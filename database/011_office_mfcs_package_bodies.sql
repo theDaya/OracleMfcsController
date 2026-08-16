@@ -982,7 +982,7 @@ create or replace package body office_mfcs_mapping_pkg as
 
     procedure assert_mapper_ready(p_mapper in varchar2) is
     begin
-        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') not in ('MOCK', 'PUBLIC_MOCK')
+        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') not in ('MOCK', 'PUBLIC_MOCK', 'LOCAL_MFCS')
            and office_mfcs_request_pkg.get_config('MFCS_SCHEMA_READY_YN', 'N') <> 'Y' then
             raise_application_error(
                 -20810,
@@ -1008,7 +1008,7 @@ create or replace package body office_mfcs_mapping_pkg as
 
     function use_public_contract return boolean is
     begin
-        return office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'PUBLIC_MOCK';
+        return office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') in ('PUBLIC_MOCK', 'LOCAL_MFCS');
     end;
 
     function source_system(p_payload in clob) return varchar2 is
@@ -1160,7 +1160,7 @@ create or replace package body office_mfcs_client_pkg as
     function get_secret(p_secret_ref in varchar2) return varchar2 is
         l_secret varchar2(4000);
     begin
-        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'PUBLIC_MOCK' then
+        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') in ('PUBLIC_MOCK', 'LOCAL_MFCS') then
             return 'public-mock-client-secret';
         end if;
 
@@ -1189,6 +1189,33 @@ create or replace package body office_mfcs_client_pkg as
             return null;
         end if;
         return get_secret(l_secret_ref);
+    end;
+
+    function https_host return varchar2 is
+    begin
+        return office_mfcs_request_pkg.get_config('MFCS_HTTPS_HOST', null);
+    end;
+
+    function local_resource(p_endpoint_key in varchar2) return varchar2 is
+    begin
+        return case p_endpoint_key
+            when 'ENDPOINT.ITEM_NUMBERS_MANAGE' then 'RESERVE_ITEM_NUMBERS'
+            when 'ENDPOINT.ITEMS_CREATE' then 'ITEMS'
+            when 'ENDPOINT.ITEMS_UPDATE' then 'ITEMS_UPDATE'
+            when 'ENDPOINT.ITEM_APPROVE' then 'ITEMS_UPDATE'
+            when 'ENDPOINT.INITIAL_RETAIL' then 'ITEMS_UPDATE'
+            when 'ENDPOINT.ITEM_SOURCING_CREATE' then 'ITEM_SUPPLIERS'
+            when 'ENDPOINT.ITEM_SOURCING_UPDATE' then 'ITEM_SUPPLIERS'
+            when 'ENDPOINT.ITEM_UDAS_CREATE' then 'ITEM_UDAS'
+            when 'ENDPOINT.ITEM_UDAS_UPDATE' then 'ITEM_UDAS'
+            when 'ENDPOINT.ITEM_LOCATIONS_CREATE' then 'ITEM_LOCATIONS'
+            when 'ENDPOINT.ITEM_LOCATIONS_UPDATE' then 'ITEM_LOCATIONS'
+            when 'ENDPOINT.PO_PREISSUED_CREATE' then 'RESERVE_ORDER_NUMBERS'
+            when 'ENDPOINT.PURCHASE_ORDERS_CREATE' then 'PURCHASE_ORDERS'
+            when 'ENDPOINT.PURCHASE_ORDERS_UPDATE' then 'PURCHASE_ORDERS'
+            when 'ENDPOINT.PURCHASE_ORDER_GET' then 'GET_ORDER'
+            else null
+        end;
     end;
 
     function access_token return varchar2 is
@@ -1226,6 +1253,7 @@ create or replace package body office_mfcs_client_pkg as
                    || '&scope=' || l_scope,
             p_wallet_path => wallet_path,
             p_wallet_pwd => wallet_password,
+            p_https_host => https_host,
             p_transfer_timeout => to_number(office_mfcs_request_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45'))
         );
 
@@ -1284,6 +1312,7 @@ create or replace package body office_mfcs_client_pkg as
         l_http_status number;
         l_mock_attempt_status varchar2(30);
         l_order_no varchar2(30);
+        l_local_resource varchar2(100);
     begin
         l_base_url := office_mfcs_request_pkg.get_config('MFCS_BASE_URL');
         l_endpoint_path := office_mfcs_request_pkg.get_config(p_endpoint_key);
@@ -1339,6 +1368,28 @@ create or replace package body office_mfcs_client_pkg as
             return l_response;
         end if;
 
+        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'LOCAL_MFCS' then
+            l_local_resource := local_resource(p_endpoint_key);
+            if l_local_resource is null then
+                raise_application_error(-20950, 'Local MFCS resource mapping is missing for ' || p_endpoint_key);
+            end if;
+            execute immediate
+                'begin local_mfcs_service_pkg.handle(:a,:b,:c,:d,:e,null,:f,:g); end;'
+                using l_local_resource,
+                      p_http_method,
+                      p_request_payload,
+                      l_correlation_id,
+                      l_order_no,
+                      out l_http_status,
+                      out l_response;
+            if l_http_status between 200 and 299 then
+                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'SUCCEEDED', l_http_status, l_response);
+                return l_response;
+            end if;
+            office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'FAILED', l_http_status, l_response);
+            raise_application_error(-20950, 'Local MFCS rejected request at ' || p_endpoint_key);
+        end if;
+
         apex_web_service.g_request_headers.delete;
         apex_web_service.g_request_headers(1).name := 'Authorization';
         apex_web_service.g_request_headers(1).value := 'Bearer ' || access_token;
@@ -1357,6 +1408,7 @@ create or replace package body office_mfcs_client_pkg as
             p_body => p_request_payload,
             p_wallet_path => wallet_path,
             p_wallet_pwd => wallet_password,
+            p_https_host => https_host,
             p_transfer_timeout => to_number(office_mfcs_request_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45'))
         );
         l_http_status := apex_web_service.g_status_code;
@@ -1394,11 +1446,19 @@ create or replace package body office_mfcs_client_pkg as
     ) return clob is
         l_response clob;
         l_endpoint varchar2(1000);
+        l_http_status number;
     begin
         if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'MOCK' then
             execute immediate
                 'begin :x := office_mfcs_mock_pkg.correlation_status(:a,:b); end;'
                 using out l_response, p_action_request_id, p_correlation_id;
+            return l_response;
+        end if;
+
+        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'LOCAL_MFCS' then
+            execute immediate
+                'begin local_mfcs_service_pkg.handle(''GET_STATUS'',''GET'',null,:a,null,:b,:c,:d); end;'
+                using lower(rawtohex(sys_guid())), p_correlation_id, out l_http_status, out l_response;
             return l_response;
         end if;
 
@@ -1418,6 +1478,7 @@ create or replace package body office_mfcs_client_pkg as
             p_http_method => 'GET',
             p_wallet_path => wallet_path,
             p_wallet_pwd => wallet_password,
+            p_https_host => https_host,
             p_transfer_timeout => to_number(office_mfcs_request_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45'))
         );
 

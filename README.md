@@ -22,6 +22,10 @@ The approval workflow and APEX user interface are intentionally out of scope.
 - `tests/sample_create_all.json`
 - `mock-mfcs/server.js`
 - `mock-mfcs/server.test.js`
+- `local-mfcs/install.sql`
+- `local-mfcs/database/*`
+- `local-mfcs/tests/local_mfcs_controller_e2e.sql`
+- `local-mfcs/tests/local_mfcs_ords_smoke.ps1`
 
 ## Installation Order
 
@@ -45,11 +49,19 @@ For local tests, install the mock package after the application packages:
 
 Install `tests/office_mfcs_public_contract_pkg.sql` only when using the public-contract simulator. It is dynamically invoked only in `PUBLIC_MOCK` mode and is not a production mapper.
 
+For a complete local controller plus stateful RMS simulator installation, use:
+
+```sql
+@local-mfcs/install.sql
+```
+
+See `local-mfcs/README.md` for its RMS-shaped tables, public MFCS routes, seed data, tests, and deliberate scope limits.
+
 ## Required Privileges
 
 The schema needs:
 
-- `CREATE TABLE`, `CREATE SEQUENCE`, `CREATE PROCEDURE`
+- `CREATE TABLE`, `CREATE SEQUENCE`, `CREATE PROCEDURE`, `CREATE VIEW`
 - `EXECUTE` on `SYS.DBMS_CRYPTO` for canonical request hashing
 - ORDS metadata access required by `ORDS.DEFINE_MODULE`, `ORDS.DEFINE_TEMPLATE`, `ORDS.DEFINE_HANDLER`, and `ORDS.DEFINE_PRIVILEGE`
 - `APEX_WEB_SERVICE` execute access for outbound MFCS REST calls
@@ -76,7 +88,7 @@ Non-secret configuration lives in `OFFICE_MFCS_CONFIG`.
 
 Important keys:
 
-- `MFCS_CLIENT_MODE`: `MOCK` for PL/SQL tests, `PUBLIC_MOCK` for the HTTP simulator, or a production mode for real MFCS calls
+- `MFCS_CLIENT_MODE`: `MOCK` for PL/SQL tests, `PUBLIC_MOCK` for the Node HTTP simulator, `LOCAL_MFCS` for the stateful Oracle simulator, or a production mode for real MFCS calls
 - `MFCS_BASE_URL`
 - `MFCS_TOKEN_URL`
 - `MFCS_CLIENT_ID`
@@ -103,6 +115,12 @@ node .\mock-mfcs\server.js
 ```
 
 See `mock-mfcs/README.md` for HTTPS and database E2E details.
+
+## Local MFCS Simulator
+
+`local-mfcs` persists the public-contract item-to-order chain in a compact RMS-shaped schema. It includes the requested `ITEM_MASTER`, `ITEM_SUPPLIER`, `ITEM_SUPP_COUNTRY`, differentiator, `ORDHEAD`, `ORDSKU`, and `ORDLOC` relationships, plus the minimum foundation, item-location, UDA, reservation, and correlation tables needed to make the chain behave coherently.
+
+The simulator is based on Oracle's public service and functional documentation and is not represented as the complete licensed RMS 16/MFCS physical model. It stops before inventory transactions, stock ledger, receiving, invoicing, and financial posting.
 
 ## OAuth Placeholders
 
@@ -168,6 +186,17 @@ With the local `adb-free` container and ORDS HTTPS listener running, exercise al
 ```
 
 The ORDS smoke runner checks five completed transactions plus representative HTTP 400 and 422 cases through the live HTTPS handlers.
+
+Run the stateful Local MFCS tests after installing `local-mfcs`:
+
+```sql
+@local-mfcs/tests/local_mfcs_controller_e2e.sql
+@local-mfcs/tests/verify_install.sql
+```
+
+```powershell
+.\local-mfcs\tests\local_mfcs_ords_smoke.ps1
+```
 
 ## Inspecting Requests
 

@@ -99,6 +99,7 @@ create or replace package body office_mfcs_public_contract_pkg as
         l_subclass number;
         l_retail number;
         l_source_ref varchar2(120);
+        l_color varchar2(10);
         l_root json_object_t := json_object_t();
         l_items json_array_t := json_array_t();
         l_item json_object_t;
@@ -109,8 +110,9 @@ create or replace package body office_mfcs_public_contract_pkg as
                json_value(l_payload, '$.CLASS' returning number),
                json_value(l_payload, '$.SUBCLASS' returning number),
                json_value(l_payload, '$.RETAIL_PRICE' returning number),
-               json_value(l_payload, '$.SOURCE_STYLE_REF' returning varchar2(120))
-          into l_operation, l_department, l_class, l_subclass, l_retail, l_source_ref
+               json_value(l_payload, '$.SOURCE_STYLE_REF' returning varchar2(120)),
+               json_value(l_payload, '$.COLOUR' returning varchar2(10))
+          into l_operation, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color
           from dual;
 
         l_item := json_object_t();
@@ -132,6 +134,12 @@ create or replace package body office_mfcs_public_contract_pkg as
             l_item.put('sellableInd', 'Y');
             l_item.put('orderableInd', 'Y');
             l_item.put('originalRetail', l_retail);
+            l_item.put('diff1', 'SHOE_SIZE');
+            l_item.put('diff1Type', 'S');
+            l_item.put('diff2', 'WIDTH_STD');
+            l_item.put('diff2Type', 'W');
+            l_item.put('diff3', 'COLOR_STD');
+            l_item.put('diff3Type', 'C');
         end if;
         l_items.append(l_item);
 
@@ -166,6 +174,12 @@ create or replace package body office_mfcs_public_contract_pkg as
                 l_item.put('sellableInd', 'Y');
                 l_item.put('orderableInd', 'Y');
                 l_item.put('originalRetail', l_retail);
+                l_item.put('diff1', v.sku_size);
+                l_item.put('diff1Type', 'S');
+                l_item.put('diff2', v.sku_width);
+                l_item.put('diff2Type', 'W');
+                l_item.put('diff3', l_color);
+                l_item.put('diff3Type', 'C');
             end if;
             l_items.append(l_item);
         end loop;
