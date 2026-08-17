@@ -202,6 +202,7 @@ if (-not $SkipWorkbench) {
     Invoke-SqlFiles $workbenchSchema @(
         'apps/office-mfcs-workbench/database/002_workflow_logging_upgrade.sql',
         'apps/office-mfcs-workbench/database/003_workflow_log_package.sql',
+        'apps/office-mfcs-workbench/database/004_workflow_http_package.sql',
         'apps/office-mfcs-workbench/database/010_workflow_package_spec.sql',
         'apps/office-mfcs-workbench/database/011_workflow_package_body.sql',
         'apps/office-mfcs-workbench/database/012_state_viewer_package_spec.sql',

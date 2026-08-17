@@ -11,7 +11,7 @@ declare
         l_source :=
             'declare l_status number; l_response clob; l_body clob := :body_text; begin ' ||
             'office_workflow_pkg.' || p_procedure || '(p_request_id => :id, ' || p_body_parameter || ' => l_body, p_http_status => l_status, p_response => l_response); ' ||
-            'owa_util.mime_header(''application/json'', false); owa_util.status_line(l_status, null, false); owa_util.http_header_close; htp.prn(l_response); end;';
+            'office_workflow_http_pkg.send_json(l_status, l_response); end;';
         ords.define_handler(
             p_module_name => c_module,
             p_pattern => l_pattern,
@@ -44,7 +44,7 @@ begin
         p_pattern => 'requests',
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
-        p_source => q'[declare l_status number; l_response clob; begin office_workflow_pkg.list_requests(:status, l_status, l_response); owa_util.mime_header('application/json', false); owa_util.status_line(l_status, null, false); owa_util.http_header_close; htp.prn(l_response); end;]'
+        p_source => q'[declare l_status number; l_response clob; begin office_workflow_pkg.list_requests(:status, l_status, l_response); office_workflow_http_pkg.send_json(l_status, l_response); end;]'
     );
     ords.define_parameter(c_module, 'requests', 'GET', 'status', 'status', 'URI', 'STRING', 'IN');
 
@@ -54,14 +54,14 @@ begin
         p_pattern => 'requests/:id',
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
-        p_source => q'[declare l_status number; l_response clob; begin office_workflow_pkg.get_request(:id, l_status, l_response); owa_util.mime_header('application/json', false); owa_util.status_line(l_status, null, false); owa_util.http_header_close; htp.prn(l_response); end;]'
+        p_source => q'[declare l_status number; l_response clob; begin office_workflow_pkg.get_request(:id, l_status, l_response); office_workflow_http_pkg.send_json(l_status, l_response); end;]'
     );
     ords.define_handler(
         p_module_name => c_module,
         p_pattern => 'requests/:id',
         p_method => 'PUT',
         p_source_type => ords.source_type_plsql,
-        p_source => q'[declare l_status number; l_response clob; l_body clob := :body_text; begin office_workflow_pkg.save_draft(l_body, l_status, l_response); owa_util.mime_header('application/json', false); owa_util.status_line(l_status, null, false); owa_util.http_header_close; htp.prn(l_response); end;]',
+        p_source => q'[declare l_status number; l_response clob; l_body clob := :body_text; begin office_workflow_pkg.save_draft(l_body, l_status, l_response); office_workflow_http_pkg.send_json(l_status, l_response); end;]',
         p_mimes_allowed => 'application/json'
     );
     ords.define_handler(
@@ -69,7 +69,7 @@ begin
         p_pattern => 'requests/:id',
         p_method => 'DELETE',
         p_source_type => ords.source_type_plsql,
-        p_source => q'[declare l_status number; l_response clob; begin office_workflow_pkg.delete_draft(:id, l_status, l_response); owa_util.mime_header('application/json', false); owa_util.status_line(l_status, null, false); owa_util.http_header_close; if l_response is not null then htp.prn(l_response); end if; end;]'
+        p_source => q'[declare l_status number; l_response clob; begin office_workflow_pkg.delete_draft(:id, l_status, l_response); office_workflow_http_pkg.send_json(l_status, l_response); end;]'
     );
 
     define_id_command('submit', 'POST', 'submit_request', 'p_actor_json');
@@ -85,7 +85,7 @@ begin
         p_pattern => 'state/:identifier',
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
-        p_source => q'[declare l_status number; l_response clob; begin office_mfcs_state_pkg.lookup_state(:identifier, l_status, l_response); owa_util.mime_header('application/json', false); owa_util.status_line(l_status, null, false); owa_util.http_header_close; htp.prn(l_response); end;]'
+        p_source => q'[declare l_status number; l_response clob; begin office_mfcs_state_pkg.lookup_state(:identifier, l_status, l_response); office_workflow_http_pkg.send_json(l_status, l_response); end;]'
     );
 
     ords.define_template(p_module_name => c_module, p_pattern => 'health');

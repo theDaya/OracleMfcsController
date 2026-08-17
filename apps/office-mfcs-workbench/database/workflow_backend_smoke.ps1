@@ -31,10 +31,13 @@ $request = @{
     sourcing = @{ supplier = 70001; vpn = 'SMOKE-VPN'; originCountry = 'CN'; manufacturingCountry = 'CN'; currencyCode = 'USD'; costPrice = 22.75; nonMerchCost = 1.2; rsp = 69.99; casePackSize = 1; innerPackSize = 1 }
     variants = @(@{ id = [guid]::NewGuid().ToString(); sourceVariantRef = "SMOKE-STYLE-$requestId-UK8"; size = '8'; width = 'STANDARD'; quantity = 12; skuId = '' })
     order = @{ existingOrderNo = ''; deliveryLocation = 98; poType = '2'; notBeforeDate = '2026-10-12'; notAfterDate = '2026-10-18'; otbEowDate = '2026-10-18'; earliestShipDate = '2026-08-20'; latestShipDate = '2026-08-30'; exchangeRate = 1; specialInstructions = ''; dutyCode = '6403.99.00'; dutyRate = 0.08 }
+    diagnosticPadding = 'x' * 34000
 }
 
 $saved = Invoke-WorkflowApi PUT "requests/$requestId" $request 201
 Assert-Equal $saved.status 'DRAFT' 'Draft save failed'
+$listed = Invoke-WorkflowApi GET 'requests' $null
+if (-not ($listed | Where-Object id -eq $requestId)) { throw 'Large request was missing from the workflow list.' }
 $submitted = Invoke-WorkflowApi POST "requests/$requestId/submit" $buyer
 Assert-Equal $submitted.status 'SUBMITTED' 'Submit transition failed'
 $returned = Invoke-WorkflowApi POST "requests/$requestId/return" @{ actor = $manager; reason = 'Confirm the delivery window.' }
@@ -42,6 +45,7 @@ Assert-Equal $returned.status 'RETURNED' 'Return transition failed'
 $corrected = Invoke-WorkflowApi POST "requests/$requestId/correct" $buyer
 Assert-Equal $corrected.status 'DRAFT' 'Correction transition failed'
 Assert-Equal $corrected.sourceVersion 2 'Correction did not increment source version'
+$corrected.PSObject.Properties.Remove('diagnosticPadding')
 $corrected.style.description = 'Oracle Workflow Smoke Trainer Corrected'
 $corrected.updatedAt = [DateTime]::UtcNow.ToString('o')
 $null = Invoke-WorkflowApi PUT "requests/$requestId" $corrected
@@ -76,4 +80,4 @@ $state = Invoke-WorkflowApi GET "state/$($posted.integrationResponse.ORDER_NO)" 
 Assert-Equal $state.foundBy 'ORDER' 'Posted order was not readable from Local MFCS state'
 Assert-Equal $state.styles[0].item $posted.integrationResponse.STYLE 'State viewer returned the wrong style'
 
-Write-Output "Live workflow smoke passed: request=$requestId style=$($posted.integrationResponse.STYLE) order=$($posted.integrationResponse.ORDER_NO) assertions=13"
+Write-Output "Live workflow smoke passed: request=$requestId style=$($posted.integrationResponse.STYLE) order=$($posted.integrationResponse.ORDER_NO) assertions=14"
