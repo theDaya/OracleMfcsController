@@ -117,10 +117,10 @@ declare
         return l_count;
     end;
 
-    procedure submit(p_payload in clob, o_http out number, o_response out clob) is
+    procedure submit(p_payload in clob, p_http out number, p_response out clob) is
     begin
-        office_mfcs_api_pkg.submit_transaction(p_payload, o_http, o_response);
-        dbms_output.put_line('HTTP ' || o_http || ' ' || substr(o_response, 1, 240));
+        office_mfcs_api_pkg.submit_transaction(p_payload, p_http, p_response);
+        dbms_output.put_line('HTTP ' || p_http || ' ' || substr(p_response, 1, 240));
     end;
 
 begin

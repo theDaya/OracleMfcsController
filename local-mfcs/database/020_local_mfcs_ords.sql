@@ -27,8 +27,8 @@ declare
             '    p_http_method => ''' || p_method || ''',' || chr(10) ||
             '    p_request_payload => l_body,' || chr(10) ||
             '    p_correlation_id => :x_correlation_id,' || chr(10) ||
-            '    o_http_status => l_status,' || chr(10) ||
-            '    o_response => l_response);' || chr(10) ||
+            '    p_http_status => l_status,' || chr(10) ||
+            '    p_response => l_response);' || chr(10) ||
             '  owa_util.mime_header(''application/json'', false);' || chr(10) ||
             '  owa_util.status_line(l_status, null, false);' || chr(10) ||
             '  owa_util.http_header_close;' || chr(10) ||
@@ -74,8 +74,8 @@ declare
             '    p_resource => ''' || p_resource || ''',' || chr(10) ||
             '    p_http_method => ''' || p_method || ''',' || chr(10) ||
             '    p_correlation_id => :x_correlation_id,' || chr(10) ||
-            '    o_http_status => l_status,' || chr(10) ||
-            '    o_response => l_response);' || chr(10) ||
+            '    p_http_status => l_status,' || chr(10) ||
+            '    p_response => l_response);' || chr(10) ||
             '  owa_util.mime_header(''application/json'', false);' || chr(10) ||
             '  owa_util.status_line(l_status, null, false);' || chr(10) ||
             '  owa_util.http_header_close;' || chr(10) ||
@@ -151,8 +151,8 @@ begin
         p_http_method => 'GET',
         p_correlation_id => :x_correlation_id,
         p_order_no => :orderNo,
-        o_http_status => l_status,
-        o_response => l_response);
+        p_http_status => l_status,
+        p_response => l_response);
     owa_util.mime_header('application/json', false);
     owa_util.status_line(l_status, null, false);
     owa_util.http_header_close;
@@ -181,8 +181,8 @@ begin
         p_http_method => 'GET',
         p_correlation_id => :x_correlation_id,
         p_status_corr_id => :xCorrelationId,
-        o_http_status => l_status,
-        o_response => l_response);
+        p_http_status => l_status,
+        p_response => l_response);
     owa_util.mime_header('application/json', false);
     owa_util.status_line(l_status, null, false);
     owa_util.http_header_close;

@@ -143,7 +143,7 @@ create or replace package body office_mfcs_public_contract_pkg as
         end if;
         l_items.append(l_item);
 
-        for v in (
+        for l_variant_row in (
             select source_variant_ref, sku_size, sku_width, sku_id
               from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
                   columns
@@ -153,10 +153,10 @@ create or replace package body office_mfcs_public_contract_pkg as
                       sku_id varchar2(30) path '$.SKU_ID'
               )
         ) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolved_sku(l_payload, l_variant_row.source_variant_ref, l_variant_row.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
-            l_item.put('itemDescription', substr(l_source_ref || ' ' || v.sku_size || ' ' || v.sku_width, 1, 250));
+            l_item.put('itemDescription', substr(l_source_ref || ' ' || l_variant_row.sku_size || ' ' || l_variant_row.sku_width, 1, 250));
             l_item.put('dataLoadingDestination', 'RMS');
             if l_operation <> 'MODIFY_STYLE' then
                 l_item.put('itemParent', l_style);
@@ -174,9 +174,9 @@ create or replace package body office_mfcs_public_contract_pkg as
                 l_item.put('sellableInd', 'Y');
                 l_item.put('orderableInd', 'Y');
                 l_item.put('originalRetail', l_retail);
-                l_item.put('diff1', v.sku_size);
+                l_item.put('diff1', l_variant_row.sku_size);
                 l_item.put('diff1Type', 'S');
-                l_item.put('diff2', v.sku_width);
+                l_item.put('diff2', l_variant_row.sku_width);
                 l_item.put('diff2Type', 'W');
                 l_item.put('diff3', l_color);
                 l_item.put('diff3Type', 'C');
@@ -209,7 +209,7 @@ create or replace package body office_mfcs_public_contract_pkg as
           into l_supplier, l_cost, l_country
           from dual;
 
-        for v in (
+        for l_variant_row in (
             select source_variant_ref, sku_id
               from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
                   columns
@@ -217,7 +217,7 @@ create or replace package body office_mfcs_public_contract_pkg as
                       sku_id varchar2(30) path '$.SKU_ID'
               )
         ) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolved_sku(l_payload, l_variant_row.source_variant_ref, l_variant_row.sku_id);
             l_country_node := json_object_t();
             l_country_node.put('originCountry', l_country);
             l_country_node.put('primaryCountryInd', 'Y');
@@ -251,7 +251,7 @@ create or replace package body office_mfcs_public_contract_pkg as
         l_item json_object_t;
         l_sku varchar2(30);
     begin
-        for v in (
+        for l_variant_row in (
             select source_variant_ref, sku_id
               from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
                   columns
@@ -259,7 +259,7 @@ create or replace package body office_mfcs_public_contract_pkg as
                       sku_id varchar2(30) path '$.SKU_ID'
               )
         ) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolved_sku(l_payload, l_variant_row.source_variant_ref, l_variant_row.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
             l_item.put('dataLoadingDestination', 'RMS');
@@ -283,7 +283,7 @@ create or replace package body office_mfcs_public_contract_pkg as
     begin
         select json_value(l_payload, '$.DELIVERY_LOC' returning number)
           into l_delivery from dual;
-        for v in (
+        for l_variant_row in (
             select source_variant_ref, sku_id
               from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
                   columns
@@ -291,7 +291,7 @@ create or replace package body office_mfcs_public_contract_pkg as
                       sku_id varchar2(30) path '$.SKU_ID'
               )
         ) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolved_sku(l_payload, l_variant_row.source_variant_ref, l_variant_row.sku_id);
             l_location := json_object_t();
             l_location.put('location', l_delivery);
             l_location.put('locationType', 'S');
@@ -323,7 +323,7 @@ create or replace package body office_mfcs_public_contract_pkg as
         l_item.put('approveInd', 'Y');
         l_item.put('dataLoadingDestination', 'RMS');
         l_items.append(l_item);
-        for v in (
+        for l_variant_row in (
             select source_variant_ref, sku_id
               from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
                   columns
@@ -331,7 +331,7 @@ create or replace package body office_mfcs_public_contract_pkg as
                       sku_id varchar2(30) path '$.SKU_ID'
               )
         ) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolved_sku(l_payload, l_variant_row.source_variant_ref, l_variant_row.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
             l_item.put('status', 'A');
@@ -353,12 +353,12 @@ create or replace package body office_mfcs_public_contract_pkg as
         l_sku varchar2(30);
     begin
         select json_value(l_payload, '$.RETAIL_PRICE' returning number) into l_retail from dual;
-        for v in (
+        for l_variant_row in (
             select source_variant_ref, sku_id
               from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
                   columns source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF', sku_id varchar2(30) path '$.SKU_ID')
         ) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolved_sku(l_payload, l_variant_row.source_variant_ref, l_variant_row.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
             l_item.put('originalRetail', l_retail);
@@ -404,7 +404,7 @@ create or replace package body office_mfcs_public_contract_pkg as
         l_order.put('approvedBy', office_mfcs_mapping_pkg.user_id(l_payload));
         l_order.put('dataLoadingDestination', 'RMS');
 
-        for v in (
+        for l_variant_row in (
             select source_variant_ref, sku_id, sku_qty
               from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
                   columns
@@ -412,12 +412,12 @@ create or replace package body office_mfcs_public_contract_pkg as
                       sku_id varchar2(30) path '$.SKU_ID',
                       sku_qty number path '$.SKU_QTY')
         ) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolved_sku(l_payload, l_variant_row.source_variant_ref, l_variant_row.sku_id);
             l_detail := json_object_t();
             l_detail.put('item', l_sku);
             l_detail.put('location', number_value(l_payload, 'DELIVERY_LOC'));
             l_detail.put('locationType', 'S');
-            l_detail.put('qtyOrdered', v.sku_qty);
+            l_detail.put('qtyOrdered', l_variant_row.sku_qty);
             l_detail.put('unitCost', number_value(l_payload, 'UNIT_COST'));
             l_detail.put('originCountryId', string_value(l_payload, 'ORIGIN_COUNTRY'));
             l_details.append(l_detail);

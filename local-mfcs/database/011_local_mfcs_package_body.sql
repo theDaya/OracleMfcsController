@@ -3,6 +3,7 @@ set define off
 prompt Creating Local MFCS service package body
 
 create or replace package body local_mfcs_service_pkg as
+    -- Shared validation and response helpers.
     e_validation exception;
     pragma exception_init(e_validation, -20001);
 
@@ -90,10 +91,11 @@ create or replace package body local_mfcs_service_pkg as
         assert_true(l_count > 0, p_field, 'must reference DIFF_IDS or DIFF_GROUP_HEAD for the supplied type');
     end;
 
+    -- Item domain: number reservation, hierarchy, sourcing, locations, and UDAs.
     procedure reserve_item_numbers(
         p_payload in clob,
         p_corr in varchar2,
-        o_response out clob
+        p_response out clob
     ) is
         l_quantity number;
         l_days number;
@@ -128,10 +130,10 @@ create or replace package body local_mfcs_service_pkg as
             l_items.append(l_node);
         end loop;
         l_root.put('items', l_items);
-        o_response := l_root.to_clob;
+        p_response := l_root.to_clob;
     end;
 
-    procedure upsert_items(p_payload in clob, p_update in boolean, o_response out clob) is
+    procedure upsert_items(p_payload in clob, p_update in boolean, p_response out clob) is
         l_count number;
         l_parent_diff_1 item_master.diff_1%type;
         l_parent_diff_2 item_master.diff_2%type;
@@ -163,7 +165,7 @@ create or replace package body local_mfcs_service_pkg as
         end;
     begin
         validate_collection(p_payload);
-        for r in (
+        for l_row in (
             select item,
                    item_number_type,
                    item_parent,
@@ -222,49 +224,49 @@ create or replace package body local_mfcs_service_pkg as
                       data_destination varchar2(6) path '$.dataLoadingDestination'
               )
         ) loop
-            assert_true(r.item is not null, 'items.item', 'is required');
-            assert_true(r.data_destination = 'RMS', 'items.dataLoadingDestination', 'must be RMS for direct Local MFCS creation');
-            validate_diff(r.diff_1, r.diff_1_type, 'items.diff1');
-            validate_diff(r.diff_2, r.diff_2_type, 'items.diff2');
-            validate_diff(r.diff_3, r.diff_3_type, 'items.diff3');
-            validate_diff(r.diff_4, r.diff_4_type, 'items.diff4');
+            assert_true(l_row.item is not null, 'items.item', 'is required');
+            assert_true(l_row.data_destination = 'RMS', 'items.dataLoadingDestination', 'must be RMS for direct Local MFCS creation');
+            validate_diff(l_row.diff_1, l_row.diff_1_type, 'items.diff1');
+            validate_diff(l_row.diff_2, l_row.diff_2_type, 'items.diff2');
+            validate_diff(l_row.diff_3, l_row.diff_3_type, 'items.diff3');
+            validate_diff(l_row.diff_4, l_row.diff_4_type, 'items.diff4');
 
             if p_update then
                 update item_master
-                   set item_desc = coalesce(r.item_desc, item_desc),
-                       short_desc = coalesce(substr(r.item_desc, 1, 120), short_desc),
-                       status = coalesce(r.status, status),
-                       approve_ind = coalesce(r.approve_ind, approve_ind),
-                       original_retail = coalesce(r.original_retail, original_retail),
-                       diff_1 = coalesce(r.diff_1, diff_1),
-                       diff_1_type = coalesce(r.diff_1_type, diff_1_type),
-                       diff_2 = coalesce(r.diff_2, diff_2),
-                       diff_2_type = coalesce(r.diff_2_type, diff_2_type),
-                       diff_3 = coalesce(r.diff_3, diff_3),
-                       diff_3_type = coalesce(r.diff_3_type, diff_3_type),
-                       diff_4 = coalesce(r.diff_4, diff_4),
-                       diff_4_type = coalesce(r.diff_4_type, diff_4_type),
-                       approved_by = case when coalesce(r.status, status) = 'A' then coalesce(approved_by, 'LOCAL_MFCS_REST') else approved_by end,
-                       approved_at = case when coalesce(r.status, status) = 'A' then coalesce(approved_at, systimestamp) else approved_at end,
+                   set item_desc = coalesce(l_row.item_desc, item_desc),
+                       short_desc = coalesce(substr(l_row.item_desc, 1, 120), short_desc),
+                       status = coalesce(l_row.status, status),
+                       approve_ind = coalesce(l_row.approve_ind, approve_ind),
+                       original_retail = coalesce(l_row.original_retail, original_retail),
+                       diff_1 = coalesce(l_row.diff_1, diff_1),
+                       diff_1_type = coalesce(l_row.diff_1_type, diff_1_type),
+                       diff_2 = coalesce(l_row.diff_2, diff_2),
+                       diff_2_type = coalesce(l_row.diff_2_type, diff_2_type),
+                       diff_3 = coalesce(l_row.diff_3, diff_3),
+                       diff_3_type = coalesce(l_row.diff_3_type, diff_3_type),
+                       diff_4 = coalesce(l_row.diff_4, diff_4),
+                       diff_4_type = coalesce(l_row.diff_4_type, diff_4_type),
+                       approved_by = case when coalesce(l_row.status, status) = 'A' then coalesce(approved_by, 'LOCAL_MFCS_REST') else approved_by end,
+                       approved_at = case when coalesce(l_row.status, status) = 'A' then coalesce(approved_at, systimestamp) else approved_at end,
                        updated_at = systimestamp
-                 where item = r.item;
-                assert_true(sql%rowcount = 1, 'items.item', 'does not exist for update: ' || r.item);
+                 where item = l_row.item;
+                assert_true(sql%rowcount = 1, 'items.item', 'does not exist for update: ' || l_row.item);
             else
-                assert_true(r.item_level is not null and r.tran_level is not null, 'items.itemLevel', 'itemLevel and tranLevel are required for create');
-                assert_true(r.dept is not null and r.class_no is not null and r.subclass_no is not null, 'items.dept', 'dept, class and subclass are required for create');
-                if r.item_parent is not null then
+                assert_true(l_row.item_level is not null and l_row.tran_level is not null, 'items.itemLevel', 'itemLevel and tranLevel are required for create');
+                assert_true(l_row.dept is not null and l_row.class_no is not null and l_row.subclass_no is not null, 'items.dept', 'dept, class and subclass are required for create');
+                if l_row.item_parent is not null then
                     begin
                         select diff_1, diff_2, diff_3, diff_4
                           into l_parent_diff_1, l_parent_diff_2, l_parent_diff_3, l_parent_diff_4
                           from item_master
-                         where item = r.item_parent;
+                         where item = l_row.item_parent;
                     exception when no_data_found then
-                        fail('items.itemParent', 'must already exist: ' || r.item_parent);
+                        fail('items.itemParent', 'must already exist: ' || l_row.item_parent);
                     end;
-                    validate_group_member(l_parent_diff_1, r.diff_1, 'items.diff1');
-                    validate_group_member(l_parent_diff_2, r.diff_2, 'items.diff2');
-                    validate_group_member(l_parent_diff_3, r.diff_3, 'items.diff3');
-                    validate_group_member(l_parent_diff_4, r.diff_4, 'items.diff4');
+                    validate_group_member(l_parent_diff_1, l_row.diff_1, 'items.diff1');
+                    validate_group_member(l_parent_diff_2, l_row.diff_2, 'items.diff2');
+                    validate_group_member(l_parent_diff_3, l_row.diff_3, 'items.diff3');
+                    validate_group_member(l_parent_diff_4, l_row.diff_4, 'items.diff4');
                 end if;
                 insert into item_master(
                     item, item_number_type, item_parent, item_grandparent, item_level, tran_level,
@@ -273,31 +275,31 @@ create or replace package body local_mfcs_service_pkg as
                     diff_1, diff_1_type, diff_2, diff_2_type, diff_3, diff_3_type, diff_4, diff_4_type,
                     original_retail, approved_by, approved_at
                 ) values (
-                    r.item, coalesce(r.item_number_type, 'ITEM'), r.item_parent, r.item_grandparent,
-                    r.item_level, r.tran_level, coalesce(r.item_desc, r.item), substr(coalesce(r.item_desc, r.item), 1, 120),
-                    r.dept, r.class_no, r.subclass_no, coalesce(r.status, 'W'), coalesce(r.approve_ind, 'N'),
-                    coalesce(r.standard_uom, 'EA'), coalesce(r.merchandise_ind, 'Y'), coalesce(r.inventory_ind, 'Y'),
-                    coalesce(r.sellable_ind, 'Y'), coalesce(r.orderable_ind, 'Y'),
-                    r.diff_1, r.diff_1_type, r.diff_2, r.diff_2_type, r.diff_3, r.diff_3_type, r.diff_4, r.diff_4_type,
-                    r.original_retail,
-                    case when r.status = 'A' then 'LOCAL_MFCS_REST' end,
-                    case when r.status = 'A' then systimestamp end
+                    l_row.item, coalesce(l_row.item_number_type, 'ITEM'), l_row.item_parent, l_row.item_grandparent,
+                    l_row.item_level, l_row.tran_level, coalesce(l_row.item_desc, l_row.item), substr(coalesce(l_row.item_desc, l_row.item), 1, 120),
+                    l_row.dept, l_row.class_no, l_row.subclass_no, coalesce(l_row.status, 'W'), coalesce(l_row.approve_ind, 'N'),
+                    coalesce(l_row.standard_uom, 'EA'), coalesce(l_row.merchandise_ind, 'Y'), coalesce(l_row.inventory_ind, 'Y'),
+                    coalesce(l_row.sellable_ind, 'Y'), coalesce(l_row.orderable_ind, 'Y'),
+                    l_row.diff_1, l_row.diff_1_type, l_row.diff_2, l_row.diff_2_type, l_row.diff_3, l_row.diff_3_type, l_row.diff_4, l_row.diff_4_type,
+                    l_row.original_retail,
+                    case when l_row.status = 'A' then 'LOCAL_MFCS_REST' end,
+                    case when l_row.status = 'A' then systimestamp end
                 );
-                update item_number_reservation set consumed_ind = 'Y' where item = r.item;
+                update item_number_reservation set consumed_ind = 'Y' where item = l_row.item;
             end if;
         end loop;
-        o_response := success_response;
+        p_response := success_response;
     exception
         when dup_val_on_index then
             fail('items.item', 'already exists or violates a unique item rule');
     end;
 
-    procedure upsert_item_suppliers(p_payload in clob, o_response out clob) is
+    procedure upsert_item_suppliers(p_payload in clob, p_response out clob) is
         l_currency varchar2(3);
         l_count number;
     begin
         validate_collection(p_payload);
-        for r in (
+        for l_row in (
             select item, supplier_no, primary_supp_ind, origin_country, primary_country_ind, unit_cost, data_destination
               from json_table(p_payload, '$.items[*]'
                   columns
@@ -314,56 +316,56 @@ create or replace package body local_mfcs_service_pkg as
                       )
               )
         ) loop
-            assert_true(r.data_destination = 'RMS', 'items.dataLoadingDestination', 'must be RMS');
-            select count(*) into l_count from item_master where item = r.item;
-            assert_true(l_count = 1, 'items.item', 'must exist before sourcing: ' || r.item);
+            assert_true(l_row.data_destination = 'RMS', 'items.dataLoadingDestination', 'must be RMS');
+            select count(*) into l_count from item_master where item = l_row.item;
+            assert_true(l_count = 1, 'items.item', 'must exist before sourcing: ' || l_row.item);
             begin
-                select currency_code into l_currency from sups where supplier = r.supplier_no and status = 'A';
+                select currency_code into l_currency from sups where supplier = l_row.supplier_no and status = 'A';
             exception when no_data_found then
-                fail('items.supplier', 'supplier is not active: ' || r.supplier_no);
+                fail('items.supplier', 'supplier is not active: ' || l_row.supplier_no);
             end;
-            select count(*) into l_count from country where country_id = r.origin_country;
-            assert_true(l_count = 1, 'items.originCountry', 'country is not defined: ' || r.origin_country);
-            assert_true(r.unit_cost is not null and r.unit_cost >= 0, 'items.unitCost', 'must be zero or greater');
+            select count(*) into l_count from country where country_id = l_row.origin_country;
+            assert_true(l_count = 1, 'items.originCountry', 'country is not defined: ' || l_row.origin_country);
+            assert_true(l_row.unit_cost is not null and l_row.unit_cost >= 0, 'items.unitCost', 'must be zero or greater');
 
-            if coalesce(r.primary_supp_ind, 'N') = 'Y' then
-                update item_supplier set primary_supp_ind = 'N', updated_at = systimestamp where item = r.item;
+            if coalesce(l_row.primary_supp_ind, 'N') = 'Y' then
+                update item_supplier set primary_supp_ind = 'N', updated_at = systimestamp where item = l_row.item;
             end if;
             merge into item_supplier d
-            using (select r.item item, r.supplier_no supplier from dual) s
+            using (select l_row.item item, l_row.supplier_no supplier from dual) s
                on (d.item = s.item and d.supplier = s.supplier)
-            when matched then update set d.primary_supp_ind = coalesce(r.primary_supp_ind, d.primary_supp_ind), d.updated_at = systimestamp
-            when not matched then insert (item, supplier, primary_supp_ind) values (r.item, r.supplier_no, coalesce(r.primary_supp_ind, 'N'));
+            when matched then update set d.primary_supp_ind = coalesce(l_row.primary_supp_ind, d.primary_supp_ind), d.updated_at = systimestamp
+            when not matched then insert (item, supplier, primary_supp_ind) values (l_row.item, l_row.supplier_no, coalesce(l_row.primary_supp_ind, 'N'));
 
-            if coalesce(r.primary_country_ind, 'N') = 'Y' then
+            if coalesce(l_row.primary_country_ind, 'N') = 'Y' then
                 update item_supp_country
                    set primary_country_ind = 'N', updated_at = systimestamp
-                 where item = r.item and supplier = r.supplier_no;
+                 where item = l_row.item and supplier = l_row.supplier_no;
             end if;
             merge into item_supp_country d
-            using (select r.item item, r.supplier_no supplier, r.origin_country origin_country_id from dual) s
+            using (select l_row.item item, l_row.supplier_no supplier, l_row.origin_country origin_country_id from dual) s
                on (d.item = s.item and d.supplier = s.supplier and d.origin_country_id = s.origin_country_id)
             when matched then update set
-                d.primary_country_ind = coalesce(r.primary_country_ind, d.primary_country_ind),
-                d.unit_cost = r.unit_cost,
+                d.primary_country_ind = coalesce(l_row.primary_country_ind, d.primary_country_ind),
+                d.unit_cost = l_row.unit_cost,
                 d.currency_code = l_currency,
                 d.updated_at = systimestamp
             when not matched then insert (
                 item, supplier, origin_country_id, primary_country_ind, unit_cost, currency_code
             ) values (
-                r.item, r.supplier_no, r.origin_country, coalesce(r.primary_country_ind, 'N'), r.unit_cost, l_currency
+                l_row.item, l_row.supplier_no, l_row.origin_country, coalesce(l_row.primary_country_ind, 'N'), l_row.unit_cost, l_currency
             );
         end loop;
-        o_response := success_response;
+        p_response := success_response;
     end;
 
-    procedure upsert_item_locations(p_payload in clob, o_response out clob) is
+    procedure upsert_item_locations(p_payload in clob, p_response out clob) is
         l_count number;
         l_primary_supplier number;
         l_retail number;
     begin
         validate_collection(p_payload);
-        for r in (
+        for l_row in (
             select item, location, loc_type, location_status, data_destination
               from json_table(p_payload, '$.items[*]'
                   columns
@@ -376,13 +378,13 @@ create or replace package body local_mfcs_service_pkg as
                       )
               )
         ) loop
-            assert_true(r.data_destination = 'RMS', 'items.dataLoadingDestination', 'must be RMS');
-            select count(*) into l_count from item_master where item = r.item;
-            assert_true(l_count = 1, 'items.item', 'must exist before location ranging: ' || r.item);
-            if r.loc_type = 'S' then
-                select count(*) into l_count from store where store = r.location and status = 'A' and stockholding_ind = 'Y';
-            elsif r.loc_type = 'W' then
-                select count(*) into l_count from wh where wh = r.location and status = 'A' and stockholding_ind = 'Y';
+            assert_true(l_row.data_destination = 'RMS', 'items.dataLoadingDestination', 'must be RMS');
+            select count(*) into l_count from item_master where item = l_row.item;
+            assert_true(l_count = 1, 'items.item', 'must exist before location ranging: ' || l_row.item);
+            if l_row.loc_type = 'S' then
+                select count(*) into l_count from store where store = l_row.location and status = 'A' and stockholding_ind = 'Y';
+            elsif l_row.loc_type = 'W' then
+                select count(*) into l_count from wh where wh = l_row.location and status = 'A' and stockholding_ind = 'Y';
             else
                 l_count := 0;
             end if;
@@ -390,26 +392,26 @@ create or replace package body local_mfcs_service_pkg as
             begin
                 select supplier into l_primary_supplier
                   from item_supplier
-                 where item = r.item and primary_supp_ind = 'Y';
+                 where item = l_row.item and primary_supp_ind = 'Y';
             exception when no_data_found then
                 l_primary_supplier := null;
             end;
-            select original_retail into l_retail from item_master where item = r.item;
+            select original_retail into l_retail from item_master where item = l_row.item;
             merge into item_loc d
-            using (select r.item item, r.location location, r.loc_type loc_type from dual) s
+            using (select l_row.item item, l_row.location location, l_row.loc_type loc_type from dual) s
                on (d.item = s.item and d.location = s.location and d.loc_type = s.loc_type)
-            when matched then update set d.status = coalesce(r.location_status, d.status), d.primary_supp = coalesce(l_primary_supplier, d.primary_supp), d.unit_retail = coalesce(l_retail, d.unit_retail), d.updated_at = systimestamp
+            when matched then update set d.status = coalesce(l_row.location_status, d.status), d.primary_supp = coalesce(l_primary_supplier, d.primary_supp), d.unit_retail = coalesce(l_retail, d.unit_retail), d.updated_at = systimestamp
             when not matched then insert (item, location, loc_type, status, primary_supp, unit_retail)
-                values (r.item, r.location, r.loc_type, coalesce(r.location_status, 'A'), l_primary_supplier, l_retail);
+                values (l_row.item, l_row.location, l_row.loc_type, coalesce(l_row.location_status, 'A'), l_primary_supplier, l_retail);
         end loop;
-        o_response := success_response;
+        p_response := success_response;
     end;
 
-    procedure upsert_item_udas(p_payload in clob, o_response out clob) is
+    procedure upsert_item_udas(p_payload in clob, p_response out clob) is
         l_count number;
     begin
         validate_collection(p_payload);
-        for item_row in (
+        for l_item_row in (
             select item, uda_json, data_destination
               from json_table(p_payload, '$.items[*]'
                   columns
@@ -418,26 +420,27 @@ create or replace package body local_mfcs_service_pkg as
                       uda_json clob format json path '$.uda'
               )
         ) loop
-            assert_true(item_row.data_destination = 'RMS', 'items.dataLoadingDestination', 'must be RMS');
-            select count(*) into l_count from item_master where item = item_row.item;
-            assert_true(l_count = 1, 'items.item', 'must exist before UDA assignment: ' || item_row.item);
-            for u in (
+            assert_true(l_item_row.data_destination = 'RMS', 'items.dataLoadingDestination', 'must be RMS');
+            select count(*) into l_count from item_master where item = l_item_row.item;
+            assert_true(l_count = 1, 'items.item', 'must exist before UDA assignment: ' || l_item_row.item);
+            for l_uda_row in (
                 select uda_id, uda_value
-                  from json_table(item_row.uda_json, '$[*]'
+                  from json_table(l_item_row.uda_json, '$[*]'
                       columns uda_id number path '$.udaId', uda_value varchar2(250) path '$.udaValue')
             ) loop
-                assert_true(u.uda_id is not null and u.uda_value is not null, 'items.uda', 'udaId and udaValue are required');
+                assert_true(l_uda_row.uda_id is not null and l_uda_row.uda_value is not null, 'items.uda', 'udaId and udaValue are required');
                 merge into item_uda d
-                using (select item_row.item item, u.uda_id uda_id from dual) s
+                using (select l_item_row.item item, l_uda_row.uda_id uda_id from dual) s
                    on (d.item = s.item and d.uda_id = s.uda_id)
-                when matched then update set d.uda_value = u.uda_value, d.updated_at = systimestamp
-                when not matched then insert (item, uda_id, uda_value) values (item_row.item, u.uda_id, u.uda_value);
+                when matched then update set d.uda_value = l_uda_row.uda_value, d.updated_at = systimestamp
+                when not matched then insert (item, uda_id, uda_value) values (l_item_row.item, l_uda_row.uda_id, l_uda_row.uda_value);
             end loop;
         end loop;
-        o_response := success_response;
+        p_response := success_response;
     end;
 
-    procedure reserve_order_numbers(p_payload in clob, p_corr in varchar2, o_response out clob) is
+    -- Order domain: number reservation, purchase-order persistence, and lookup.
+    procedure reserve_order_numbers(p_payload in clob, p_corr in varchar2, p_response out clob) is
         l_supplier number;
         l_quantity number;
         l_days number;
@@ -470,10 +473,10 @@ create or replace package body local_mfcs_service_pkg as
             l_orders.append(l_node);
         end loop;
         l_root.put('orderNumbers', l_orders);
-        o_response := l_root.to_clob;
+        p_response := l_root.to_clob;
     end;
 
-    procedure upsert_purchase_orders(p_payload in clob, p_update in boolean, o_response out clob) is
+    procedure upsert_purchase_orders(p_payload in clob, p_update in boolean, p_response out clob) is
         l_count number;
         l_detail_count number;
         l_header_exists number;
@@ -489,7 +492,7 @@ create or replace package body local_mfcs_service_pkg as
         select count(*) into l_count from json_table(p_payload, '$.items[*]' columns x path '$');
         assert_true(l_count > 0, 'items', 'must contain at least one purchase order');
 
-        for h in (
+        for l_order_row in (
             select order_no, supplier_no, currency_code, not_before_date, not_after_date,
                    earliest_ship_date, latest_ship_date, dept, order_status, exchange_rate,
                    approved_by, data_destination, details
@@ -510,36 +513,36 @@ create or replace package body local_mfcs_service_pkg as
                       details clob format json path '$.details'
               )
         ) loop
-            assert_true(h.order_no is not null, 'items.orderNo', 'is required');
-            assert_true(h.data_destination = 'RMS', 'items.dataLoadingDestination', 'must be RMS');
-            select count(*) into l_count from sups where supplier = h.supplier_no and status = 'A';
+            assert_true(l_order_row.order_no is not null, 'items.orderNo', 'is required');
+            assert_true(l_order_row.data_destination = 'RMS', 'items.dataLoadingDestination', 'must be RMS');
+            select count(*) into l_count from sups where supplier = l_order_row.supplier_no and status = 'A';
             assert_true(l_count = 1, 'items.supplier', 'must identify an active supplier');
-            select count(*) into l_count from deps where dept = h.dept;
+            select count(*) into l_count from deps where dept = l_order_row.dept;
             assert_true(l_count = 1, 'items.dept', 'must identify an existing department');
-            select count(*) into l_header_exists from ordhead where order_no = h.order_no;
-            l_not_before_date := iso_date(h.not_before_date);
-            l_not_after_date := iso_date(h.not_after_date);
-            l_earliest_ship_date := iso_date(h.earliest_ship_date);
-            l_latest_ship_date := iso_date(h.latest_ship_date);
+            select count(*) into l_header_exists from ordhead where order_no = l_order_row.order_no;
+            l_not_before_date := iso_date(l_order_row.not_before_date);
+            l_not_after_date := iso_date(l_order_row.not_after_date);
+            l_earliest_ship_date := iso_date(l_order_row.earliest_ship_date);
+            l_latest_ship_date := iso_date(l_order_row.latest_ship_date);
 
             if p_update then
                 assert_true(l_header_exists = 1, 'items.orderNo', 'does not exist for update');
                 update ordhead
-                   set supplier = coalesce(h.supplier_no, supplier),
-                       dept = coalesce(h.dept, dept),
-                       status = coalesce(h.order_status, status),
-                       currency_code = coalesce(h.currency_code, currency_code),
-                       exchange_rate = coalesce(h.exchange_rate, exchange_rate),
+                   set supplier = coalesce(l_order_row.supplier_no, supplier),
+                       dept = coalesce(l_order_row.dept, dept),
+                       status = coalesce(l_order_row.order_status, status),
+                       currency_code = coalesce(l_order_row.currency_code, currency_code),
+                       exchange_rate = coalesce(l_order_row.exchange_rate, exchange_rate),
                        not_before_date = coalesce(l_not_before_date, not_before_date),
                        not_after_date = coalesce(l_not_after_date, not_after_date),
                        earliest_ship_date = coalesce(l_earliest_ship_date, earliest_ship_date),
                        latest_ship_date = coalesce(l_latest_ship_date, latest_ship_date),
-                       approved_by = coalesce(h.approved_by, approved_by),
-                       approved_at = case when coalesce(h.order_status, status) = 'A' then coalesce(approved_at, systimestamp) else approved_at end,
+                       approved_by = coalesce(l_order_row.approved_by, approved_by),
+                       approved_at = case when coalesce(l_order_row.order_status, status) = 'A' then coalesce(approved_at, systimestamp) else approved_at end,
                        updated_at = systimestamp
-                 where order_no = h.order_no;
-                delete from ordloc where order_no = h.order_no;
-                delete from ordsku where order_no = h.order_no;
+                 where order_no = l_order_row.order_no;
+                delete from ordloc where order_no = l_order_row.order_no;
+                delete from ordsku where order_no = l_order_row.order_no;
             else
                 assert_true(l_header_exists = 0, 'items.orderNo', 'already exists');
                 insert into ordhead(
@@ -547,18 +550,18 @@ create or replace package body local_mfcs_service_pkg as
                     not_before_date, not_after_date, earliest_ship_date, latest_ship_date,
                     approved_by, approved_at
                 ) values (
-                    h.order_no, h.supplier_no, h.dept, coalesce(h.order_status, 'W'), h.currency_code,
-                    coalesce(h.exchange_rate, 1), l_not_before_date, l_not_after_date,
-                    l_earliest_ship_date, l_latest_ship_date, h.approved_by,
-                    case when h.order_status = 'A' then systimestamp end
+                    l_order_row.order_no, l_order_row.supplier_no, l_order_row.dept, coalesce(l_order_row.order_status, 'W'), l_order_row.currency_code,
+                    coalesce(l_order_row.exchange_rate, 1), l_not_before_date, l_not_after_date,
+                    l_earliest_ship_date, l_latest_ship_date, l_order_row.approved_by,
+                    case when l_order_row.order_status = 'A' then systimestamp end
                 );
-                update order_number_reservation set consumed_ind = 'Y' where order_no = h.order_no;
+                update order_number_reservation set consumed_ind = 'Y' where order_no = l_order_row.order_no;
             end if;
 
-            l_details := h.details;
+            l_details := l_order_row.details;
             select count(*) into l_detail_count from json_table(l_details, '$[*]' columns x path '$');
             assert_true(l_detail_count > 0, 'items.details', 'must contain at least one item/location detail');
-            for d in (
+            for l_line_row in (
                 select item, location, loc_type, qty_ordered, unit_cost, origin_country_id
                   from json_table(l_details, '$[*]'
                       columns
@@ -571,46 +574,46 @@ create or replace package body local_mfcs_service_pkg as
                   )
             ) loop
                 begin
-                    select status, original_retail into l_item_status, l_item_retail from item_master where item = d.item;
+                    select status, original_retail into l_item_status, l_item_retail from item_master where item = l_line_row.item;
                 exception when no_data_found then
-                    fail('items.details.item', 'does not exist: ' || d.item);
+                    fail('items.details.item', 'does not exist: ' || l_line_row.item);
                 end;
-                assert_true(l_item_status = 'A', 'items.details.item', 'must be approved before ordering: ' || d.item);
+                assert_true(l_item_status = 'A', 'items.details.item', 'must be approved before ordering: ' || l_line_row.item);
                 select count(*) into l_count
                   from item_supp_country
-                 where item = d.item
-                   and supplier = h.supplier_no
-                   and origin_country_id = d.origin_country_id;
+                 where item = l_line_row.item
+                   and supplier = l_order_row.supplier_no
+                   and origin_country_id = l_line_row.origin_country_id;
                 assert_true(l_count = 1, 'items.details.originCountryId', 'item must be sourced from the order supplier and country');
                 select count(*) into l_count
                   from item_loc
-                 where item = d.item
-                   and location = d.location
-                   and loc_type = d.loc_type
+                 where item = l_line_row.item
+                   and location = l_line_row.location
+                   and loc_type = l_line_row.loc_type
                    and status = 'A';
                 assert_true(l_count = 1, 'items.details.location', 'item must be active at the order location');
-                assert_true(d.qty_ordered > 0 and d.qty_ordered = trunc(d.qty_ordered), 'items.details.qtyOrdered', 'must be a positive whole number');
-                assert_true(d.unit_cost >= 0, 'items.details.unitCost', 'must be zero or greater');
+                assert_true(l_line_row.qty_ordered > 0 and l_line_row.qty_ordered = trunc(l_line_row.qty_ordered), 'items.details.qtyOrdered', 'must be a positive whole number');
+                assert_true(l_line_row.unit_cost >= 0, 'items.details.unitCost', 'must be zero or greater');
 
                 merge into ordsku target
-                using (select h.order_no order_no, d.item item from dual) source
+                using (select l_order_row.order_no order_no, l_line_row.item item from dual) source
                    on (target.order_no = source.order_no and target.item = source.item)
                 when matched then update set
-                    target.qty_ordered = target.qty_ordered + d.qty_ordered,
-                    target.unit_cost = d.unit_cost,
-                    target.origin_country_id = d.origin_country_id
+                    target.qty_ordered = target.qty_ordered + l_line_row.qty_ordered,
+                    target.unit_cost = l_line_row.unit_cost,
+                    target.origin_country_id = l_line_row.origin_country_id
                 when not matched then insert (
                     order_no, item, origin_country_id, unit_cost, qty_ordered
                 ) values (
-                    h.order_no, d.item, d.origin_country_id, d.unit_cost, d.qty_ordered
+                    l_order_row.order_no, l_line_row.item, l_line_row.origin_country_id, l_line_row.unit_cost, l_line_row.qty_ordered
                 );
 
                 insert into ordloc(
                     order_no, item, location, loc_type, origin_country_id,
                     qty_ordered, unit_cost, unit_retail, earliest_ship_date, latest_ship_date
                 ) values (
-                    h.order_no, d.item, d.location, d.loc_type, d.origin_country_id,
-                    d.qty_ordered, d.unit_cost, l_item_retail, l_earliest_ship_date, l_latest_ship_date
+                    l_order_row.order_no, l_line_row.item, l_line_row.location, l_line_row.loc_type, l_line_row.origin_country_id,
+                    l_line_row.qty_ordered, l_line_row.unit_cost, l_item_retail, l_earliest_ship_date, l_latest_ship_date
                 );
             end loop;
 
@@ -620,39 +623,39 @@ create or replace package body local_mfcs_service_pkg as
                      from ordloc ol
                     where ol.order_no = oh.order_no
                )
-             where order_no = h.order_no;
+             where order_no = l_order_row.order_no;
         end loop;
-        o_response := success_response;
+        p_response := success_response;
     end;
 
-    procedure get_purchase_order(p_order_no in varchar2, o_response out clob) is
+    procedure get_purchase_order(p_order_no in varchar2, p_response out clob) is
         l_root json_object_t := json_object_t();
         l_items json_array_t := json_array_t();
         l_order json_object_t := json_object_t();
         l_details json_array_t := json_array_t();
         l_detail json_object_t;
     begin
-        for h in (select * from ordhead where order_no = to_number(p_order_no)) loop
-            l_order.put('orderNo', h.order_no);
-            l_order.put('supplier', h.supplier);
-            l_order.put('dept', h.dept);
-            l_order.put('status', h.status);
-            l_order.put('currencyCode', h.currency_code);
-            l_order.put('exchangeRate', h.exchange_rate);
-            l_order.put('notBeforeDate', to_char(h.not_before_date, 'YYYY-MM-DD'));
-            l_order.put('notAfterDate', to_char(h.not_after_date, 'YYYY-MM-DD'));
-            l_order.put('earliestShipDate', to_char(h.earliest_ship_date, 'YYYY-MM-DD'));
-            l_order.put('latestShipDate', to_char(h.latest_ship_date, 'YYYY-MM-DD'));
-            l_order.put('totalQtyOrdered', h.total_qty_ordered);
-            l_order.put('totalCost', h.total_cost);
-            for d in (select * from ordloc where order_no = h.order_no order by item, location) loop
+        for l_order_row in (select * from ordhead where order_no = to_number(p_order_no)) loop
+            l_order.put('orderNo', l_order_row.order_no);
+            l_order.put('supplier', l_order_row.supplier);
+            l_order.put('dept', l_order_row.dept);
+            l_order.put('status', l_order_row.status);
+            l_order.put('currencyCode', l_order_row.currency_code);
+            l_order.put('exchangeRate', l_order_row.exchange_rate);
+            l_order.put('notBeforeDate', to_char(l_order_row.not_before_date, 'YYYY-MM-DD'));
+            l_order.put('notAfterDate', to_char(l_order_row.not_after_date, 'YYYY-MM-DD'));
+            l_order.put('earliestShipDate', to_char(l_order_row.earliest_ship_date, 'YYYY-MM-DD'));
+            l_order.put('latestShipDate', to_char(l_order_row.latest_ship_date, 'YYYY-MM-DD'));
+            l_order.put('totalQtyOrdered', l_order_row.total_qty_ordered);
+            l_order.put('totalCost', l_order_row.total_cost);
+            for l_line_row in (select * from ordloc where order_no = l_order_row.order_no order by item, location) loop
                 l_detail := json_object_t();
-                l_detail.put('item', d.item);
-                l_detail.put('location', d.location);
-                l_detail.put('locationType', d.loc_type);
-                l_detail.put('originCountryId', d.origin_country_id);
-                l_detail.put('qtyOrdered', d.qty_ordered);
-                l_detail.put('unitCost', d.unit_cost);
+                l_detail.put('item', l_line_row.item);
+                l_detail.put('location', l_line_row.location);
+                l_detail.put('locationType', l_line_row.loc_type);
+                l_detail.put('originCountryId', l_line_row.origin_country_id);
+                l_detail.put('qtyOrdered', l_line_row.qty_ordered);
+                l_detail.put('unitCost', l_line_row.unit_cost);
                 l_details.append(l_detail);
             end loop;
             l_order.put('details', l_details);
@@ -664,18 +667,19 @@ create or replace package body local_mfcs_service_pkg as
         l_root.put('limit', 1000);
         l_root.put('count', 1);
         l_root.put('links', json_array_t());
-        o_response := l_root.to_clob;
+        p_response := l_root.to_clob;
     exception when value_error then
         fail('orderNo', 'must be numeric');
     end;
 
-    procedure get_operation_status(p_target_corr in varchar2, o_response out clob) is
+    -- Read models used by correlation recovery and the local state viewer.
+    procedure get_operation_status(p_target_corr in varchar2, p_response out clob) is
         l_root json_object_t := json_object_t();
         l_items json_array_t := json_array_t();
         l_node json_object_t := json_object_t();
         l_found boolean := false;
     begin
-        for r in (
+        for l_row in (
             select *
               from (
                   select e.* from local_mfcs_rest_event e
@@ -684,15 +688,15 @@ create or replace package body local_mfcs_service_pkg as
               )
              where rownum = 1
         ) loop
-            l_node.put('requestId', to_char(r.event_id));
-            l_node.put('xCorrelationId', r.correlation_id);
-            l_node.put('method', r.http_method);
-            l_node.put('serviceUrl', r.service_name);
-            l_node.put('responseCode', r.response_code);
-            l_node.put('requestTimestamp', to_char(r.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
-            l_node.put('responseTimestamp', to_char(r.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
-            if r.request_payload is not null then l_node.put('requestPayload', dbms_lob.substr(r.request_payload, 32000, 1)); else l_node.put_null('requestPayload'); end if;
-            if r.response_payload is not null then l_node.put('responsePayload', dbms_lob.substr(r.response_payload, 32000, 1)); else l_node.put_null('responsePayload'); end if;
+            l_node.put('requestId', to_char(l_row.event_id));
+            l_node.put('xCorrelationId', l_row.correlation_id);
+            l_node.put('method', l_row.http_method);
+            l_node.put('serviceUrl', l_row.service_name);
+            l_node.put('responseCode', l_row.response_code);
+            l_node.put('requestTimestamp', to_char(l_row.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
+            l_node.put('responseTimestamp', to_char(l_row.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
+            if l_row.request_payload is not null then l_node.put('requestPayload', dbms_lob.substr(l_row.request_payload, 32000, 1)); else l_node.put_null('requestPayload'); end if;
+            if l_row.response_payload is not null then l_node.put('responsePayload', dbms_lob.substr(l_row.response_payload, 32000, 1)); else l_node.put_null('responsePayload'); end if;
             l_items.append(l_node);
             l_found := true;
         end loop;
@@ -701,10 +705,10 @@ create or replace package body local_mfcs_service_pkg as
         l_root.put('limit', 1000);
         l_root.put('count', case when l_found then 1 else 0 end);
         l_root.put('links', json_array_t());
-        o_response := l_root.to_clob;
+        p_response := l_root.to_clob;
     end;
 
-    procedure state_snapshot(o_response out clob) is
+    procedure state_snapshot(p_response out clob) is
         l_root json_object_t := json_object_t();
         l_counts json_object_t := json_object_t();
         l_items json_array_t := json_array_t();
@@ -720,33 +724,34 @@ create or replace package body local_mfcs_service_pkg as
         select count(*) into l_count from ordsku; l_counts.put('ORDSKU', l_count);
         select count(*) into l_count from ordloc; l_counts.put('ORDLOC', l_count);
         l_root.put('tableCounts', l_counts);
-        for r in (select item, item_parent, item_level, tran_level, item_desc, status, diff_1, diff_2, diff_3 from item_master order by created_at, item) loop
+        for l_row in (select item, item_parent, item_level, tran_level, item_desc, status, diff_1, diff_2, diff_3 from item_master order by created_at, item) loop
             l_node := json_object_t();
-            l_node.put('item', r.item);
-            if r.item_parent is null then l_node.put_null('itemParent'); else l_node.put('itemParent', r.item_parent); end if;
-            l_node.put('itemLevel', r.item_level);
-            l_node.put('tranLevel', r.tran_level);
-            l_node.put('itemDescription', r.item_desc);
-            l_node.put('status', r.status);
-            if r.diff_1 is not null then l_node.put('diff1', r.diff_1); end if;
-            if r.diff_2 is not null then l_node.put('diff2', r.diff_2); end if;
-            if r.diff_3 is not null then l_node.put('diff3', r.diff_3); end if;
+            l_node.put('item', l_row.item);
+            if l_row.item_parent is null then l_node.put_null('itemParent'); else l_node.put('itemParent', l_row.item_parent); end if;
+            l_node.put('itemLevel', l_row.item_level);
+            l_node.put('tranLevel', l_row.tran_level);
+            l_node.put('itemDescription', l_row.item_desc);
+            l_node.put('status', l_row.status);
+            if l_row.diff_1 is not null then l_node.put('diff1', l_row.diff_1); end if;
+            if l_row.diff_2 is not null then l_node.put('diff2', l_row.diff_2); end if;
+            if l_row.diff_3 is not null then l_node.put('diff3', l_row.diff_3); end if;
             l_items.append(l_node);
         end loop;
-        for r in (select order_no, supplier, status, total_qty_ordered, total_cost from ordhead order by order_no) loop
+        for l_row in (select order_no, supplier, status, total_qty_ordered, total_cost from ordhead order by order_no) loop
             l_node := json_object_t();
-            l_node.put('orderNo', r.order_no);
-            l_node.put('supplier', r.supplier);
-            l_node.put('status', r.status);
-            l_node.put('totalQtyOrdered', r.total_qty_ordered);
-            l_node.put('totalCost', r.total_cost);
+            l_node.put('orderNo', l_row.order_no);
+            l_node.put('supplier', l_row.supplier);
+            l_node.put('status', l_row.status);
+            l_node.put('totalQtyOrdered', l_row.total_qty_ordered);
+            l_node.put('totalCost', l_row.total_cost);
             l_orders.append(l_node);
         end loop;
         l_root.put('items', l_items);
         l_root.put('orders', l_orders);
-        o_response := l_root.to_clob;
+        p_response := l_root.to_clob;
     end;
 
+    -- Administration operations only affect transactional simulator data.
     procedure reset_transactional_data is
     begin
         delete from local_mfcs_rest_event;
@@ -763,6 +768,7 @@ create or replace package body local_mfcs_service_pkg as
         commit;
     end;
 
+    -- Thin REST dispatcher: route, commit/rollback once, then journal the result.
     procedure handle(
         p_resource        in varchar2,
         p_http_method     in varchar2,
@@ -770,8 +776,8 @@ create or replace package body local_mfcs_service_pkg as
         p_correlation_id  in varchar2 default null,
         p_order_no        in varchar2 default null,
         p_status_corr_id  in varchar2 default null,
-        o_http_status     out number,
-        o_response        out clob
+        p_http_status     out number,
+        p_response        out clob
     ) is
         l_corr varchar2(100) := correlation_id(p_correlation_id);
         l_started timestamp with time zone := systimestamp;
@@ -787,44 +793,41 @@ create or replace package body local_mfcs_service_pkg as
                 l_root.put('access_token', 'public-contract-token');
                 l_root.put('token_type', 'Bearer');
                 l_root.put('expires_in', 3600);
-                o_response := l_root.to_clob;
+                p_response := l_root.to_clob;
             when 'RESERVE_ITEM_NUMBERS' then
-                reserve_item_numbers(p_request_payload, l_corr, o_response);
+                reserve_item_numbers(p_request_payload, l_corr, p_response);
             when 'ITEMS' then
-                upsert_items(p_request_payload, upper(p_http_method) = 'PUT', o_response);
+                upsert_items(p_request_payload, upper(p_http_method) = 'PUT', p_response);
             when 'ITEMS_UPDATE' then
-                upsert_items(p_request_payload, true, o_response);
+                upsert_items(p_request_payload, true, p_response);
             when 'ITEM_SUPPLIERS' then
-                upsert_item_suppliers(p_request_payload, o_response);
+                upsert_item_suppliers(p_request_payload, p_response);
             when 'ITEM_UDAS' then
-                upsert_item_udas(p_request_payload, o_response);
+                upsert_item_udas(p_request_payload, p_response);
             when 'ITEM_LOCATIONS' then
-                upsert_item_locations(p_request_payload, o_response);
+                upsert_item_locations(p_request_payload, p_response);
             when 'RESERVE_ORDER_NUMBERS' then
-                reserve_order_numbers(p_request_payload, l_corr, o_response);
+                reserve_order_numbers(p_request_payload, l_corr, p_response);
             when 'PURCHASE_ORDERS' then
-                upsert_purchase_orders(p_request_payload, upper(p_http_method) = 'PUT', o_response);
+                upsert_purchase_orders(p_request_payload, upper(p_http_method) = 'PUT', p_response);
             when 'GET_ORDER' then
-                get_purchase_order(p_order_no, o_response);
+                get_purchase_order(p_order_no, p_response);
             when 'GET_STATUS' then
-                get_operation_status(p_status_corr_id, o_response);
+                get_operation_status(p_status_corr_id, p_response);
             when 'STATE' then
-                state_snapshot(o_response);
+                state_snapshot(p_response);
             when 'RESET' then
                 reset_transactional_data;
-                o_response := success_response;
+                p_response := success_response;
             else
                 fail('resource', 'is not implemented: ' || p_resource);
         end case;
-        o_http_status := 200;
-        insert into local_mfcs_rest_event(
-            event_id, correlation_id, service_name, http_method, response_code,
-            request_payload, response_payload, started_at, completed_at
-        ) values (
-            local_mfcs_event_seq.nextval, l_corr, upper(p_resource), upper(p_http_method), o_http_status,
-            p_request_payload, o_response, l_started, systimestamp
-        );
         commit;
+        p_http_status := 200;
+        local_mfcs_log_pkg.record_event(
+            l_corr, p_resource, p_http_method, p_http_status,
+            p_request_payload, p_response, l_started
+        );
     exception
         when others then
             rollback;
@@ -837,16 +840,12 @@ create or replace package body local_mfcs_service_pkg as
                 l_field := 'service';
                 l_message := l_error;
             end if;
-            o_http_status := 400;
-            o_response := error_response(l_field, l_message);
-            insert into local_mfcs_rest_event(
-                event_id, correlation_id, service_name, http_method, response_code,
-                request_payload, response_payload, started_at, completed_at
-            ) values (
-                local_mfcs_event_seq.nextval, l_corr, upper(p_resource), upper(p_http_method), o_http_status,
-                p_request_payload, o_response, l_started, systimestamp
+            p_http_status := 400;
+            p_response := error_response(l_field, l_message);
+            local_mfcs_log_pkg.record_event(
+                l_corr, p_resource, p_http_method, p_http_status,
+                p_request_payload, p_response, l_started
             );
-            commit;
     end;
 end local_mfcs_service_pkg;
 /

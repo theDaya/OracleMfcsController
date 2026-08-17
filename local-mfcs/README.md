@@ -40,6 +40,11 @@ Run from the repository root as the ORDS-enabled application schema:
 
 The installer includes the Office controller and public-contract mapper, creates and seeds the local RMS subset, defines both ORDS modules, and sets `MFCS_CLIENT_MODE` to `LOCAL_MFCS`.
 
+Foundation seeds are idempotent and include supplier `70001`, store `98`,
+warehouse `1001`, hierarchy `100/10/1`, countries, and differentiator groups.
+The optional local demonstration seed provides style `3900000`, SKUs `3900001`
+and `3900002`, and order `11900000` for immediate state-viewer inspection.
+
 The schema owner needs `CREATE TABLE`, `CREATE SEQUENCE`, `CREATE PROCEDURE`, and `CREATE VIEW`, plus the controller privileges listed in the root README.
 
 To install only the simulator into an existing controller schema, run `local-mfcs/database/001` through `030` in numeric order.
@@ -80,6 +85,19 @@ Run the public ORDS-to-database smoke test from PowerShell:
 ```
 
 The SQL test covers the complete `CREATE_ALL` workflow, RMS hierarchy and sourcing relationships, PO totals, idempotency, and invalid diff rejection. The HTTP smoke covers direct service create/update routes, persisted state, correlation status, and a representative validation failure.
+
+## Event Logging
+
+`LOCAL_MFCS_LOG_PKG` records every simulator call in `LOCAL_MFCS_REST_EVENT` using
+an autonomous transaction. This keeps the REST journal available when the RMS
+business transaction is rolled back.
+
+```sql
+select event_id, correlation_id, service_name, http_method, response_code,
+       started_at, completed_at
+from local_mfcs_rest_event
+order by event_id desc;
+```
 
 ## Deliberate Limits
 

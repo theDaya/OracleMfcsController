@@ -127,9 +127,9 @@ create or replace package body office_mfcs_request_pkg as
         p_operation_name    in varchar2,
         p_payload_hash      in varchar2,
         p_payload           in clob,
-        o_result            out varchar2,
-        o_status            out varchar2,
-        o_response_payload  out clob
+        p_result            out varchar2,
+        p_status            out varchar2,
+        p_response_payload  out clob
     ) is
         l_existing_hash varchar2(64);
         l_status varchar2(30);
@@ -191,9 +191,9 @@ create or replace package body office_mfcs_request_pkg as
             );
 
             commit;
-            o_result := 'NEW';
-            o_status := 'RECEIVED';
-            o_response_payload := null;
+            p_result := 'NEW';
+            p_status := 'RECEIVED';
+            p_response_payload := null;
             return;
         exception
             when dup_val_on_index then
@@ -202,16 +202,16 @@ create or replace package body office_mfcs_request_pkg as
 
         begin
             select payload_hash, request_status, response_payload
-              into l_existing_hash, l_status, o_response_payload
+              into l_existing_hash, l_status, p_response_payload
               from office_mfcs_request
              where action_request_id = p_action_request_id
              for update nowait;
         exception
             when others then
                 if sqlcode = -54 then
-                    o_result := 'EXECUTING';
-                    o_status := 'IN_PROGRESS';
-                    o_response_payload := null;
+                    p_result := 'EXECUTING';
+                    p_status := 'IN_PROGRESS';
+                    p_response_payload := null;
                     rollback;
                     return;
                 end if;
@@ -219,32 +219,32 @@ create or replace package body office_mfcs_request_pkg as
         end;
 
         if l_existing_hash <> p_payload_hash then
-            o_result := 'CONFLICT';
-            o_status := l_status;
+            p_result := 'CONFLICT';
+            p_status := l_status;
         elsif l_status = 'IN_PROGRESS' then
-            o_result := 'EXECUTING';
-            o_status := l_status;
+            p_result := 'EXECUTING';
+            p_status := l_status;
         elsif l_status = 'FAILED_NO_SIDE_EFFECT'
-              and o_response_payload is not null
-              and dbms_lob.instr(o_response_payload, 'MFCS_BATCH_WINDOW_ACTIVE') > 0 then
+              and p_response_payload is not null
+              and dbms_lob.instr(p_response_payload, 'MFCS_BATCH_WINDOW_ACTIVE') > 0 then
             update office_mfcs_request
                set request_status = 'IN_PROGRESS',
                    started_at = coalesce(started_at, systimestamp),
                    last_updated_at = systimestamp
              where action_request_id = p_action_request_id;
-            o_result := 'RESUME';
-            o_status := 'IN_PROGRESS';
+            p_result := 'RESUME';
+            p_status := 'IN_PROGRESS';
         elsif l_status in ('COMPLETED', 'FAILED_NO_SIDE_EFFECT', 'MANUAL_REVIEW') then
-            o_result := 'EXISTING';
-            o_status := l_status;
+            p_result := 'EXISTING';
+            p_status := l_status;
         else
             update office_mfcs_request
                set request_status = 'IN_PROGRESS',
                    started_at = coalesce(started_at, systimestamp),
                    last_updated_at = systimestamp
              where action_request_id = p_action_request_id;
-            o_result := 'RESUME';
-            o_status := 'IN_PROGRESS';
+            p_result := 'RESUME';
+            p_status := 'IN_PROGRESS';
         end if;
 
         commit;
@@ -457,8 +457,8 @@ create or replace package body office_mfcs_request_pkg as
         p_http_method       in varchar2,
         p_endpoint          in varchar2,
         p_request_payload   in clob,
-        o_attempt_id        out number,
-        o_correlation_id    out varchar2
+        p_attempt_id        out number,
+        p_correlation_id    out varchar2
     ) is
         l_attempt_number number;
         l_guid varchar2(32);
@@ -470,13 +470,13 @@ create or replace package body office_mfcs_request_pkg as
            and step_code = p_step_code;
 
         l_guid := lower(rawtohex(sys_guid()));
-        o_correlation_id := substr(l_guid, 1, 8) || '-'
+        p_correlation_id := substr(l_guid, 1, 8) || '-'
                          || substr(l_guid, 9, 4) || '-'
                          || substr(l_guid, 13, 4) || '-'
                          || substr(l_guid, 17, 4) || '-'
                          || substr(l_guid, 21);
 
-        o_attempt_id := office_mfcs_attempt_seq.nextval;
+        p_attempt_id := office_mfcs_attempt_seq.nextval;
 
         insert into office_mfcs_attempt (
             attempt_id,
@@ -489,11 +489,11 @@ create or replace package body office_mfcs_request_pkg as
             request_payload,
             attempt_status
         ) values (
-            o_attempt_id,
+            p_attempt_id,
             p_action_request_id,
             p_step_code,
             l_attempt_number,
-            o_correlation_id,
+            p_correlation_id,
             p_http_method,
             p_endpoint,
             p_request_payload,
@@ -550,7 +550,7 @@ create or replace package body office_mfcs_request_pkg as
             || '"ORDER_NO":' || case when l_order is null then 'null' else '"' || json_escape(l_order) || '"' end || ','
             || '"PLMSizeCurveDtl":[';
 
-        for r in (
+        for l_request_row in (
             select source_variant_ref, sku_size, sku_width, mfcs_sku_no
               from office_mfcs_entity_map m
               join office_mfcs_request r
@@ -567,15 +567,15 @@ create or replace package body office_mfcs_request_pkg as
             end if;
 
             l_response := l_response
-                || '{"SOURCE_VARIANT_REF":"' || json_escape(r.source_variant_ref) || '",'
-                || '"SKU_SIZE":"' || json_escape(r.sku_size) || '",'
-                || '"SKU_WIDTH":"' || json_escape(r.sku_width) || '",'
-                || '"SKU_ID":"' || json_escape(r.mfcs_sku_no) || '"}';
+                || '{"SOURCE_VARIANT_REF":"' || json_escape(l_request_row.source_variant_ref) || '",'
+                || '"SKU_SIZE":"' || json_escape(l_request_row.sku_size) || '",'
+                || '"SKU_WIDTH":"' || json_escape(l_request_row.sku_width) || '",'
+                || '"SKU_ID":"' || json_escape(l_request_row.mfcs_sku_no) || '"}';
         end loop;
 
         l_response := l_response || '],"COMPLETED_STEPS":[';
         l_first := true;
-        for s in (
+        for l_step_row in (
             select step_code
               from office_mfcs_step
              where action_request_id = p_action_request_id
@@ -587,7 +587,7 @@ create or replace package body office_mfcs_request_pkg as
             else
                 l_response := l_response || ',';
             end if;
-            l_response := l_response || '"' || json_escape(s.step_code) || '"';
+            l_response := l_response || '"' || json_escape(l_step_row.step_code) || '"';
         end loop;
 
         l_response := l_response || '],"FAILED_STEP":';
@@ -640,7 +640,7 @@ create or replace package body office_mfcs_validation_pkg as
 
     function validate_request(
         p_payload in clob,
-        o_errors  out clob
+        p_errors  out clob
     ) return boolean is
         l_errors json_array_t := json_array_t();
         l_action_request_id varchar2(80);
@@ -677,7 +677,7 @@ create or replace package body office_mfcs_validation_pkg as
         exception
             when others then
                 add_error(l_errors, '$', 'INVALID_JSON', sqlerrm);
-                o_errors := l_errors.to_clob;
+                p_errors := l_errors.to_clob;
                 return false;
         end;
 
@@ -838,7 +838,7 @@ create or replace package body office_mfcs_validation_pkg as
         end if;
 
         if l_operation in ('CREATE_ORDER', 'MODIFY_STYLE', 'MODIFY_ORDER') then
-            for v in (
+            for l_variant_row in (
                 select source_variant_ref, sku_id
                   from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
                       columns
@@ -846,13 +846,13 @@ create or replace package body office_mfcs_validation_pkg as
                           sku_id varchar2(60) path '$.SKU_ID' null on error
                   )
             ) loop
-                if trim(v.sku_id) is null then
+                if trim(l_variant_row.sku_id) is null then
                     select count(*)
                       into l_count
                       from office_mfcs_entity_map
                      where source_system = l_source_system
                        and source_style_ref = l_source_style_ref
-                       and source_variant_ref = v.source_variant_ref
+                       and source_variant_ref = l_variant_row.source_variant_ref
                        and mfcs_sku_no is not null;
 
                     if l_count = 0 then
@@ -940,7 +940,7 @@ create or replace package body office_mfcs_validation_pkg as
             add_error(l_errors, 'COLOUR', 'MAPPING_NOT_FOUND', 'Colour mapping is not configured.');
         end if;
 
-        for v in (
+        for l_variant_row in (
             select sku_size, sku_width
               from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
                   columns
@@ -948,21 +948,21 @@ create or replace package body office_mfcs_validation_pkg as
                       sku_width varchar2(60) path '$.SKU_WIDTH' null on error
               )
         ) loop
-            if v.sku_size is null or not has_config('MAP.SIZE.' || upper(v.sku_size)) then
+            if l_variant_row.sku_size is null or not has_config('MAP.SIZE.' || upper(l_variant_row.sku_size)) then
                 add_error(l_errors, 'PLMSizeCurveDtl.SKU_SIZE', 'MAPPING_NOT_FOUND', 'Size mapping is not configured.');
             end if;
 
-            if v.sku_width is null or not has_config('MAP.WIDTH.' || upper(v.sku_width)) then
+            if l_variant_row.sku_width is null or not has_config('MAP.WIDTH.' || upper(l_variant_row.sku_width)) then
                 add_error(l_errors, 'PLMSizeCurveDtl.SKU_WIDTH', 'MAPPING_NOT_FOUND', 'Width mapping is not configured.');
             end if;
         end loop;
 
         if l_errors.get_size > 0 then
-            o_errors := l_errors.to_clob;
+            p_errors := l_errors.to_clob;
             return false;
         end if;
 
-        o_errors := '[]';
+        p_errors := '[]';
         return true;
     end;
 end office_mfcs_validation_pkg;
@@ -1154,6 +1154,7 @@ end office_mfcs_mapping_pkg;
 /
 
 create or replace package body office_mfcs_client_pkg as
+    c_package_name constant varchar2(128) := 'OFFICE_MFCS_CLIENT_PKG';
     g_access_token varchar2(4000);
     g_token_expires_at timestamp with time zone;
 
@@ -1313,7 +1314,13 @@ create or replace package body office_mfcs_client_pkg as
         l_mock_attempt_status varchar2(30);
         l_order_no varchar2(30);
         l_local_resource varchar2(100);
+        l_error_code number;
+        l_error_message varchar2(4000);
     begin
+        office_mfcs_log_pkg.info(
+            c_package_name, 'CALL_SERVICE', p_action_request_id,
+            p_step_code || ' -> ' || p_endpoint_key
+        );
         l_base_url := office_mfcs_request_pkg.get_config('MFCS_BASE_URL');
         l_endpoint_path := office_mfcs_request_pkg.get_config(p_endpoint_key);
 
@@ -1333,8 +1340,8 @@ create or replace package body office_mfcs_client_pkg as
             p_http_method => p_http_method,
             p_endpoint => l_endpoint,
             p_request_payload => p_request_payload,
-            o_attempt_id => l_attempt_id,
-            o_correlation_id => l_correlation_id
+            p_attempt_id => l_attempt_id,
+            p_correlation_id => l_correlation_id
         );
 
         if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'MOCK' then
@@ -1365,6 +1372,7 @@ create or replace package body office_mfcs_client_pkg as
             end if;
 
             office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'SUCCEEDED', l_http_status, l_response);
+            office_mfcs_log_pkg.info(c_package_name, 'CALL_SERVICE', p_action_request_id, p_step_code || ' completed');
             return l_response;
         end if;
 
@@ -1384,6 +1392,7 @@ create or replace package body office_mfcs_client_pkg as
                       out l_response;
             if l_http_status between 200 and 299 then
                 office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'SUCCEEDED', l_http_status, l_response);
+                office_mfcs_log_pkg.info(c_package_name, 'CALL_SERVICE', p_action_request_id, p_step_code || ' completed');
                 return l_response;
             end if;
             office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'FAILED', l_http_status, l_response);
@@ -1415,6 +1424,7 @@ create or replace package body office_mfcs_client_pkg as
 
         if l_http_status between 200 and 299 then
             office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'SUCCEEDED', l_http_status, l_response);
+            office_mfcs_log_pkg.info(c_package_name, 'CALL_SERVICE', p_action_request_id, p_step_code || ' completed');
             return l_response;
         elsif l_http_status = 503 then
             office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'FAILED', l_http_status, l_response);
@@ -1425,19 +1435,26 @@ create or replace package body office_mfcs_client_pkg as
         end if;
     exception
         when others then
-            if sqlcode in (-20950, -20951, -20952) then
+            l_error_code := sqlcode;
+            l_error_message := sqlerrm;
+            office_mfcs_log_pkg.error(
+                c_package_name, 'CALL_SERVICE', p_action_request_id,
+                p_step_code || ' failed', l_error_message
+            );
+
+            if l_error_code in (-20950, -20951, -20952) then
                 raise;
             end if;
 
-            if instr(lower(sqlerrm), 'timeout') > 0 then
-                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'OUTCOME_UNKNOWN', null, '{"ERROR":"' || replace(sqlerrm, '"', '\"') || '"}');
+            if instr(lower(l_error_message), 'timeout') > 0 then
+                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'OUTCOME_UNKNOWN', null, '{"ERROR":"' || replace(l_error_message, '"', '\"') || '"}');
                 raise_application_error(-20952, 'MFCS timeout after request was sent.');
             end if;
 
             if l_attempt_id is not null then
-                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'FAILED', null, '{"ERROR":"' || replace(sqlerrm, '"', '\"') || '"}');
+                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'FAILED', null, '{"ERROR":"' || replace(l_error_message, '"', '\"') || '"}');
             end if;
-            raise_application_error(-20950, sqlerrm);
+            raise_application_error(-20950, l_error_message);
     end;
 
     function correlation_status(
@@ -1552,6 +1569,8 @@ end office_mfcs_recovery_pkg;
 /
 
 create or replace package body office_mfcs_orchestrator_pkg as
+    c_package_name constant varchar2(128) := 'OFFICE_MFCS_ORCHESTRATOR_PKG';
+
     function request_payload(p_action_request_id in varchar2) return clob is
         l_payload clob;
     begin
@@ -1613,7 +1632,7 @@ create or replace package body office_mfcs_orchestrator_pkg as
         l_response_obj := json_object_t.parse(p_response);
         if l_response_obj.has('items') then
             l_items := l_response_obj.get_array('items');
-            for v in (
+            for l_variant_row in (
                 select ordinality, source_variant_ref, sku_size, sku_width
                   from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
                       columns
@@ -1623,20 +1642,20 @@ create or replace package body office_mfcs_orchestrator_pkg as
                           sku_width varchar2(60) path '$.SKU_WIDTH'
                   )
             ) loop
-                l_sku_no := treat(l_items.get(v.ordinality) as json_object_t).get_string('item');
+                l_sku_no := treat(l_items.get(l_variant_row.ordinality) as json_object_t).get_string('item');
                 office_mfcs_request_pkg.save_generated_identifier(
                     p_action_request_id => p_action_request_id,
                     p_source_system => l_source_system,
                     p_source_style_ref => l_source_style_ref,
                     p_mfcs_style_no => l_style_no,
-                    p_source_variant_ref => v.source_variant_ref,
+                    p_source_variant_ref => l_variant_row.source_variant_ref,
                     p_mfcs_sku_no => l_sku_no,
-                    p_sku_size => v.sku_size,
-                    p_sku_width => v.sku_width
+                    p_sku_size => l_variant_row.sku_size,
+                    p_sku_width => l_variant_row.sku_width
                 );
             end loop;
         else
-            for v in (
+            for l_variant_row in (
                 select source_variant_ref, sku_size, sku_width, sku_id
                   from json_table(p_response, '$.PLMSizeCurveDtl[*]'
                       columns
@@ -1651,10 +1670,10 @@ create or replace package body office_mfcs_orchestrator_pkg as
                     p_source_system => l_source_system,
                     p_source_style_ref => l_source_style_ref,
                     p_mfcs_style_no => l_style_no,
-                    p_source_variant_ref => v.source_variant_ref,
-                    p_mfcs_sku_no => v.sku_id,
-                    p_sku_size => v.sku_size,
-                    p_sku_width => v.sku_width
+                    p_source_variant_ref => l_variant_row.source_variant_ref,
+                    p_mfcs_sku_no => l_variant_row.sku_id,
+                    p_sku_size => l_variant_row.sku_size,
+                    p_sku_width => l_variant_row.sku_width
                 );
             end loop;
         end if;
@@ -1760,7 +1779,10 @@ create or replace package body office_mfcs_orchestrator_pkg as
         l_recovery_status varchar2(30);
         l_started_at timestamp with time zone := systimestamp;
         l_budget_seconds number := to_number(office_mfcs_request_pkg.get_config('INTERNAL_TIME_BUDGET_SECONDS', '240'));
+        l_error_code number;
+        l_error_message varchar2(4000);
     begin
+        office_mfcs_log_pkg.info(c_package_name, 'EXECUTE_REQUEST', p_action_request_id, 'Integration orchestration started');
         if l_operation = 'CREATE_ALL'
            and office_mfcs_request_pkg.get_config('BATCH_WINDOW_ACTIVE_YN', 'N') = 'Y'
            and not any_succeeded(p_action_request_id) then
@@ -1815,6 +1837,7 @@ create or replace package body office_mfcs_orchestrator_pkg as
             l_method := method_for_step(l_step, l_operation);
             l_request_payload := payload_for_step(p_action_request_id, l_step);
 
+            office_mfcs_log_pkg.info(c_package_name, 'EXECUTE_STEP', p_action_request_id, l_step || ' started');
             office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'IN_PROGRESS');
             l_response := office_mfcs_client_pkg.call_service(
                 p_action_request_id => p_action_request_id,
@@ -1832,6 +1855,7 @@ create or replace package body office_mfcs_orchestrator_pkg as
             end if;
 
             office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'SUCCEEDED');
+            office_mfcs_log_pkg.info(c_package_name, 'EXECUTE_STEP', p_action_request_id, l_step || ' completed');
         end loop;
 
         office_mfcs_request_pkg.set_request_status(
@@ -1839,13 +1863,19 @@ create or replace package body office_mfcs_orchestrator_pkg as
             'COMPLETED',
             office_mfcs_request_pkg.build_status_response(p_action_request_id, 'COMPLETED')
         );
+        office_mfcs_log_pkg.info(c_package_name, 'EXECUTE_REQUEST', p_action_request_id, 'Integration orchestration completed');
     exception
         when office_mfcs_client_pkg.e_outcome_unknown then
-            office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'OUTCOME_UNKNOWN', null, 'OUTCOME_UNKNOWN', sqlerrm);
+            l_error_message := sqlerrm;
+            office_mfcs_log_pkg.error(c_package_name, 'EXECUTE_REQUEST', p_action_request_id, l_step || ' outcome is unknown', l_error_message);
+            office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'OUTCOME_UNKNOWN', null, 'OUTCOME_UNKNOWN', l_error_message);
             office_mfcs_request_pkg.set_request_status(p_action_request_id, 'OUTCOME_UNKNOWN', office_mfcs_request_pkg.build_status_response(p_action_request_id, 'OUTCOME_UNKNOWN'));
         when others then
+            l_error_code := sqlcode;
+            l_error_message := sqlerrm;
+            office_mfcs_log_pkg.error(c_package_name, 'EXECUTE_REQUEST', p_action_request_id, coalesce(l_step, 'REQUEST') || ' failed', l_error_message);
             if l_step is not null then
-                office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'FAILED', null, to_char(sqlcode), sqlerrm);
+                office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'FAILED', null, to_char(l_error_code), l_error_message);
             end if;
 
             if any_succeeded(p_action_request_id) then
@@ -1854,7 +1884,7 @@ create or replace package body office_mfcs_orchestrator_pkg as
                 office_mfcs_request_pkg.set_request_status(
                     p_action_request_id,
                     'FAILED_NO_SIDE_EFFECT',
-                    '{"ACTION_REQUEST_ID":"' || p_action_request_id || '","STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":true,"COMPLETED_STEPS":[],"FAILED_STEP":"' || l_step || '","GENERATED_IDENTIFIERS":{},"ERRORS":[{"FIELD":"' || l_step || '","CODE":"' || sqlcode || '","MESSAGE":"' || replace(sqlerrm, '"', '\"') || '"}]}'
+                    '{"ACTION_REQUEST_ID":"' || p_action_request_id || '","STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":true,"COMPLETED_STEPS":[],"FAILED_STEP":"' || l_step || '","GENERATED_IDENTIFIERS":{},"ERRORS":[{"FIELD":"' || l_step || '","CODE":"' || l_error_code || '","MESSAGE":"' || replace(l_error_message, '"', '\"') || '"}]}'
                 );
             end if;
     end;
@@ -1869,6 +1899,8 @@ end office_mfcs_orchestrator_pkg;
 /
 
 create or replace package body office_mfcs_api_pkg as
+    c_package_name constant varchar2(128) := 'OFFICE_MFCS_API_PKG';
+
     function simple_error(
         p_action_request_id in varchar2,
         p_status            in varchar2,
@@ -1913,8 +1945,8 @@ create or replace package body office_mfcs_api_pkg as
 
     procedure submit_transaction(
         p_payload      in clob,
-        o_http_status  out number,
-        o_response     out clob
+        p_http_status  out number,
+        p_response     out clob
     ) is
         l_action_request_id varchar2(80);
         l_operation varchar2(30);
@@ -1930,8 +1962,9 @@ create or replace package body office_mfcs_api_pkg as
             l_parsed := json_element_t.parse(p_payload);
         exception
             when others then
-                o_http_status := 400;
-                o_response := simple_error(null, 'FAILED_NO_SIDE_EFFECT', 'false', '$', 'INVALID_JSON', sqlerrm);
+                office_mfcs_log_pkg.error(c_package_name, 'SUBMIT_TRANSACTION', null, 'Invalid JSON payload', sqlerrm);
+                p_http_status := 400;
+                p_response := simple_error(null, 'FAILED_NO_SIDE_EFFECT', 'false', '$', 'INVALID_JSON', sqlerrm);
                 return;
         end;
 
@@ -1940,19 +1973,21 @@ create or replace package body office_mfcs_api_pkg as
           into l_action_request_id, l_operation
           from dual;
 
+        office_mfcs_log_pkg.info(c_package_name, 'SUBMIT_TRANSACTION', l_action_request_id, coalesce(l_operation, 'UNKNOWN') || ' received');
+
         if trim(l_action_request_id) is null then
-            o_http_status := 400;
-            o_response := simple_error(null, 'FAILED_NO_SIDE_EFFECT', 'false', 'ACTION_REQUEST_ID', 'REQUIRED', 'ACTION_REQUEST_ID is required.');
+            p_http_status := 400;
+            p_response := simple_error(null, 'FAILED_NO_SIDE_EFFECT', 'false', 'ACTION_REQUEST_ID', 'REQUIRED', 'ACTION_REQUEST_ID is required.');
             return;
         end if;
 
         if trim(l_operation) is null then
-            o_http_status := 400;
-            o_response := simple_error(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'false', 'OPERATION_NAME', 'REQUIRED', 'OPERATION_NAME is required.');
+            p_http_status := 400;
+            p_response := simple_error(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'false', 'OPERATION_NAME', 'REQUIRED', 'OPERATION_NAME is required.');
             return;
         elsif l_operation not in ('CREATE_STYLE', 'MODIFY_STYLE', 'CREATE_ORDER', 'MODIFY_ORDER', 'CREATE_ALL') then
-            o_http_status := 400;
-            o_response := simple_error(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'false', 'OPERATION_NAME', 'UNSUPPORTED_OPERATION', 'Unsupported OPERATION_NAME.');
+            p_http_status := 400;
+            p_response := simple_error(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'false', 'OPERATION_NAME', 'UNSUPPORTED_OPERATION', 'Unsupported OPERATION_NAME.');
             return;
         end if;
 
@@ -1962,31 +1997,31 @@ create or replace package body office_mfcs_api_pkg as
             p_operation_name => l_operation,
             p_payload_hash => l_hash,
             p_payload => p_payload,
-            o_result => l_result,
-            o_status => l_status,
-            o_response_payload => l_existing_response
+            p_result => l_result,
+            p_status => l_status,
+            p_response_payload => l_existing_response
         );
 
         if l_result = 'CONFLICT' then
-            o_http_status := 409;
-            o_response := simple_error(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'false', 'ACTION_REQUEST_ID', 'IDEMPOTENCY_CONFLICT', 'ACTION_REQUEST_ID already exists with a different business payload hash.');
+            p_http_status := 409;
+            p_response := simple_error(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'false', 'ACTION_REQUEST_ID', 'IDEMPOTENCY_CONFLICT', 'ACTION_REQUEST_ID already exists with a different business payload hash.');
             return;
         elsif l_result = 'EXECUTING' then
-            o_http_status := 409;
-            o_response := simple_error(l_action_request_id, 'IN_PROGRESS', 'true', 'ACTION_REQUEST_ID', 'ALREADY_EXECUTING', 'Request is currently executing.');
+            p_http_status := 409;
+            p_response := simple_error(l_action_request_id, 'IN_PROGRESS', 'true', 'ACTION_REQUEST_ID', 'ALREADY_EXECUTING', 'Request is currently executing.');
             return;
         elsif l_result = 'EXISTING' and l_existing_response is not null then
-            o_http_status := response_status_to_http(l_status, l_existing_response);
-            o_response := l_existing_response;
+            p_http_status := response_status_to_http(l_status, l_existing_response);
+            p_response := l_existing_response;
             return;
         end if;
 
         l_valid := office_mfcs_validation_pkg.validate_request(p_payload, l_errors);
 
         if not l_valid then
-            o_response := '{"ACTION_REQUEST_ID":"' || replace(l_action_request_id, '"', '\"') || '","STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":false,"COMPLETED_STEPS":[],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":' || l_errors || '}';
-            office_mfcs_request_pkg.set_request_status(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', o_response);
-            o_http_status := 422;
+            p_response := '{"ACTION_REQUEST_ID":"' || replace(l_action_request_id, '"', '\"') || '","STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":false,"COMPLETED_STEPS":[],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":' || l_errors || '}';
+            office_mfcs_request_pkg.set_request_status(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', p_response);
+            p_http_status := 422;
             return;
         end if;
 
@@ -2000,22 +2035,24 @@ create or replace package body office_mfcs_api_pkg as
          where action_request_id = l_action_request_id;
 
         if l_existing_response is not null then
-            o_response := l_existing_response;
+            p_response := l_existing_response;
         else
-            o_response := office_mfcs_request_pkg.build_status_response(l_action_request_id);
+            p_response := office_mfcs_request_pkg.build_status_response(l_action_request_id);
         end if;
 
-        o_http_status := response_status_to_http(l_status, o_response);
+        p_http_status := response_status_to_http(l_status, p_response);
+        office_mfcs_log_pkg.info(c_package_name, 'SUBMIT_TRANSACTION', l_action_request_id, 'Completed with status ' || l_status);
     exception
         when others then
-            o_http_status := 500;
-            o_response := simple_error(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'true', 'INTEGRATION', to_char(sqlcode), sqlerrm);
+            office_mfcs_log_pkg.error(c_package_name, 'SUBMIT_TRANSACTION', l_action_request_id, 'Unhandled integration error', sqlerrm);
+            p_http_status := 500;
+            p_response := simple_error(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'true', 'INTEGRATION', to_char(sqlcode), sqlerrm);
     end;
 
     procedure validate_transaction(
         p_payload      in clob,
-        o_http_status  out number,
-        o_response     out clob
+        p_http_status  out number,
+        p_response     out clob
     ) is
         l_action_request_id varchar2(80);
         l_errors clob;
@@ -2028,22 +2065,24 @@ create or replace package body office_mfcs_api_pkg as
         l_valid := office_mfcs_validation_pkg.validate_request(p_payload, l_errors);
 
         if l_valid then
-            o_http_status := 200;
-            o_response := '{"ACTION_REQUEST_ID":"' || replace(l_action_request_id, '"', '\"') || '","STATUS":"VALIDATED","RETRYABLE":false,"COMPLETED_STEPS":["VALIDATE_REQUEST"],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":[]}';
+            p_http_status := 200;
+            p_response := '{"ACTION_REQUEST_ID":"' || replace(l_action_request_id, '"', '\"') || '","STATUS":"VALIDATED","RETRYABLE":false,"COMPLETED_STEPS":["VALIDATE_REQUEST"],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":[]}';
         else
-            o_http_status := 422;
-            o_response := '{"ACTION_REQUEST_ID":' || case when l_action_request_id is null then 'null' else '"' || replace(l_action_request_id, '"', '\"') || '"' end || ',"STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":false,"COMPLETED_STEPS":[],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":' || l_errors || '}';
+            p_http_status := 422;
+            p_response := '{"ACTION_REQUEST_ID":' || case when l_action_request_id is null then 'null' else '"' || replace(l_action_request_id, '"', '\"') || '"' end || ',"STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":false,"COMPLETED_STEPS":[],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":' || l_errors || '}';
         end if;
+        office_mfcs_log_pkg.info(c_package_name, 'VALIDATE_TRANSACTION', l_action_request_id, case when l_valid then 'Validation succeeded' else 'Validation failed' end);
     exception
         when others then
-            o_http_status := 400;
-            o_response := simple_error(null, 'FAILED_NO_SIDE_EFFECT', 'false', '$', 'INVALID_JSON', sqlerrm);
+            office_mfcs_log_pkg.error(c_package_name, 'VALIDATE_TRANSACTION', l_action_request_id, 'Validation raised an exception', sqlerrm);
+            p_http_status := 400;
+            p_response := simple_error(null, 'FAILED_NO_SIDE_EFFECT', 'false', '$', 'INVALID_JSON', sqlerrm);
     end;
 
     procedure get_transaction(
         p_action_request_id in varchar2,
-        o_http_status       out number,
-        o_response          out clob
+        p_http_status       out number,
+        p_response          out clob
     ) is
         l_status varchar2(30);
         l_response_payload clob;
@@ -2053,22 +2092,24 @@ create or replace package body office_mfcs_api_pkg as
           from office_mfcs_request
          where action_request_id = p_action_request_id;
 
-        o_http_status := 200;
+        p_http_status := 200;
         if l_response_payload is not null then
-            o_response := l_response_payload;
+            p_response := l_response_payload;
         else
-            o_response := office_mfcs_request_pkg.build_status_response(p_action_request_id);
+            p_response := office_mfcs_request_pkg.build_status_response(p_action_request_id);
         end if;
+        office_mfcs_log_pkg.info(c_package_name, 'GET_TRANSACTION', p_action_request_id, 'Transaction state returned');
     exception
         when no_data_found then
-            o_http_status := 404;
-            o_response := simple_error(p_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'false', 'ACTION_REQUEST_ID', 'NOT_FOUND', 'Transaction was not found.');
+            office_mfcs_log_pkg.info(c_package_name, 'GET_TRANSACTION', p_action_request_id, 'Transaction was not found');
+            p_http_status := 404;
+            p_response := simple_error(p_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'false', 'ACTION_REQUEST_ID', 'NOT_FOUND', 'Transaction was not found.');
     end;
 
     procedure resume_transaction(
         p_action_request_id in varchar2,
-        o_http_status       out number,
-        o_response          out clob
+        p_http_status       out number,
+        p_response          out clob
     ) is
         l_status varchar2(30);
         l_response_payload clob;
@@ -2081,20 +2122,20 @@ create or replace package body office_mfcs_api_pkg as
 
         if l_status = 'IN_PROGRESS' then
             rollback;
-            o_http_status := 409;
-            o_response := simple_error(p_action_request_id, 'IN_PROGRESS', 'true', 'ACTION_REQUEST_ID', 'ALREADY_EXECUTING', 'Request is currently executing.');
+            p_http_status := 409;
+            p_response := simple_error(p_action_request_id, 'IN_PROGRESS', 'true', 'ACTION_REQUEST_ID', 'ALREADY_EXECUTING', 'Request is currently executing.');
             return;
         elsif l_status = 'COMPLETED' then
             commit;
-            o_http_status := 200;
+            p_http_status := 200;
             select response_payload
               into l_response_payload
               from office_mfcs_request
              where action_request_id = p_action_request_id;
             if l_response_payload is not null then
-                o_response := l_response_payload;
+                p_response := l_response_payload;
             else
-                o_response := office_mfcs_request_pkg.build_status_response(p_action_request_id);
+                p_response := office_mfcs_request_pkg.build_status_response(p_action_request_id);
             end if;
             return;
         end if;
@@ -2113,22 +2154,25 @@ create or replace package body office_mfcs_api_pkg as
          where action_request_id = p_action_request_id;
 
         if l_response_payload is not null then
-            o_response := l_response_payload;
+            p_response := l_response_payload;
         else
-            o_response := office_mfcs_request_pkg.build_status_response(p_action_request_id);
+            p_response := office_mfcs_request_pkg.build_status_response(p_action_request_id);
         end if;
-        o_http_status := response_status_to_http(l_status, o_response);
+        p_http_status := response_status_to_http(l_status, p_response);
+        office_mfcs_log_pkg.info(c_package_name, 'RESUME_TRANSACTION', p_action_request_id, 'Resume completed with status ' || l_status);
     exception
         when no_data_found then
-            o_http_status := 404;
-            o_response := simple_error(p_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'false', 'ACTION_REQUEST_ID', 'NOT_FOUND', 'Transaction was not found.');
+            office_mfcs_log_pkg.info(c_package_name, 'RESUME_TRANSACTION', p_action_request_id, 'Transaction was not found');
+            p_http_status := 404;
+            p_response := simple_error(p_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'false', 'ACTION_REQUEST_ID', 'NOT_FOUND', 'Transaction was not found.');
         when others then
+            office_mfcs_log_pkg.error(c_package_name, 'RESUME_TRANSACTION', p_action_request_id, 'Resume failed', sqlerrm);
             if sqlcode = -54 then
-                o_http_status := 409;
-                o_response := simple_error(p_action_request_id, 'IN_PROGRESS', 'true', 'ACTION_REQUEST_ID', 'ALREADY_EXECUTING', 'Request is currently executing.');
+                p_http_status := 409;
+                p_response := simple_error(p_action_request_id, 'IN_PROGRESS', 'true', 'ACTION_REQUEST_ID', 'ALREADY_EXECUTING', 'Request is currently executing.');
             else
-                o_http_status := 500;
-                o_response := simple_error(p_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'true', 'INTEGRATION', to_char(sqlcode), sqlerrm);
+                p_http_status := 500;
+                p_response := simple_error(p_action_request_id, 'FAILED_NO_SIDE_EFFECT', 'true', 'INTEGRATION', to_char(sqlcode), sqlerrm);
             end if;
     end;
 end office_mfcs_api_pkg;

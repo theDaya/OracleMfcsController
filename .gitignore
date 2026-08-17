@@ -1,7 +1,12 @@
 node_modules/
+dist/
+coverage/
+artifacts/
+.vite/
 __pycache__/
 *.pyc
 .env
 .env.*
+!.env.example
 *.log
 .local-tls/

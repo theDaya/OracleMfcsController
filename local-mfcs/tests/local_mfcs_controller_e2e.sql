@@ -175,8 +175,8 @@ begin
         p_http_method => 'POST',
         p_request_payload => q'~{"collectionSize":1,"items":[{"item":"3999999","itemDescription":"Invalid Diff","itemLevel":1,"tranLevel":1,"dept":100,"class":10,"subclass":1,"diff1":"NOT_A_DIFF","diff1Type":"S","dataLoadingDestination":"RMS"}]}~',
         p_correlation_id => 'local-mfcs-negative-diff',
-        o_http_status => l_negative_http,
-        o_response => l_negative_response
+        p_http_status => l_negative_http,
+        p_response => l_negative_response
     );
     assert_true(l_negative_http = 400, 'unknown differentiator returns HTTP 400');
     select count(*) into l_count from item_master where item = '3999999';
@@ -187,8 +187,8 @@ begin
         p_http_method => 'POST',
         p_request_payload => '{"collectionSize":1,"items":[{"item":"3999997","itemParent":"' || l_style || '","itemDescription":"Out of Group Size","itemLevel":2,"tranLevel":2,"dept":100,"class":10,"subclass":1,"diff1":"13","diff1Type":"S","diff2":"STANDARD","diff2Type":"W","diff3":"BLACK","diff3Type":"C","dataLoadingDestination":"RMS"}]}',
         p_correlation_id => 'local-mfcs-negative-diff-group',
-        o_http_status => l_negative_http,
-        o_response => l_negative_response
+        p_http_status => l_negative_http,
+        p_response => l_negative_response
     );
     assert_true(l_negative_http = 400, 'diff ID outside the parent group returns HTTP 400');
     select count(*) into l_count from item_master where item = '3999997';

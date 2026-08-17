@@ -1,5 +1,8 @@
 # Oracle MFCS Office Integration Layer
 
+For a complete local deployment, including the controller, RMS simulator,
+Workbench backend, seeds, and verification scripts, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
 This repository contains a PL/SQL and ORDS integration layer for approved Office style/order transactions. It accepts the legacy PLM-shaped payload, validates it locally, journals every logical step, calls Oracle MFCS through `APEX_WEB_SERVICE`, and supports idempotent retries after partial completion or ambiguous HTTP timeouts.
 
 The approval workflow and APEX user interface are intentionally out of scope.
@@ -35,6 +38,8 @@ Run these as the schema owner that will expose the ORDS module:
 @database/001_office_mfcs_tables.sql
 @database/002_office_mfcs_constraints.sql
 @database/003_office_mfcs_config.sql
+@database/004_office_mfcs_logging_upgrade.sql
+@database/005_office_mfcs_log_package.sql
 @database/010_office_mfcs_package_specs.sql
 @database/011_office_mfcs_package_bodies.sql
 @database/020_office_mfcs_ords.sql
@@ -214,7 +219,20 @@ select attempt_number, step_code, correlation_id, http_status, attempt_status, s
 from office_mfcs_attempt
 where action_request_id = :action_request_id
 order by attempt_id;
+
+select log_level, package_name, operation_name, message, created_at
+from office_mfcs_log
+where action_request_id = :action_request_id
+order by log_id;
 ```
+
+`OFFICE_MFCS_LOG_PKG` writes operational events in an autonomous transaction, so
+diagnostics survive a business rollback. Do not write credentials, access tokens,
+wallet values, or complete sensitive payloads to `DETAILS`.
+
+PL/SQL conventions are consistent across the controller: procedure parameters use
+`p_`, local variables and implicit cursor records use `l_`, package globals use
+`g_`, constants use `c_`, and exceptions use `e_`.
 
 ## Resuming Partial Requests
 

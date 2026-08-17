@@ -2,6 +2,7 @@ set define off
 
 prompt Creating OFFICE MFCS package specifications
 
+-- Owns request state, step state, idempotency, attempts, and entity mappings.
 create or replace package office_mfcs_request_pkg authid definer as
     subtype t_status is varchar2(30);
 
@@ -18,9 +19,9 @@ create or replace package office_mfcs_request_pkg authid definer as
         p_operation_name    in varchar2,
         p_payload_hash      in varchar2,
         p_payload           in clob,
-        o_result            out varchar2,
-        o_status            out varchar2,
-        o_response_payload  out clob
+        p_result            out varchar2,
+        p_status            out varchar2,
+        p_response_payload  out clob
     );
 
     procedure initialize_steps(
@@ -71,8 +72,8 @@ create or replace package office_mfcs_request_pkg authid definer as
         p_http_method       in varchar2,
         p_endpoint          in varchar2,
         p_request_payload   in clob,
-        o_attempt_id        out number,
-        o_correlation_id    out varchar2
+        p_attempt_id        out number,
+        p_correlation_id    out varchar2
     );
 
     procedure complete_attempt(
@@ -89,14 +90,16 @@ create or replace package office_mfcs_request_pkg authid definer as
 end office_mfcs_request_pkg;
 /
 
+-- Validates the Office transaction contract without changing database state.
 create or replace package office_mfcs_validation_pkg authid definer as
     function validate_request(
         p_payload in clob,
-        o_errors  out clob
+        p_errors  out clob
     ) return boolean;
 end office_mfcs_validation_pkg;
 /
 
+-- Converts the Office contract into endpoint-specific Local MFCS payloads.
 create or replace package office_mfcs_mapping_pkg authid definer as
     function source_system(p_payload in clob) return varchar2;
     function source_style_ref(p_payload in clob) return varchar2;
@@ -116,6 +119,7 @@ create or replace package office_mfcs_mapping_pkg authid definer as
 end office_mfcs_mapping_pkg;
 /
 
+-- Isolates downstream transport, correlation IDs, and HTTP attempt journaling.
 create or replace package office_mfcs_client_pkg authid definer as
     e_downstream_failure exception;
     pragma exception_init(e_downstream_failure, -20950);
@@ -142,6 +146,7 @@ create or replace package office_mfcs_client_pkg authid definer as
 end office_mfcs_client_pkg;
 /
 
+-- Resolves uncertain downstream outcomes from their correlation journal.
 create or replace package office_mfcs_recovery_pkg authid definer as
     function resolve_step(
         p_action_request_id in varchar2,
@@ -150,6 +155,7 @@ create or replace package office_mfcs_recovery_pkg authid definer as
 end office_mfcs_recovery_pkg;
 /
 
+-- Runs and resumes the ordered integration steps for a registered request.
 create or replace package office_mfcs_orchestrator_pkg authid definer as
     procedure execute_request(
         p_action_request_id in varchar2
@@ -161,29 +167,30 @@ create or replace package office_mfcs_orchestrator_pkg authid definer as
 end office_mfcs_orchestrator_pkg;
 /
 
+-- Stable entry point used by ORDS and the Office workflow application.
 create or replace package office_mfcs_api_pkg authid definer as
     procedure submit_transaction(
         p_payload      in clob,
-        o_http_status  out number,
-        o_response     out clob
+        p_http_status  out number,
+        p_response     out clob
     );
 
     procedure validate_transaction(
         p_payload      in clob,
-        o_http_status  out number,
-        o_response     out clob
+        p_http_status  out number,
+        p_response     out clob
     );
 
     procedure get_transaction(
         p_action_request_id in varchar2,
-        o_http_status       out number,
-        o_response          out clob
+        p_http_status       out number,
+        p_response          out clob
     );
 
     procedure resume_transaction(
         p_action_request_id in varchar2,
-        o_http_status       out number,
-        o_response          out clob
+        p_http_status       out number,
+        p_response          out clob
     );
 end office_mfcs_api_pkg;
 /

@@ -72,6 +72,28 @@ create table office_mfcs_config (
     updated_at    timestamp with time zone default systimestamp not null
 );
 
+-- Operational log entries are deliberately independent of request state so that
+-- failures can be recorded even when the business transaction is rolled back.
+create table office_mfcs_log (
+    log_id             number not null,
+    log_level          varchar2(10) not null,
+    package_name       varchar2(128) not null,
+    operation_name     varchar2(128) not null,
+    action_request_id  varchar2(80),
+    message            varchar2(4000),
+    details            clob,
+    created_at         timestamp with time zone default systimestamp not null,
+    constraint office_mfcs_log_pk primary key (log_id),
+    constraint office_mfcs_log_level_ck check (log_level in ('DEBUG', 'INFO', 'WARN', 'ERROR'))
+);
+
 create sequence office_mfcs_attempt_seq start with 1 increment by 1 nocache;
+create sequence office_mfcs_log_seq start with 1 increment by 1 nocache;
+
+create index office_mfcs_log_request_ix
+    on office_mfcs_log (action_request_id, created_at);
+
+comment on table office_mfcs_log is 'Structured operational events emitted by the Office MFCS integration packages.';
+comment on column office_mfcs_log.details is 'Optional diagnostic context. Secrets and access tokens must never be logged.';
 
 prompt OFFICE MFCS tables created

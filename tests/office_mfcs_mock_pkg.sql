@@ -85,7 +85,7 @@ create or replace package body office_mfcs_mock_pkg as
             l_response := '{"mock":{"httpStatus":200,"attemptStatus":"SUCCEEDED"},'
                 || '"STYLE":"' || l_style || '","PLMSizeCurveDtl":[';
 
-            for v in (
+            for l_variant_row in (
                 select row_number() over (order by source_variant_ref) rn,
                        source_variant_ref,
                        sku_size,
@@ -106,11 +106,11 @@ create or replace package body office_mfcs_mock_pkg as
                 end if;
 
                 l_response := l_response
-                    || '{"SOURCE_VARIANT_REF":"' || json_escape(v.source_variant_ref) || '",'
-                    || '"SKU_SIZE":"' || json_escape(v.sku_size) || '",'
-                    || '"SKU_WIDTH":"' || json_escape(v.sku_width) || '",'
-                    || '"SKU_QTY":' || to_char(v.sku_qty) || ','
-                    || '"SKU_ID":"' || to_char(hash_number(p_action_request_id || ':SKU:' || v.rn, 10000000, 999999)) || '"}';
+                    || '{"SOURCE_VARIANT_REF":"' || json_escape(l_variant_row.source_variant_ref) || '",'
+                    || '"SKU_SIZE":"' || json_escape(l_variant_row.sku_size) || '",'
+                    || '"SKU_WIDTH":"' || json_escape(l_variant_row.sku_width) || '",'
+                    || '"SKU_QTY":' || to_char(l_variant_row.sku_qty) || ','
+                    || '"SKU_ID":"' || to_char(hash_number(p_action_request_id || ':SKU:' || l_variant_row.rn, 10000000, 999999)) || '"}';
             end loop;
 
             return l_response || ']}';

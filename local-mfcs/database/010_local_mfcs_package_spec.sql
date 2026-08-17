@@ -2,6 +2,8 @@ set define off
 
 prompt Creating Local MFCS service package specification
 
+-- Public Local MFCS facade. Resource routing is kept here while item, sourcing,
+-- order, query, and administration routines remain private implementation units.
 create or replace package local_mfcs_service_pkg authid definer as
     procedure handle(
         p_resource        in varchar2,
@@ -10,8 +12,8 @@ create or replace package local_mfcs_service_pkg authid definer as
         p_correlation_id  in varchar2 default null,
         p_order_no        in varchar2 default null,
         p_status_corr_id  in varchar2 default null,
-        o_http_status     out number,
-        o_response        out clob
+        p_http_status     out number,
+        p_response        out clob
     );
 
     procedure reset_transactional_data;
