@@ -4,8 +4,13 @@
 
 - Docker container `adb-free` running the Oracle ADB Free image
 - The container has `ADMIN_PASSWORD` and the `myatp_low` wallet alias configured
+- Oracle APEX packages `APEX_JSON` and `APEX_WEB_SERVICE` available to both schemas
 - PowerShell 7 or Windows PowerShell 5.1
 - Node.js and `pnpm` for the React Workbench
+
+The local stack is verified against Oracle APEX `24.2.14`. PL/SQL response
+generation uses `APEX_JSON`, while outbound MFCS/OAuth calls use
+`APEX_WEB_SERVICE`.
 
 No passwords are stored in the repository. The deployment script reads
 `ADMIN_PASSWORD` from the container unless `-AdminPassword` is supplied.

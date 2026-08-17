@@ -37,25 +37,38 @@ create or replace package body local_mfcs_service_pkg as
     end;
 
     function success_response return clob is
-        l_object json_object_t := json_object_t();
     begin
-        l_object.put('status', 'SUCCESS');
-        return l_object.to_clob;
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.write('status', 'SUCCESS');
+        apex_json.close_object;
+        return office_mfcs_apex_pkg.end_json;
+    exception
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
     end;
 
     function error_response(p_field in varchar2, p_message in varchar2) return clob is
-        l_root json_object_t := json_object_t();
-        l_error json_object_t := json_object_t();
-        l_errors json_array_t := json_array_t();
+        l_null varchar2(1);
     begin
-        l_root.put('status', 'ERROR');
-        l_root.put('message', 'Error found in validation of input payload');
-        l_error.put('error', p_message);
-        l_error.put('field', p_field);
-        l_error.put_null('inputValue');
-        l_errors.append(l_error);
-        l_root.put('validationErrors', l_errors);
-        return l_root.to_clob;
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.write('status', 'ERROR');
+        apex_json.write('message', 'Error found in validation of input payload');
+        apex_json.open_array('validationErrors');
+        apex_json.open_object;
+        apex_json.write('error', p_message);
+        apex_json.write('field', p_field);
+        apex_json.write('inputValue', l_null, true);
+        apex_json.close_object;
+        apex_json.close_array;
+        apex_json.close_object;
+        return office_mfcs_apex_pkg.end_json;
+    exception
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
     end;
 
     procedure validate_collection(p_payload in clob) is
@@ -102,9 +115,6 @@ create or replace package body local_mfcs_service_pkg as
         l_type varchar2(10);
         l_item varchar2(25);
         l_expiry timestamp with time zone;
-        l_root json_object_t := json_object_t();
-        l_items json_array_t := json_array_t();
-        l_node json_object_t;
     begin
         assert_true(p_payload is json, 'body', 'must be valid JSON');
         select json_value(p_payload, '$.quantity' returning number),
@@ -115,6 +125,9 @@ create or replace package body local_mfcs_service_pkg as
         assert_true(l_quantity between 1 and 1000 and l_quantity = trunc(l_quantity), 'quantity', 'must be a whole number from 1 to 1000');
         assert_true(l_days between 1 and 90, 'daysUntilExpiry', 'must be from 1 to 90');
 
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.open_array('items');
         for i in 1 .. l_quantity loop
             l_item := to_char(local_mfcs_item_seq.nextval);
             l_expiry := systimestamp + numtodsinterval(l_days, 'DAY');
@@ -123,14 +136,19 @@ create or replace package body local_mfcs_service_pkg as
             ) values (
                 l_item, l_type, l_expiry, p_corr
             );
-            l_node := json_object_t();
-            l_node.put('item', l_item);
-            l_node.put('itemNumberType', l_type);
-            l_node.put('expiryDate', to_char(l_expiry, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
-            l_items.append(l_node);
+            apex_json.open_object;
+            apex_json.write('item', l_item);
+            apex_json.write('itemNumberType', l_type);
+            apex_json.write('expiryDate', to_char(l_expiry, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
+            apex_json.close_object;
         end loop;
-        l_root.put('items', l_items);
-        p_response := l_root.to_clob;
+        apex_json.close_array;
+        apex_json.close_object;
+        p_response := office_mfcs_apex_pkg.end_json;
+    exception
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
     end;
 
     procedure upsert_items(p_payload in clob, p_update in boolean, p_response out clob) is
@@ -447,9 +465,7 @@ create or replace package body local_mfcs_service_pkg as
         l_order_no number;
         l_expiry timestamp with time zone;
         l_count number;
-        l_root json_object_t := json_object_t();
-        l_orders json_array_t := json_array_t();
-        l_node json_object_t;
+        l_null_supplier number;
     begin
         assert_true(p_payload is json, 'body', 'must be valid JSON');
         select json_value(p_payload, '$.supplier' returning number null on error),
@@ -461,19 +477,28 @@ create or replace package body local_mfcs_service_pkg as
             assert_true(l_count = 1, 'supplier', 'must identify an active supplier');
         end if;
         assert_true(l_quantity between 1 and 100 and l_quantity = trunc(l_quantity), 'quantity', 'must be a whole number from 1 to 100');
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.open_array('orderNumbers');
         for i in 1 .. l_quantity loop
             l_order_no := local_mfcs_order_seq.nextval;
             l_expiry := systimestamp + numtodsinterval(l_days, 'DAY');
             insert into order_number_reservation(order_no, supplier, expiry_date, correlation_id)
             values (l_order_no, l_supplier, l_expiry, p_corr);
-            l_node := json_object_t();
-            if l_supplier is null then l_node.put_null('supplier'); else l_node.put('supplier', l_supplier); end if;
-            l_node.put('orderNo', l_order_no);
-            l_node.put('expiryDate', to_char(l_expiry, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
-            l_orders.append(l_node);
+            l_null_supplier := l_supplier;
+            apex_json.open_object;
+            apex_json.write('supplier', l_null_supplier, true);
+            apex_json.write('orderNo', l_order_no);
+            apex_json.write('expiryDate', to_char(l_expiry, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
+            apex_json.close_object;
         end loop;
-        l_root.put('orderNumbers', l_orders);
-        p_response := l_root.to_clob;
+        apex_json.close_array;
+        apex_json.close_object;
+        p_response := office_mfcs_apex_pkg.end_json;
+    exception
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
     end;
 
     procedure upsert_purchase_orders(p_payload in clob, p_update in boolean, p_response out clob) is
@@ -629,56 +654,67 @@ create or replace package body local_mfcs_service_pkg as
     end;
 
     procedure get_purchase_order(p_order_no in varchar2, p_response out clob) is
-        l_root json_object_t := json_object_t();
-        l_items json_array_t := json_array_t();
-        l_order json_object_t := json_object_t();
-        l_details json_array_t := json_array_t();
-        l_detail json_object_t;
+        l_found_count number := 0;
     begin
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.open_array('items');
         for l_order_row in (select * from ordhead where order_no = to_number(p_order_no)) loop
-            l_order.put('orderNo', l_order_row.order_no);
-            l_order.put('supplier', l_order_row.supplier);
-            l_order.put('dept', l_order_row.dept);
-            l_order.put('status', l_order_row.status);
-            l_order.put('currencyCode', l_order_row.currency_code);
-            l_order.put('exchangeRate', l_order_row.exchange_rate);
-            l_order.put('notBeforeDate', to_char(l_order_row.not_before_date, 'YYYY-MM-DD'));
-            l_order.put('notAfterDate', to_char(l_order_row.not_after_date, 'YYYY-MM-DD'));
-            l_order.put('earliestShipDate', to_char(l_order_row.earliest_ship_date, 'YYYY-MM-DD'));
-            l_order.put('latestShipDate', to_char(l_order_row.latest_ship_date, 'YYYY-MM-DD'));
-            l_order.put('totalQtyOrdered', l_order_row.total_qty_ordered);
-            l_order.put('totalCost', l_order_row.total_cost);
+            l_found_count := l_found_count + 1;
+            apex_json.open_object;
+            apex_json.write('orderNo', l_order_row.order_no);
+            apex_json.write('supplier', l_order_row.supplier);
+            apex_json.write('dept', l_order_row.dept);
+            apex_json.write('status', l_order_row.status);
+            apex_json.write('currencyCode', l_order_row.currency_code);
+            apex_json.write('exchangeRate', l_order_row.exchange_rate);
+            apex_json.write('notBeforeDate', to_char(l_order_row.not_before_date, 'YYYY-MM-DD'), true);
+            apex_json.write('notAfterDate', to_char(l_order_row.not_after_date, 'YYYY-MM-DD'), true);
+            apex_json.write('earliestShipDate', to_char(l_order_row.earliest_ship_date, 'YYYY-MM-DD'), true);
+            apex_json.write('latestShipDate', to_char(l_order_row.latest_ship_date, 'YYYY-MM-DD'), true);
+            apex_json.write('totalQtyOrdered', l_order_row.total_qty_ordered);
+            apex_json.write('totalCost', l_order_row.total_cost);
+            apex_json.open_array('details');
             for l_line_row in (select * from ordloc where order_no = l_order_row.order_no order by item, location) loop
-                l_detail := json_object_t();
-                l_detail.put('item', l_line_row.item);
-                l_detail.put('location', l_line_row.location);
-                l_detail.put('locationType', l_line_row.loc_type);
-                l_detail.put('originCountryId', l_line_row.origin_country_id);
-                l_detail.put('qtyOrdered', l_line_row.qty_ordered);
-                l_detail.put('unitCost', l_line_row.unit_cost);
-                l_details.append(l_detail);
+                apex_json.open_object;
+                apex_json.write('item', l_line_row.item);
+                apex_json.write('location', l_line_row.location);
+                apex_json.write('locationType', l_line_row.loc_type);
+                apex_json.write('originCountryId', l_line_row.origin_country_id);
+                apex_json.write('qtyOrdered', l_line_row.qty_ordered);
+                apex_json.write('unitCost', l_line_row.unit_cost);
+                apex_json.close_object;
             end loop;
-            l_order.put('details', l_details);
-            l_items.append(l_order);
+            apex_json.close_array;
+            apex_json.close_object;
         end loop;
-        assert_true(l_items.get_size = 1, 'orderNo', 'order was not found: ' || p_order_no);
-        l_root.put('items', l_items);
-        l_root.put('hasMore', false);
-        l_root.put('limit', 1000);
-        l_root.put('count', 1);
-        l_root.put('links', json_array_t());
-        p_response := l_root.to_clob;
-    exception when value_error then
-        fail('orderNo', 'must be numeric');
+        apex_json.close_array;
+        assert_true(l_found_count = 1, 'orderNo', 'order was not found: ' || p_order_no);
+        apex_json.write('hasMore', false);
+        apex_json.write('limit', 1000);
+        apex_json.write('count', 1);
+        apex_json.open_array('links');
+        apex_json.close_array;
+        apex_json.close_object;
+        p_response := office_mfcs_apex_pkg.end_json;
+    exception
+        when value_error then
+            office_mfcs_apex_pkg.abandon_json;
+            fail('orderNo', 'must be numeric');
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
     end;
 
     -- Read models used by correlation recovery and the local state viewer.
     procedure get_operation_status(p_target_corr in varchar2, p_response out clob) is
-        l_root json_object_t := json_object_t();
-        l_items json_array_t := json_array_t();
-        l_node json_object_t := json_object_t();
         l_found boolean := false;
+        l_request_payload varchar2(32000);
+        l_response_payload varchar2(32000);
     begin
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.open_array('items');
         for l_row in (
             select *
               from (
@@ -688,67 +724,81 @@ create or replace package body local_mfcs_service_pkg as
               )
              where rownum = 1
         ) loop
-            l_node.put('requestId', to_char(l_row.event_id));
-            l_node.put('xCorrelationId', l_row.correlation_id);
-            l_node.put('method', l_row.http_method);
-            l_node.put('serviceUrl', l_row.service_name);
-            l_node.put('responseCode', l_row.response_code);
-            l_node.put('requestTimestamp', to_char(l_row.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
-            l_node.put('responseTimestamp', to_char(l_row.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
-            if l_row.request_payload is not null then l_node.put('requestPayload', dbms_lob.substr(l_row.request_payload, 32000, 1)); else l_node.put_null('requestPayload'); end if;
-            if l_row.response_payload is not null then l_node.put('responsePayload', dbms_lob.substr(l_row.response_payload, 32000, 1)); else l_node.put_null('responsePayload'); end if;
-            l_items.append(l_node);
+            l_request_payload := case when l_row.request_payload is not null then dbms_lob.substr(l_row.request_payload, 32000, 1) end;
+            l_response_payload := case when l_row.response_payload is not null then dbms_lob.substr(l_row.response_payload, 32000, 1) end;
+            apex_json.open_object;
+            apex_json.write('requestId', to_char(l_row.event_id));
+            apex_json.write('xCorrelationId', l_row.correlation_id);
+            apex_json.write('method', l_row.http_method);
+            apex_json.write('serviceUrl', l_row.service_name);
+            apex_json.write('responseCode', l_row.response_code);
+            apex_json.write('requestTimestamp', to_char(l_row.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
+            apex_json.write('responseTimestamp', to_char(l_row.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM'));
+            apex_json.write('requestPayload', l_request_payload, true);
+            apex_json.write('responsePayload', l_response_payload, true);
+            apex_json.close_object;
             l_found := true;
         end loop;
-        l_root.put('items', l_items);
-        l_root.put('hasMore', false);
-        l_root.put('limit', 1000);
-        l_root.put('count', case when l_found then 1 else 0 end);
-        l_root.put('links', json_array_t());
-        p_response := l_root.to_clob;
+        apex_json.close_array;
+        apex_json.write('hasMore', false);
+        apex_json.write('limit', 1000);
+        apex_json.write('count', case when l_found then 1 else 0 end);
+        apex_json.open_array('links');
+        apex_json.close_array;
+        apex_json.close_object;
+        p_response := office_mfcs_apex_pkg.end_json;
+    exception
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
     end;
 
     procedure state_snapshot(p_response out clob) is
-        l_root json_object_t := json_object_t();
-        l_counts json_object_t := json_object_t();
-        l_items json_array_t := json_array_t();
-        l_orders json_array_t := json_array_t();
-        l_node json_object_t;
         l_count number;
     begin
-        select count(*) into l_count from item_master; l_counts.put('ITEM_MASTER', l_count);
-        select count(*) into l_count from item_supplier; l_counts.put('ITEM_SUPPLIER', l_count);
-        select count(*) into l_count from item_supp_country; l_counts.put('ITEM_SUPP_COUNTRY', l_count);
-        select count(*) into l_count from item_loc; l_counts.put('ITEM_LOC', l_count);
-        select count(*) into l_count from ordhead; l_counts.put('ORDHEAD', l_count);
-        select count(*) into l_count from ordsku; l_counts.put('ORDSKU', l_count);
-        select count(*) into l_count from ordloc; l_counts.put('ORDLOC', l_count);
-        l_root.put('tableCounts', l_counts);
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.open_object('tableCounts');
+        select count(*) into l_count from item_master; apex_json.write('ITEM_MASTER', l_count);
+        select count(*) into l_count from item_supplier; apex_json.write('ITEM_SUPPLIER', l_count);
+        select count(*) into l_count from item_supp_country; apex_json.write('ITEM_SUPP_COUNTRY', l_count);
+        select count(*) into l_count from item_loc; apex_json.write('ITEM_LOC', l_count);
+        select count(*) into l_count from ordhead; apex_json.write('ORDHEAD', l_count);
+        select count(*) into l_count from ordsku; apex_json.write('ORDSKU', l_count);
+        select count(*) into l_count from ordloc; apex_json.write('ORDLOC', l_count);
+        apex_json.close_object;
+        apex_json.open_array('items');
         for l_row in (select item, item_parent, item_level, tran_level, item_desc, status, diff_1, diff_2, diff_3 from item_master order by created_at, item) loop
-            l_node := json_object_t();
-            l_node.put('item', l_row.item);
-            if l_row.item_parent is null then l_node.put_null('itemParent'); else l_node.put('itemParent', l_row.item_parent); end if;
-            l_node.put('itemLevel', l_row.item_level);
-            l_node.put('tranLevel', l_row.tran_level);
-            l_node.put('itemDescription', l_row.item_desc);
-            l_node.put('status', l_row.status);
-            if l_row.diff_1 is not null then l_node.put('diff1', l_row.diff_1); end if;
-            if l_row.diff_2 is not null then l_node.put('diff2', l_row.diff_2); end if;
-            if l_row.diff_3 is not null then l_node.put('diff3', l_row.diff_3); end if;
-            l_items.append(l_node);
+            apex_json.open_object;
+            apex_json.write('item', l_row.item);
+            apex_json.write('itemParent', l_row.item_parent, true);
+            apex_json.write('itemLevel', l_row.item_level);
+            apex_json.write('tranLevel', l_row.tran_level);
+            apex_json.write('itemDescription', l_row.item_desc);
+            apex_json.write('status', l_row.status);
+            apex_json.write('diff1', l_row.diff_1);
+            apex_json.write('diff2', l_row.diff_2);
+            apex_json.write('diff3', l_row.diff_3);
+            apex_json.close_object;
         end loop;
+        apex_json.close_array;
+        apex_json.open_array('orders');
         for l_row in (select order_no, supplier, status, total_qty_ordered, total_cost from ordhead order by order_no) loop
-            l_node := json_object_t();
-            l_node.put('orderNo', l_row.order_no);
-            l_node.put('supplier', l_row.supplier);
-            l_node.put('status', l_row.status);
-            l_node.put('totalQtyOrdered', l_row.total_qty_ordered);
-            l_node.put('totalCost', l_row.total_cost);
-            l_orders.append(l_node);
+            apex_json.open_object;
+            apex_json.write('orderNo', l_row.order_no);
+            apex_json.write('supplier', l_row.supplier);
+            apex_json.write('status', l_row.status);
+            apex_json.write('totalQtyOrdered', l_row.total_qty_ordered);
+            apex_json.write('totalCost', l_row.total_cost);
+            apex_json.close_object;
         end loop;
-        l_root.put('items', l_items);
-        l_root.put('orders', l_orders);
-        p_response := l_root.to_clob;
+        apex_json.close_array;
+        apex_json.close_object;
+        p_response := office_mfcs_apex_pkg.end_json;
+    exception
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
     end;
 
     -- Administration operations only affect transactional simulator data.
@@ -785,15 +835,16 @@ create or replace package body local_mfcs_service_pkg as
         l_field varchar2(4000);
         l_message varchar2(4000);
         l_separator number;
-        l_root json_object_t;
     begin
         case upper(p_resource)
             when 'TOKEN' then
-                l_root := json_object_t();
-                l_root.put('access_token', 'public-contract-token');
-                l_root.put('token_type', 'Bearer');
-                l_root.put('expires_in', 3600);
-                p_response := l_root.to_clob;
+                office_mfcs_apex_pkg.begin_json;
+                apex_json.open_object;
+                apex_json.write('access_token', 'public-contract-token');
+                apex_json.write('token_type', 'Bearer');
+                apex_json.write('expires_in', 3600);
+                apex_json.close_object;
+                p_response := office_mfcs_apex_pkg.end_json;
             when 'RESERVE_ITEM_NUMBERS' then
                 reserve_item_numbers(p_request_payload, l_corr, p_response);
             when 'ITEMS' then

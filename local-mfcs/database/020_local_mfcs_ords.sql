@@ -29,10 +29,7 @@ declare
             '    p_correlation_id => :x_correlation_id,' || chr(10) ||
             '    p_http_status => l_status,' || chr(10) ||
             '    p_response => l_response);' || chr(10) ||
-            '  owa_util.mime_header(''application/json'', false);' || chr(10) ||
-            '  owa_util.status_line(l_status, null, false);' || chr(10) ||
-            '  owa_util.http_header_close;' || chr(10) ||
-            '  htp.prn(l_response);' || chr(10) ||
+            '  office_mfcs_apex_pkg.send_json(l_status, l_response);' || chr(10) ||
             'end;';
         ords.define_handler(
             p_module_name => c_module,
@@ -76,10 +73,7 @@ declare
             '    p_correlation_id => :x_correlation_id,' || chr(10) ||
             '    p_http_status => l_status,' || chr(10) ||
             '    p_response => l_response);' || chr(10) ||
-            '  owa_util.mime_header(''application/json'', false);' || chr(10) ||
-            '  owa_util.status_line(l_status, null, false);' || chr(10) ||
-            '  owa_util.http_header_close;' || chr(10) ||
-            '  htp.prn(l_response);' || chr(10) ||
+            '  office_mfcs_apex_pkg.send_json(l_status, l_response);' || chr(10) ||
             'end;';
         ords.define_handler(
             p_module_name => c_module,
@@ -153,10 +147,7 @@ begin
         p_order_no => :orderNo,
         p_http_status => l_status,
         p_response => l_response);
-    owa_util.mime_header('application/json', false);
-    owa_util.status_line(l_status, null, false);
-    owa_util.http_header_close;
-    htp.prn(l_response);
+    office_mfcs_apex_pkg.send_json(l_status, l_response);
 end;
 ]'
     );
@@ -183,10 +174,7 @@ begin
         p_status_corr_id => :xCorrelationId,
         p_http_status => l_status,
         p_response => l_response);
-    owa_util.mime_header('application/json', false);
-    owa_util.status_line(l_status, null, false);
-    owa_util.http_header_close;
-    htp.prn(l_response);
+    office_mfcs_apex_pkg.send_json(l_status, l_response);
 end;
 ]'
     );
@@ -203,11 +191,16 @@ end;
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
         p_source => q'[
+declare
+    l_response clob;
 begin
-    owa_util.mime_header('application/json', false);
-    owa_util.status_line(200, null, false);
-    owa_util.http_header_close;
-    htp.prn('{"status":"UP","service":"local-mfcs-rms-simulator"}');
+    office_mfcs_apex_pkg.begin_json;
+    apex_json.open_object;
+    apex_json.write('status', 'UP');
+    apex_json.write('service', 'local-mfcs-rms-simulator');
+    apex_json.close_object;
+    l_response := office_mfcs_apex_pkg.end_json;
+    office_mfcs_apex_pkg.send_json(200, l_response);
 end;
 ]'
     );

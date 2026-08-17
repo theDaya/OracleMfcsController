@@ -22,11 +22,8 @@ create or replace package body office_workflow_pkg as
     end;
 
     function error_json(p_code in varchar2, p_message in varchar2) return clob is
-        l_root json_object_t := json_object_t();
     begin
-        l_root.put('code', p_code);
-        l_root.put('message', p_message);
-        return l_root.to_clob;
+        return office_workflow_http_pkg.error_json(p_code, p_message);
     end;
 
     procedure response_error(

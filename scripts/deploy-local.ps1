@@ -159,6 +159,7 @@ Invoke-SqlFiles $controllerSchema @(
     'database/003_office_mfcs_config.sql',
     'database/004_office_mfcs_logging_upgrade.sql',
     'database/005_office_mfcs_log_package.sql',
+    'database/006_office_mfcs_apex_package.sql',
     'database/010_office_mfcs_package_specs.sql',
     'tests/office_mfcs_public_contract_pkg.sql'
 )

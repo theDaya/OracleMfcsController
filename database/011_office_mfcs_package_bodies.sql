@@ -3,24 +3,6 @@ set define off
 prompt Creating OFFICE MFCS package bodies
 
 create or replace package body office_mfcs_request_pkg as
-    function json_escape(p_value in varchar2) return varchar2 is
-    begin
-        if p_value is null then
-            return null;
-        end if;
-
-        return replace(
-                   replace(
-                       replace(
-                           replace(p_value, '\', '\\'),
-                           '"', '\"'
-                       ),
-                       chr(10), '\n'
-                   ),
-                   chr(13), '\r'
-               );
-    end;
-
     function get_config(
         p_key         in varchar2,
         p_default     in varchar2 default null,
@@ -82,7 +64,7 @@ create or replace package body office_mfcs_request_pkg as
                         end if;
 
                         l_result := l_result
-                            || '"' || json_escape(l_key) || '":'
+                            || apex_json.stringify(l_key) || ':'
                             || canonicalize(l_object.get(l_key));
                     end if;
                 end loop;
@@ -530,8 +512,7 @@ create or replace package body office_mfcs_request_pkg as
         l_order varchar2(30);
         l_failed_step varchar2(60);
         l_response clob;
-        l_retryable varchar2(5);
-        l_first boolean := true;
+        l_retryable boolean;
     begin
         select operation_name, request_status, style_no, order_no
           into l_operation, l_status, l_style, l_order
@@ -540,57 +521,8 @@ create or replace package body office_mfcs_request_pkg as
 
         l_status := nvl(p_status_override, l_status);
 
-        l_retryable := case when l_status in ('PARTIALLY_COMPLETED', 'OUTCOME_UNKNOWN', 'FAILED_NO_SIDE_EFFECT') then 'true' else 'false' end;
-        l_response := '{'
-            || '"OPERATION_NAME":"' || json_escape(l_operation) || '",'
-            || '"ACTION_REQUEST_ID":"' || json_escape(p_action_request_id) || '",'
-            || '"STATUS":"' || json_escape(l_status) || '",'
-            || '"RETRYABLE":' || l_retryable || ','
-            || '"STYLE":' || case when l_style is null then 'null' else '"' || json_escape(l_style) || '"' end || ','
-            || '"ORDER_NO":' || case when l_order is null then 'null' else '"' || json_escape(l_order) || '"' end || ','
-            || '"PLMSizeCurveDtl":[';
+        l_retryable := l_status in ('PARTIALLY_COMPLETED', 'OUTCOME_UNKNOWN', 'FAILED_NO_SIDE_EFFECT');
 
-        for l_request_row in (
-            select source_variant_ref, sku_size, sku_width, mfcs_sku_no
-              from office_mfcs_entity_map m
-              join office_mfcs_request r
-                on r.source_system = m.source_system
-               and nvl(r.source_style_ref, '-') = nvl(m.source_style_ref, '-')
-             where r.action_request_id = p_action_request_id
-               and m.mfcs_sku_no is not null
-             order by source_variant_ref
-        ) loop
-            if l_first then
-                l_first := false;
-            else
-                l_response := l_response || ',';
-            end if;
-
-            l_response := l_response
-                || '{"SOURCE_VARIANT_REF":"' || json_escape(l_request_row.source_variant_ref) || '",'
-                || '"SKU_SIZE":"' || json_escape(l_request_row.sku_size) || '",'
-                || '"SKU_WIDTH":"' || json_escape(l_request_row.sku_width) || '",'
-                || '"SKU_ID":"' || json_escape(l_request_row.mfcs_sku_no) || '"}';
-        end loop;
-
-        l_response := l_response || '],"COMPLETED_STEPS":[';
-        l_first := true;
-        for l_step_row in (
-            select step_code
-              from office_mfcs_step
-             where action_request_id = p_action_request_id
-               and step_status = 'SUCCEEDED'
-             order by step_sequence
-        ) loop
-            if l_first then
-                l_first := false;
-            else
-                l_response := l_response || ',';
-            end if;
-            l_response := l_response || '"' || json_escape(l_step_row.step_code) || '"';
-        end loop;
-
-        l_response := l_response || '],"FAILED_STEP":';
         begin
             select step_code
               into l_failed_step
@@ -602,18 +534,66 @@ create or replace package body office_mfcs_request_pkg as
                    order by step_sequence
               )
              where rownum = 1;
-            l_response := l_response || '"' || json_escape(l_failed_step) || '"';
         exception
             when no_data_found then
-                l_response := l_response || 'null';
+                l_failed_step := null;
         end;
 
-        l_response := l_response || ',"GENERATED_IDENTIFIERS":{'
-            || '"STYLE":' || case when l_style is null then 'null' else '"' || json_escape(l_style) || '"' end
-            || ',"ORDER_NO":' || case when l_order is null then 'null' else '"' || json_escape(l_order) || '"' end
-            || '},"ERRORS":[]}';
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.write('OPERATION_NAME', l_operation);
+        apex_json.write('ACTION_REQUEST_ID', p_action_request_id);
+        apex_json.write('STATUS', l_status);
+        apex_json.write('RETRYABLE', l_retryable);
+        apex_json.write('STYLE', l_style, true);
+        apex_json.write('ORDER_NO', l_order, true);
+        apex_json.open_array('PLMSizeCurveDtl');
 
+        for l_request_row in (
+            select source_variant_ref, sku_size, sku_width, mfcs_sku_no
+              from office_mfcs_entity_map m
+              join office_mfcs_request r
+                on r.source_system = m.source_system
+               and nvl(r.source_style_ref, '-') = nvl(m.source_style_ref, '-')
+             where r.action_request_id = p_action_request_id
+               and m.mfcs_sku_no is not null
+             order by source_variant_ref
+        ) loop
+            apex_json.open_object;
+            apex_json.write('SOURCE_VARIANT_REF', l_request_row.source_variant_ref);
+            apex_json.write('SKU_SIZE', l_request_row.sku_size);
+            apex_json.write('SKU_WIDTH', l_request_row.sku_width);
+            apex_json.write('SKU_ID', l_request_row.mfcs_sku_no);
+            apex_json.close_object;
+        end loop;
+
+        apex_json.close_array;
+        apex_json.open_array('COMPLETED_STEPS');
+        for l_step_row in (
+            select step_code
+              from office_mfcs_step
+             where action_request_id = p_action_request_id
+               and step_status = 'SUCCEEDED'
+             order by step_sequence
+        ) loop
+            apex_json.write(l_step_row.step_code);
+        end loop;
+
+        apex_json.close_array;
+        apex_json.write('FAILED_STEP', l_failed_step, true);
+        apex_json.open_object('GENERATED_IDENTIFIERS');
+        apex_json.write('STYLE', l_style, true);
+        apex_json.write('ORDER_NO', l_order, true);
+        apex_json.close_object;
+        apex_json.open_array('ERRORS');
+        apex_json.close_array;
+        apex_json.close_object;
+        l_response := office_mfcs_apex_pkg.end_json;
         return l_response;
+    exception
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
     end;
 end office_mfcs_request_pkg;
 /
@@ -1219,6 +1199,19 @@ create or replace package body office_mfcs_client_pkg as
         end;
     end;
 
+    function transport_error(p_message in varchar2) return clob is
+    begin
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.write('ERROR', p_message);
+        apex_json.close_object;
+        return office_mfcs_apex_pkg.end_json;
+    exception
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
+    end transport_error;
+
     function access_token return varchar2 is
         l_token_url varchar2(1000);
         l_client_id varchar2(4000);
@@ -1227,6 +1220,8 @@ create or replace package body office_mfcs_client_pkg as
         l_scope varchar2(4000);
         l_response clob;
         l_expires_in number;
+        l_parameter_names apex_application_global.vc_arr2;
+        l_parameter_values apex_application_global.vc_arr2;
     begin
         if g_access_token is not null
            and g_token_expires_at > systimestamp + interval '60' second then
@@ -1239,19 +1234,26 @@ create or replace package body office_mfcs_client_pkg as
         l_scope := office_mfcs_request_pkg.get_config('MFCS_SCOPE');
         l_client_secret := get_secret(l_secret_ref);
 
-        apex_web_service.g_request_headers.delete;
+        apex_web_service.clear_request_headers;
         apex_web_service.g_request_headers(1).name := 'Content-Type';
         apex_web_service.g_request_headers(1).value := 'application/x-www-form-urlencoded';
         apex_web_service.g_request_headers(2).name := 'Accept';
         apex_web_service.g_request_headers(2).value := 'application/json';
 
+        l_parameter_names(1) := 'grant_type';
+        l_parameter_values(1) := 'client_credentials';
+        l_parameter_names(2) := 'client_id';
+        l_parameter_values(2) := l_client_id;
+        l_parameter_names(3) := 'client_secret';
+        l_parameter_values(3) := l_client_secret;
+        l_parameter_names(4) := 'scope';
+        l_parameter_values(4) := l_scope;
+
         l_response := apex_web_service.make_rest_request(
             p_url => l_token_url,
             p_http_method => 'POST',
-            p_body => 'grant_type=client_credentials'
-                   || '&client_id=' || l_client_id
-                   || '&client_secret=' || l_client_secret
-                   || '&scope=' || l_scope,
+            p_parm_name => l_parameter_names,
+            p_parm_value => l_parameter_values,
             p_wallet_path => wallet_path,
             p_wallet_pwd => wallet_password,
             p_https_host => https_host,
@@ -1399,7 +1401,7 @@ create or replace package body office_mfcs_client_pkg as
             raise_application_error(-20950, 'Local MFCS rejected request at ' || p_endpoint_key);
         end if;
 
-        apex_web_service.g_request_headers.delete;
+        apex_web_service.clear_request_headers;
         apex_web_service.g_request_headers(1).name := 'Authorization';
         apex_web_service.g_request_headers(1).value := 'Bearer ' || access_token;
         apex_web_service.g_request_headers(2).name := 'Accept';
@@ -1447,12 +1449,12 @@ create or replace package body office_mfcs_client_pkg as
             end if;
 
             if instr(lower(l_error_message), 'timeout') > 0 then
-                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'OUTCOME_UNKNOWN', null, '{"ERROR":"' || replace(l_error_message, '"', '\"') || '"}');
+                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'OUTCOME_UNKNOWN', null, transport_error(l_error_message));
                 raise_application_error(-20952, 'MFCS timeout after request was sent.');
             end if;
 
             if l_attempt_id is not null then
-                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'FAILED', null, '{"ERROR":"' || replace(l_error_message, '"', '\"') || '"}');
+                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'FAILED', null, transport_error(l_error_message));
             end if;
             raise_application_error(-20950, l_error_message);
     end;
@@ -1464,6 +1466,8 @@ create or replace package body office_mfcs_client_pkg as
         l_response clob;
         l_endpoint varchar2(1000);
         l_http_status number;
+        l_parameter_names apex_application_global.vc_arr2;
+        l_parameter_values apex_application_global.vc_arr2;
     begin
         if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'MOCK' then
             execute immediate
@@ -1480,19 +1484,24 @@ create or replace package body office_mfcs_client_pkg as
         end if;
 
         l_endpoint := rtrim(office_mfcs_request_pkg.get_config('MFCS_BASE_URL'), '/')
-            || office_mfcs_request_pkg.get_config('ENDPOINT.REST_SERVICE_STATUS')
-            || '?xCorrelationId=' || p_correlation_id
-            || '&includePayload=Y';
+            || office_mfcs_request_pkg.get_config('ENDPOINT.REST_SERVICE_STATUS');
 
-        apex_web_service.g_request_headers.delete;
+        apex_web_service.clear_request_headers;
         apex_web_service.g_request_headers(1).name := 'Authorization';
         apex_web_service.g_request_headers(1).value := 'Bearer ' || access_token;
         apex_web_service.g_request_headers(2).name := 'Accept';
         apex_web_service.g_request_headers(2).value := 'application/json';
 
+        l_parameter_names(1) := 'xCorrelationId';
+        l_parameter_values(1) := p_correlation_id;
+        l_parameter_names(2) := 'includePayload';
+        l_parameter_values(2) := 'Y';
+
         l_response := apex_web_service.make_rest_request(
             p_url => l_endpoint,
             p_http_method => 'GET',
+            p_parm_name => l_parameter_names,
+            p_parm_value => l_parameter_values,
             p_wallet_path => wallet_path,
             p_wallet_pwd => wallet_password,
             p_https_host => https_host,
@@ -1703,6 +1712,19 @@ create or replace package body office_mfcs_orchestrator_pkg as
         );
     end;
 
+    function fallback_step_payload(p_step_code in varchar2) return clob is
+    begin
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.write('step', p_step_code);
+        apex_json.close_object;
+        return office_mfcs_apex_pkg.end_json;
+    exception
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
+    end fallback_step_payload;
+
     function payload_for_step(
         p_action_request_id in varchar2,
         p_step_code in varchar2
@@ -1719,7 +1741,7 @@ create or replace package body office_mfcs_orchestrator_pkg as
             when 'RESERVE_ORDER_NUMBER' then return office_mfcs_mapping_pkg.build_po_number_request(p_action_request_id);
             when 'CREATE_PURCHASE_ORDER' then return office_mfcs_mapping_pkg.build_purchase_order_request(p_action_request_id);
             when 'VERIFY_PURCHASE_ORDER' then return office_mfcs_mapping_pkg.build_purchase_order_verify_request(p_action_request_id);
-            else return '{"step":"' || p_step_code || '"}';
+            else return fallback_step_payload(p_step_code);
         end case;
     end;
 
@@ -1789,7 +1811,15 @@ create or replace package body office_mfcs_orchestrator_pkg as
             office_mfcs_request_pkg.set_request_status(
                 p_action_request_id,
                 'FAILED_NO_SIDE_EFFECT',
-                '{"ACTION_REQUEST_ID":"' || p_action_request_id || '","STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":true,"COMPLETED_STEPS":[],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":[{"FIELD":"MFCS_BATCH_WINDOW","CODE":"MFCS_BATCH_WINDOW_ACTIVE","MESSAGE":"Required MFCS services are unavailable during the configured batch window."}]}'
+                office_mfcs_apex_pkg.transaction_error(
+                    p_action_request_id,
+                    'FAILED_NO_SIDE_EFFECT',
+                    true,
+                    null,
+                    'MFCS_BATCH_WINDOW',
+                    'MFCS_BATCH_WINDOW_ACTIVE',
+                    'Required MFCS services are unavailable during the configured batch window.'
+                )
             );
             return;
         end if;
@@ -1884,7 +1914,15 @@ create or replace package body office_mfcs_orchestrator_pkg as
                 office_mfcs_request_pkg.set_request_status(
                     p_action_request_id,
                     'FAILED_NO_SIDE_EFFECT',
-                    '{"ACTION_REQUEST_ID":"' || p_action_request_id || '","STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":true,"COMPLETED_STEPS":[],"FAILED_STEP":"' || l_step || '","GENERATED_IDENTIFIERS":{},"ERRORS":[{"FIELD":"' || l_step || '","CODE":"' || l_error_code || '","MESSAGE":"' || replace(l_error_message, '"', '\"') || '"}]}'
+                    office_mfcs_apex_pkg.transaction_error(
+                        p_action_request_id,
+                        'FAILED_NO_SIDE_EFFECT',
+                        true,
+                        l_step,
+                        l_step,
+                        to_char(l_error_code),
+                        l_error_message
+                    )
                 );
             end if;
     end;
@@ -1910,11 +1948,40 @@ create or replace package body office_mfcs_api_pkg as
         p_message           in varchar2
     ) return clob is
     begin
-        return '{"ACTION_REQUEST_ID":' || case when p_action_request_id is null then 'null' else '"' || replace(p_action_request_id, '"', '\"') || '"' end
-            || ',"STATUS":"' || p_status || '","RETRYABLE":' || p_retryable
-            || ',"COMPLETED_STEPS":[],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{}'
-            || ',"ERRORS":[{"FIELD":"' || replace(p_field, '"', '\"') || '","CODE":"' || replace(p_code, '"', '\"') || '","MESSAGE":"' || replace(p_message, '"', '\"') || '"}]}';
+        return office_mfcs_apex_pkg.transaction_error(
+            p_action_request_id,
+            p_status,
+            lower(p_retryable) = 'true',
+            null,
+            p_field,
+            p_code,
+            p_message
+        );
     end;
+
+    function validation_success(p_action_request_id in varchar2) return clob is
+        l_null varchar2(1);
+    begin
+        office_mfcs_apex_pkg.begin_json;
+        apex_json.open_object;
+        apex_json.write('ACTION_REQUEST_ID', p_action_request_id);
+        apex_json.write('STATUS', 'VALIDATED');
+        apex_json.write('RETRYABLE', false);
+        apex_json.open_array('COMPLETED_STEPS');
+        apex_json.write('VALIDATE_REQUEST');
+        apex_json.close_array;
+        apex_json.write('FAILED_STEP', l_null, true);
+        apex_json.open_object('GENERATED_IDENTIFIERS');
+        apex_json.close_object;
+        apex_json.open_array('ERRORS');
+        apex_json.close_array;
+        apex_json.close_object;
+        return office_mfcs_apex_pkg.end_json;
+    exception
+        when others then
+            office_mfcs_apex_pkg.abandon_json;
+            raise;
+    end validation_success;
 
     function status_to_http(p_status in varchar2) return number is
     begin
@@ -2019,7 +2086,7 @@ create or replace package body office_mfcs_api_pkg as
         l_valid := office_mfcs_validation_pkg.validate_request(p_payload, l_errors);
 
         if not l_valid then
-            p_response := '{"ACTION_REQUEST_ID":"' || replace(l_action_request_id, '"', '\"') || '","STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":false,"COMPLETED_STEPS":[],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":' || l_errors || '}';
+            p_response := office_mfcs_apex_pkg.transaction_validation_error(l_action_request_id, l_errors);
             office_mfcs_request_pkg.set_request_status(l_action_request_id, 'FAILED_NO_SIDE_EFFECT', p_response);
             p_http_status := 422;
             return;
@@ -2066,10 +2133,10 @@ create or replace package body office_mfcs_api_pkg as
 
         if l_valid then
             p_http_status := 200;
-            p_response := '{"ACTION_REQUEST_ID":"' || replace(l_action_request_id, '"', '\"') || '","STATUS":"VALIDATED","RETRYABLE":false,"COMPLETED_STEPS":["VALIDATE_REQUEST"],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":[]}';
+            p_response := validation_success(l_action_request_id);
         else
             p_http_status := 422;
-            p_response := '{"ACTION_REQUEST_ID":' || case when l_action_request_id is null then 'null' else '"' || replace(l_action_request_id, '"', '\"') || '"' end || ',"STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":false,"COMPLETED_STEPS":[],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":' || l_errors || '}';
+            p_response := office_mfcs_apex_pkg.transaction_validation_error(l_action_request_id, l_errors);
         end if;
         office_mfcs_log_pkg.info(c_package_name, 'VALIDATE_TRANSACTION', l_action_request_id, case when l_valid then 'Validation succeeded' else 'Validation failed' end);
     exception

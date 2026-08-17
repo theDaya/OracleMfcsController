@@ -94,7 +94,7 @@ begin
         p_pattern => 'health',
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
-        p_source => q'[begin owa_util.mime_header('application/json', false); owa_util.status_line(200, null, false); owa_util.http_header_close; htp.prn('{"status":"UP","service":"office-mfcs-workflow"}'); end;]'
+        p_source => q'[declare l_response clob; begin office_workflow_http_pkg.begin_json; apex_json.open_object; apex_json.write('status', 'UP'); apex_json.write('service', 'office-mfcs-workflow'); apex_json.close_object; l_response := office_workflow_http_pkg.end_json; office_workflow_http_pkg.send_json(200, l_response); end;]'
     );
 
     commit;
