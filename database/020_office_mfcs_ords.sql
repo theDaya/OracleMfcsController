@@ -38,10 +38,7 @@ declare
     l_response clob;
 begin
     office_mfcs_api_pkg.submit_transaction(:body_text, l_http_status, l_response);
-    owa_util.mime_header('application/json', false);
-    owa_util.status_line(l_http_status, null, false);
-    owa_util.http_header_close;
-    htp.prn(l_response);
+    office_mfcs_ords_util_pkg.emit_json(l_response, l_http_status);
 end;
 ]'
     );
@@ -62,10 +59,7 @@ declare
     l_response clob;
 begin
     office_mfcs_api_pkg.validate_transaction(:body_text, l_http_status, l_response);
-    owa_util.mime_header('application/json', false);
-    owa_util.status_line(l_http_status, null, false);
-    owa_util.http_header_close;
-    htp.prn(l_response);
+    office_mfcs_ords_util_pkg.emit_json(l_response, l_http_status);
 end;
 ]'
     );
@@ -86,10 +80,7 @@ declare
     l_response clob;
 begin
     office_mfcs_api_pkg.get_transaction(:actionRequestId, l_http_status, l_response);
-    owa_util.mime_header('application/json', false);
-    owa_util.status_line(l_http_status, null, false);
-    owa_util.http_header_close;
-    htp.prn(l_response);
+    office_mfcs_ords_util_pkg.emit_json(l_response, l_http_status);
 end;
 ]'
     );
@@ -110,10 +101,7 @@ declare
     l_response clob;
 begin
     office_mfcs_api_pkg.resume_transaction(:actionRequestId, l_http_status, l_response);
-    owa_util.mime_header('application/json', false);
-    owa_util.status_line(l_http_status, null, false);
-    owa_util.http_header_close;
-    htp.prn(l_response);
+    office_mfcs_ords_util_pkg.emit_json(l_response, l_http_status);
 end;
 ]'
     );

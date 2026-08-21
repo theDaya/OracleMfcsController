@@ -12,9 +12,7 @@ begin
         p_source_type => ords.source_type_plsql,
         p_source => q'[
 begin
-    owa_util.mime_header('application/json', false);
-    owa_util.http_header_close;
-    htp.prn(office_mfcs_master_pkg.list_styles(
+    office_mfcs_ords_util_pkg.emit_json(office_mfcs_master_pkg.list_styles(
         p_limit => to_number(nvl(:limit, '50')),
         p_dept => :dept,
         p_item_level => nvl(:itemLevel, '1')
@@ -31,9 +29,7 @@ end;
         p_source_type => ords.source_type_plsql,
         p_source => q'[
 begin
-    owa_util.mime_header('application/json', false);
-    owa_util.http_header_close;
-    htp.prn(office_mfcs_master_pkg.get_style(:item));
+    office_mfcs_ords_util_pkg.emit_json(office_mfcs_master_pkg.get_style(:item));
 end;
 ]'
     );
@@ -46,9 +42,7 @@ end;
         p_source_type => ords.source_type_plsql,
         p_source => q'[
 begin
-    owa_util.mime_header('application/json', false);
-    owa_util.http_header_close;
-    htp.prn(office_mfcs_master_pkg.list_orders(
+    office_mfcs_ords_util_pkg.emit_json(office_mfcs_master_pkg.list_orders(
         p_limit => to_number(nvl(:limit, '50')),
         p_supplier => :supplier
     ));
@@ -64,9 +58,22 @@ end;
         p_source_type => ords.source_type_plsql,
         p_source => q'[
 begin
-    owa_util.mime_header('application/json', false);
-    owa_util.http_header_close;
-    htp.prn(office_mfcs_master_pkg.get_order(:orderNo, nvl(:enrich, 'Y')));
+    office_mfcs_ords_util_pkg.emit_json(office_mfcs_master_pkg.get_order(:orderNo, nvl(:enrich, 'Y')));
+end;
+]'
+    );
+
+    -- Bearer token health, so an expired credential is visible in the console
+    -- instead of showing up as unexplained blank listings.
+    ords.define_template(p_module_name => 'office-mfcs-v1', p_pattern => 'token-status');
+    ords.define_handler(
+        p_module_name => 'office-mfcs-v1',
+        p_pattern => 'token-status',
+        p_method => 'GET',
+        p_source_type => ords.source_type_plsql,
+        p_source => q'[
+begin
+    office_mfcs_ords_util_pkg.emit_json(office_mfcs_master_pkg.token_status);
 end;
 ]'
     );
@@ -128,9 +135,7 @@ begin
     end loop;
     l_root.put('log', l_log);
 
-    owa_util.mime_header('application/json', false);
-    owa_util.http_header_close;
-    htp.prn(l_root.to_clob);
+    office_mfcs_ords_util_pkg.emit_json(l_root.to_clob);
 end;
 ]'
     );
@@ -145,9 +150,7 @@ declare
     l_summary clob;
 begin
     office_mfcs_master_pkg.refresh_all(l_summary);
-    owa_util.mime_header('application/json', false);
-    owa_util.http_header_close;
-    htp.prn(l_summary);
+    office_mfcs_ords_util_pkg.emit_json(l_summary);
 end;
 ]'
     );

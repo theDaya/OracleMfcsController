@@ -22,6 +22,10 @@ create or replace package office_mfcs_master_pkg authid definer as
         p_supplier in varchar2 default null
     ) return clob;
 
+    -- Decodes the stored bearer token's JWT claims so an expired credential is
+    -- diagnosable without leaving the database. Never returns the token itself.
+    function token_status return clob;
+
     function get_style(p_item in varchar2) return clob;
 
     -- p_enrich resolves what an order read does not carry but a MODIFY_ORDER
@@ -39,25 +43,100 @@ show errors
 
 create or replace package body office_mfcs_master_pkg as
 
-    g_token varchar2(32767);
-
+    -- Deliberately NOT cached in a package global. ORDS pools database sessions,
+    -- so a session that once read an expired token would keep replaying it for
+    -- the life of that session, giving intermittent 401s that follow no pattern
+    -- from the caller's point of view. A single indexed lookup per call is
+    -- cheap; being wrong about a credential is not.
     function bearer return varchar2 is
         l_ref varchar2(200);
+        l_token varchar2(32767);
     begin
-        if g_token is not null then
-            return g_token;
-        end if;
         l_ref := office_mfcs_request_pkg.get_config('MFCS_BEARER_TOKEN_REF', 'MFCS_BEARER_TOKEN');
-        select dbms_lob.substr(secret_value, 32767, 1) into g_token
+        select dbms_lob.substr(secret_value, 32767, 1) into l_token
           from office_mfcs_secret where secret_ref = l_ref;
-        g_token := trim(g_token);
-        if lower(substr(g_token, 1, 7)) = 'bearer ' then
-            g_token := trim(substr(g_token, 8));
+        l_token := trim(l_token);
+        if lower(substr(l_token, 1, 7)) = 'bearer ' then
+            l_token := trim(substr(l_token, 8));
         end if;
-        return g_token;
+        return l_token;
     exception
         when no_data_found then
-            raise_application_error(-20890, 'MFCS bearer token is not configured in OFFICE_MFCS_SECRET.');
+            raise_application_error(-20890,
+                'MFCS bearer token is not configured in OFFICE_MFCS_SECRET under ref ' || l_ref || '.');
+    end;
+
+    function token_status return clob is
+        l_root json_object_t := json_object_t();
+        l_ref varchar2(200);
+        l_token varchar2(32767);
+        l_seg varchar2(32767);
+        l_json varchar2(32767);
+        l_claims json_object_t;
+        l_exp number;
+        l_iat number;
+        l_now number;
+    begin
+        l_ref := office_mfcs_request_pkg.get_config('MFCS_BEARER_TOKEN_REF', 'MFCS_BEARER_TOKEN');
+        l_root.put('secretRef', l_ref);
+
+        begin
+            select dbms_lob.substr(secret_value, 32767, 1) into l_token
+              from office_mfcs_secret where secret_ref = l_ref;
+        exception
+            when no_data_found then
+                l_root.put('present', false);
+                l_root.put('message', 'No row in OFFICE_MFCS_SECRET under ref ' || l_ref || '.');
+                return l_root.to_clob;
+        end;
+
+        l_token := trim(l_token);
+        if lower(substr(l_token, 1, 7)) = 'bearer ' then
+            l_token := trim(substr(l_token, 8));
+        end if;
+
+        l_root.put('present', true);
+        l_root.put('length', length(l_token));
+        l_root.put('segments', length(l_token) - length(replace(l_token, '.', '')) + 1);
+
+        -- Middle JWT segment, base64url-decoded.
+        l_seg := regexp_substr(l_token, '[^.]+', 1, 2);
+        if l_seg is null then
+            l_root.put('message', 'Not a JWT; cannot read expiry.');
+            return l_root.to_clob;
+        end if;
+
+        l_seg := replace(replace(l_seg, '-', '+'), '_', '/');
+        l_seg := l_seg || rpad('=', mod(4 - mod(length(l_seg), 4), 4), '=');
+
+        begin
+            l_json := utl_raw.cast_to_varchar2(utl_encode.base64_decode(utl_raw.cast_to_raw(l_seg)));
+            l_claims := json_object_t.parse(l_json);
+            l_exp := l_claims.get_number('exp');
+            l_iat := l_claims.get_number('iat');
+        exception
+            when others then
+                l_root.put('message', 'Could not decode JWT claims: ' || substr(sqlerrm, 1, 200));
+                return l_root.to_clob;
+        end;
+
+        l_now := (cast(systimestamp at time zone 'UTC' as date) - date '1970-01-01') * 86400;
+
+        if l_iat is not null then
+            l_root.put('issuedAt', to_char(date '1970-01-01' + l_iat / 86400, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'));
+        end if;
+        if l_exp is not null then
+            l_root.put('expiresAt', to_char(date '1970-01-01' + l_exp / 86400, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'));
+            l_root.put('expired', l_exp < l_now);
+            l_root.put('secondsRemaining', round(l_exp - l_now));
+            l_root.put('message',
+                case when l_exp < l_now
+                     then 'Token expired ' || round((l_now - l_exp) / 60) || ' minute(s) ago. Re-issue it in Postman.'
+                     else 'Token valid for a further ' || round((l_exp - l_now) / 60) || ' minute(s).'
+                end);
+        end if;
+
+        return l_root.to_clob;
     end;
 
     function http_get(p_path in varchar2, o_status out number) return clob is

@@ -122,3 +122,5 @@ export const listOrders = (params = {}) => {
 };
 
 export const getOrder = (orderNo) => call(`/orders/${encodeURIComponent(orderNo)}`);
+
+export const getTokenStatus = () => call('/token-status');

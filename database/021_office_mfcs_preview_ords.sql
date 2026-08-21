@@ -23,9 +23,7 @@ declare
 begin
     office_mfcs_preview_pkg.preview_transaction(:body_text, l_http_status, l_response);
     :status_code := l_http_status;
-    owa_util.mime_header('application/json', false);
-    owa_util.http_header_close;
-    htp.prn(l_response);
+    office_mfcs_ords_util_pkg.emit_json(l_response);
 end;
 ]'
     );
@@ -104,9 +102,7 @@ begin
     end loop;
     l_root.put('runtime', l_item);
 
-    owa_util.mime_header('application/json', false);
-    owa_util.http_header_close;
-    htp.prn(l_root.to_clob);
+    office_mfcs_ords_util_pkg.emit_json(l_root.to_clob);
 end;
 ]'
     );
@@ -146,9 +142,7 @@ begin
         l_arr.append(l_row);
     end loop;
     l_root.put('items', l_arr);
-    owa_util.mime_header('application/json', false);
-    owa_util.http_header_close;
-    htp.prn(l_root.to_clob);
+    office_mfcs_ords_util_pkg.emit_json(l_root.to_clob);
 end;
 ]'
     );

@@ -15,6 +15,7 @@ prompt ==========================================
 @@../../database/003_office_mfcs_config.sql
 @@../../database/004_office_mfcs_event_log.sql
 @@../../database/005_office_mfcs_master_data.sql
+@@../../database/006_office_mfcs_ords_util.sql
 @@../../database/010_office_mfcs_package_specs.sql
 
 -- The payload mapper must load before the package bodies: office_mfcs_mapping_pkg
