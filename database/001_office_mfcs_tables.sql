@@ -49,6 +49,18 @@ create table office_mfcs_attempt (
     completed_at     timestamp with time zone
 );
 
+create table office_mfcs_event_log (
+    log_id            number not null,
+    action_request_id varchar2(80),
+    step_code         varchar2(60),
+    attempt_id        number,
+    event_level       varchar2(10) default 'INFO' not null,
+    event_phase       varchar2(80) not null,
+    message           varchar2(1000),
+    detail_payload    clob,
+    created_at        timestamp with time zone default systimestamp not null
+);
+
 create table office_mfcs_entity_map (
     source_system      varchar2(60) not null,
     source_style_ref   varchar2(120),
@@ -72,6 +84,15 @@ create table office_mfcs_config (
     updated_at    timestamp with time zone default systimestamp not null
 );
 
+create table office_mfcs_secret (
+    secret_ref    varchar2(200) not null,
+    secret_value  clob not null,
+    description   varchar2(400),
+    created_at    timestamp with time zone default systimestamp not null,
+    updated_at    timestamp with time zone default systimestamp not null
+);
+
 create sequence office_mfcs_attempt_seq start with 1 increment by 1 nocache;
+create sequence office_mfcs_event_log_seq start with 1 increment by 1 nocache;
 
 prompt OFFICE MFCS tables created

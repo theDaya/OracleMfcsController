@@ -559,15 +559,22 @@ create or replace package body local_mfcs_service_pkg as
             select count(*) into l_detail_count from json_table(l_details, '$[*]' columns x path '$');
             assert_true(l_detail_count > 0, 'items.details', 'must contain at least one item/location detail');
             for d in (
-                select item, location, loc_type, qty_ordered, unit_cost, origin_country_id
+                select item,
+                       location,
+                       loc_type,
+                       coalesce(qty_ordered, legacy_qty_ordered) qty_ordered,
+                       unit_cost,
+                       coalesce(origin_country_id, legacy_origin_country_id) origin_country_id
                   from json_table(l_details, '$[*]'
                       columns
                           item varchar2(25) path '$.item',
                           location number path '$.location',
                           loc_type varchar2(1) path '$.locationType',
-                          qty_ordered number path '$.qtyOrdered',
+                          qty_ordered number path '$.quantityOrdered',
+                          legacy_qty_ordered number path '$.qtyOrdered',
                           unit_cost number path '$.unitCost',
-                          origin_country_id varchar2(3) path '$.originCountryId'
+                          origin_country_id varchar2(3) path '$.originCountry',
+                          legacy_origin_country_id varchar2(3) path '$.originCountryId'
                   )
             ) loop
                 begin

@@ -286,16 +286,23 @@ create or replace package body office_mfcs_request_pkg as
 
         if p_operation_name in ('CREATE_STYLE', 'CREATE_ALL') then
             add_step(p_action_request_id, 'RESERVE_ITEM_NUMBERS', 20);
-            add_step(p_action_request_id, 'CREATE_ITEM_HIERARCHY', 30);
-            add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 40);
-            add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 50);
-            add_step(p_action_request_id, 'CREATE_ITEM_LOCATIONS', 60);
-            add_step(p_action_request_id, 'APPROVE_ITEMS', 70);
+            add_step(p_action_request_id, 'CREATE_PARENT_ITEM_HIERARCHY', 30);
+            add_step(p_action_request_id, 'CREATE_PARENT_ITEM_SOURCING', 35);
+            add_step(p_action_request_id, 'CREATE_CHILD_ITEM_HIERARCHY', 40);
+            add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 50);
+            add_step(p_action_request_id, 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE', 55);
+            add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 60);
+            if get_config('FEATURE_ITEM_LOCATIONS_YN', 'N') = 'Y' then
+                add_step(p_action_request_id, 'CREATE_ITEM_LOCATIONS', 70);
+            end if;
+            add_step(p_action_request_id, 'APPROVE_ITEMS', 80);
         elsif p_operation_name = 'MODIFY_STYLE' then
             add_step(p_action_request_id, 'CREATE_ITEM_HIERARCHY', 30);
             add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 40);
             add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 50);
-            add_step(p_action_request_id, 'CREATE_ITEM_LOCATIONS', 60);
+            if get_config('FEATURE_ITEM_LOCATIONS_YN', 'N') = 'Y' then
+                add_step(p_action_request_id, 'CREATE_ITEM_LOCATIONS', 60);
+            end if;
             add_step(p_action_request_id, 'APPROVE_ITEMS', 70);
         end if;
 
@@ -460,6 +467,7 @@ create or replace package body office_mfcs_request_pkg as
         o_attempt_id        out number,
         o_correlation_id    out varchar2
     ) is
+        pragma autonomous_transaction;
         l_attempt_number number;
         l_guid varchar2(32);
     begin
@@ -500,6 +508,18 @@ create or replace package body office_mfcs_request_pkg as
             'IN_PROGRESS'
         );
 
+        log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'ATTEMPT_BEGIN',
+            p_step_code => p_step_code,
+            p_attempt_id => o_attempt_id,
+            p_message => 'MFCS attempt opened.',
+            p_detail_payload => '{"attemptNumber":' || l_attempt_number
+                || ',"correlationId":"' || json_escape(o_correlation_id)
+                || '","httpMethod":"' || json_escape(p_http_method)
+                || '","endpoint":"' || json_escape(p_endpoint) || '"}'
+        );
+
         commit;
     end;
 
@@ -509,15 +529,69 @@ create or replace package body office_mfcs_request_pkg as
         p_http_status      in number default null,
         p_response_payload in clob default null
     ) is
+        pragma autonomous_transaction;
+        l_action_request_id varchar2(80);
+        l_step_code varchar2(60);
     begin
         update office_mfcs_attempt
            set attempt_status = p_attempt_status,
                http_status = p_http_status,
                response_payload = p_response_payload,
                completed_at = systimestamp
-         where attempt_id = p_attempt_id;
+         where attempt_id = p_attempt_id
+         returning action_request_id, step_code
+              into l_action_request_id, l_step_code;
+
+        log_event(
+            p_action_request_id => l_action_request_id,
+            p_event_phase => 'ATTEMPT_COMPLETE',
+            p_step_code => l_step_code,
+            p_attempt_id => p_attempt_id,
+            p_event_level => case when p_attempt_status = 'SUCCEEDED' then 'INFO' else 'ERROR' end,
+            p_message => 'MFCS attempt completed.',
+            p_detail_payload => '{"attemptStatus":"' || json_escape(p_attempt_status)
+                || '","httpStatus":' || coalesce(to_char(p_http_status), 'null')
+                || ',"responseBytes":' || coalesce(to_char(dbms_lob.getlength(p_response_payload)), '0') || '}'
+        );
 
         commit;
+    end;
+
+    procedure log_event(
+        p_action_request_id in varchar2,
+        p_event_phase       in varchar2,
+        p_step_code         in varchar2 default null,
+        p_attempt_id        in number default null,
+        p_message           in varchar2 default null,
+        p_detail_payload    in clob default null,
+        p_event_level       in varchar2 default 'INFO'
+    ) is
+        pragma autonomous_transaction;
+    begin
+        insert into office_mfcs_event_log (
+            log_id,
+            action_request_id,
+            step_code,
+            attempt_id,
+            event_level,
+            event_phase,
+            message,
+            detail_payload
+        ) values (
+            office_mfcs_event_log_seq.nextval,
+            p_action_request_id,
+            p_step_code,
+            p_attempt_id,
+            coalesce(p_event_level, 'INFO'),
+            p_event_phase,
+            substr(p_message, 1, 1000),
+            p_detail_payload
+        );
+
+        commit;
+    exception
+        when others then
+            rollback;
     end;
 
     function build_status_response(
@@ -1008,7 +1082,7 @@ create or replace package body office_mfcs_mapping_pkg as
 
     function use_public_contract return boolean is
     begin
-        return office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') in ('PUBLIC_MOCK', 'LOCAL_MFCS');
+        return office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') in ('PUBLIC_MOCK', 'LOCAL_MFCS', 'ACTUAL_MFCS');
     end;
 
     function source_system(p_payload in clob) return varchar2 is
@@ -1076,6 +1150,22 @@ create or replace package body office_mfcs_mapping_pkg as
         return envelope(p_action_request_id, 'build_item_number_request', 'ENDPOINT.ITEM_NUMBERS_MANAGE');
     end;
 
+    function build_parent_item_create_request(p_action_request_id in varchar2) return clob is
+    begin
+        if use_public_contract then
+            return public_contract_request(p_action_request_id, 'build_parent_item_create_request');
+        end if;
+        return envelope(p_action_request_id, 'build_parent_item_create_request', 'ENDPOINT.ITEMS_CREATE');
+    end;
+
+    function build_child_item_create_request(p_action_request_id in varchar2) return clob is
+    begin
+        if use_public_contract then
+            return public_contract_request(p_action_request_id, 'build_child_item_create_request');
+        end if;
+        return envelope(p_action_request_id, 'build_child_item_create_request', 'ENDPOINT.ITEMS_CREATE');
+    end;
+
     function build_item_create_request(p_action_request_id in varchar2) return clob is
     begin
         if use_public_contract then
@@ -1084,12 +1174,36 @@ create or replace package body office_mfcs_mapping_pkg as
         return envelope(p_action_request_id, 'build_item_create_request', 'ENDPOINT.ITEMS_CREATE');
     end;
 
+    function build_parent_item_sourcing_request(p_action_request_id in varchar2) return clob is
+    begin
+        if use_public_contract then
+            return public_contract_request(p_action_request_id, 'build_parent_item_sourcing_request');
+        end if;
+        return envelope(p_action_request_id, 'build_parent_item_sourcing_request', 'ENDPOINT.ITEM_SOURCING_CREATE');
+    end;
+
+    function build_child_item_sourcing_request(p_action_request_id in varchar2) return clob is
+    begin
+        if use_public_contract then
+            return public_contract_request(p_action_request_id, 'build_child_item_sourcing_request');
+        end if;
+        return envelope(p_action_request_id, 'build_child_item_sourcing_request', 'ENDPOINT.ITEM_SOURCING_CREATE');
+    end;
+
     function build_item_sourcing_request(p_action_request_id in varchar2) return clob is
     begin
         if use_public_contract then
             return public_contract_request(p_action_request_id, 'build_item_sourcing_request');
         end if;
         return envelope(p_action_request_id, 'build_item_sourcing_request', 'ENDPOINT.ITEM_SOURCING_CREATE');
+    end;
+
+    function build_item_country_of_manufacture_request(p_action_request_id in varchar2) return clob is
+    begin
+        if use_public_contract then
+            return public_contract_request(p_action_request_id, 'build_item_country_of_manufacture_request');
+        end if;
+        return envelope(p_action_request_id, 'build_item_country_of_manufacture_request', 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE');
     end;
 
     function build_item_uda_request(p_action_request_id in varchar2) return clob is
@@ -1154,22 +1268,49 @@ end office_mfcs_mapping_pkg;
 /
 
 create or replace package body office_mfcs_client_pkg as
-    g_access_token varchar2(4000);
+    g_access_token varchar2(32767);
     g_token_expires_at timestamp with time zone;
 
-    function get_secret(p_secret_ref in varchar2) return varchar2 is
-        l_secret varchar2(4000);
+    function log_escape(p_value in varchar2) return varchar2 is
     begin
-        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') in ('PUBLIC_MOCK', 'LOCAL_MFCS') then
+        if p_value is null then
+            return null;
+        end if;
+
+        return replace(
+                   replace(
+                       replace(
+                           replace(p_value, '\', '\\'),
+                           '"', '\"'
+                       ),
+                       chr(10), '\n'
+                   ),
+                   chr(13), '\r'
+               );
+    end;
+
+    function get_secret(p_secret_ref in varchar2) return varchar2 is
+        l_secret varchar2(32767);
+    begin
+        if office_mfcs_request_pkg.get_config('MFCS_AUTH_MODE', 'OAUTH_CLIENT_CREDENTIALS') <> 'STATIC_BEARER'
+           and office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') in ('PUBLIC_MOCK', 'LOCAL_MFCS') then
             return 'public-mock-client-secret';
         end if;
 
-        l_secret := sys_context('OFFICE_MFCS_CTX', p_secret_ref);
+        begin
+            select dbms_lob.substr(secret_value, 32767, 1)
+              into l_secret
+              from office_mfcs_secret
+             where secret_ref = p_secret_ref;
+        exception
+            when no_data_found then
+                l_secret := sys_context('OFFICE_MFCS_CTX', p_secret_ref);
+        end;
 
         if l_secret is null then
             raise_application_error(
                 -20890,
-                'MFCS secret retrieval is not configured. Replace office_mfcs_client_pkg.get_secret with the approved RDS secret-store integration.'
+                'MFCS secret ' || p_secret_ref || ' is not configured in OFFICE_MFCS_SECRET or OFFICE_MFCS_CTX.'
             );
         end if;
 
@@ -1226,7 +1367,16 @@ create or replace package body office_mfcs_client_pkg as
         l_scope varchar2(4000);
         l_response clob;
         l_expires_in number;
+        l_static_token varchar2(32767);
     begin
+        if office_mfcs_request_pkg.get_config('MFCS_AUTH_MODE', 'OAUTH_CLIENT_CREDENTIALS') = 'STATIC_BEARER' then
+            l_static_token := trim(get_secret(office_mfcs_request_pkg.get_config('MFCS_BEARER_TOKEN_REF', 'MFCS_BEARER_TOKEN')));
+            if lower(substr(l_static_token, 1, 7)) = 'bearer ' then
+                return trim(substr(l_static_token, 8));
+            end if;
+            return l_static_token;
+        end if;
+
         if g_access_token is not null
            and g_token_expires_at > systimestamp + interval '60' second then
             return g_access_token;
@@ -1337,7 +1487,28 @@ create or replace package body office_mfcs_client_pkg as
             o_correlation_id => l_correlation_id
         );
 
+        office_mfcs_request_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'HTTP_CALL_PREPARED',
+            p_step_code => p_step_code,
+            p_attempt_id => l_attempt_id,
+            p_message => 'Prepared outbound MFCS call.',
+            p_detail_payload => '{"endpointKey":"' || log_escape(p_endpoint_key)
+                || '","endpoint":"' || log_escape(l_endpoint)
+                || '","method":"' || log_escape(p_http_method)
+                || '","clientMode":"' || log_escape(office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK'))
+                || '","requestBytes":' || coalesce(to_char(dbms_lob.getlength(p_request_payload)), '0') || '}'
+        );
+
         if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'MOCK' then
+            office_mfcs_request_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'MOCK_CALL_START',
+                p_step_code => p_step_code,
+                p_attempt_id => l_attempt_id,
+                p_message => 'Calling package mock MFCS service.'
+            );
+
             l_response := call_mock(
                 p_action_request_id,
                 p_step_code,
@@ -1352,6 +1523,18 @@ create or replace package body office_mfcs_client_pkg as
                    json_value(l_response, '$.mock.attemptStatus' returning varchar2(30) default 'SUCCEEDED' on error)
               into l_http_status, l_mock_attempt_status
               from dual;
+
+            office_mfcs_request_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'MOCK_CALL_RESPONSE',
+                p_step_code => p_step_code,
+                p_attempt_id => l_attempt_id,
+                p_event_level => case when l_mock_attempt_status = 'SUCCEEDED' then 'INFO' else 'ERROR' end,
+                p_message => 'Package mock MFCS service returned.',
+                p_detail_payload => '{"httpStatus":' || coalesce(to_char(l_http_status), 'null')
+                    || ',"attemptStatus":"' || log_escape(l_mock_attempt_status)
+                    || '","responseBytes":' || coalesce(to_char(dbms_lob.getlength(l_response)), '0') || '}'
+            );
 
             if l_mock_attempt_status = 'OUTCOME_UNKNOWN' then
                 office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'OUTCOME_UNKNOWN', l_http_status, l_response);
@@ -1373,6 +1556,16 @@ create or replace package body office_mfcs_client_pkg as
             if l_local_resource is null then
                 raise_application_error(-20950, 'Local MFCS resource mapping is missing for ' || p_endpoint_key);
             end if;
+
+            office_mfcs_request_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'LOCAL_MFCS_CALL_START',
+                p_step_code => p_step_code,
+                p_attempt_id => l_attempt_id,
+                p_message => 'Calling local MFCS service.',
+                p_detail_payload => '{"resource":"' || log_escape(l_local_resource) || '"}'
+            );
+
             execute immediate
                 'begin local_mfcs_service_pkg.handle(:a,:b,:c,:d,:e,null,:f,:g); end;'
                 using l_local_resource,
@@ -1382,6 +1575,18 @@ create or replace package body office_mfcs_client_pkg as
                       l_order_no,
                       out l_http_status,
                       out l_response;
+
+            office_mfcs_request_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'LOCAL_MFCS_CALL_RESPONSE',
+                p_step_code => p_step_code,
+                p_attempt_id => l_attempt_id,
+                p_event_level => case when l_http_status between 200 and 299 then 'INFO' else 'ERROR' end,
+                p_message => 'Local MFCS call returned.',
+                p_detail_payload => '{"httpStatus":' || coalesce(to_char(l_http_status), 'null')
+                    || ',"responseBytes":' || coalesce(to_char(dbms_lob.getlength(l_response)), '0') || '}'
+            );
+
             if l_http_status between 200 and 299 then
                 office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'SUCCEEDED', l_http_status, l_response);
                 return l_response;
@@ -1402,6 +1607,17 @@ create or replace package body office_mfcs_client_pkg as
         apex_web_service.g_request_headers(5).name := 'X-Client-Principal-User';
         apex_web_service.g_request_headers(5).value := p_user_id;
 
+        office_mfcs_request_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'HTTP_CALL_START',
+            p_step_code => p_step_code,
+            p_attempt_id => l_attempt_id,
+            p_message => 'Calling remote MFCS endpoint.',
+            p_detail_payload => '{"endpointKey":"' || log_escape(p_endpoint_key)
+                || '","endpoint":"' || log_escape(l_endpoint)
+                || '","timeoutSeconds":' || office_mfcs_request_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45') || '}'
+        );
+
         l_response := apex_web_service.make_rest_request(
             p_url => l_endpoint,
             p_http_method => p_http_method,
@@ -1412,6 +1628,17 @@ create or replace package body office_mfcs_client_pkg as
             p_transfer_timeout => to_number(office_mfcs_request_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45'))
         );
         l_http_status := apex_web_service.g_status_code;
+
+        office_mfcs_request_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'HTTP_CALL_RESPONSE',
+            p_step_code => p_step_code,
+            p_attempt_id => l_attempt_id,
+            p_event_level => case when l_http_status between 200 and 299 then 'INFO' else 'ERROR' end,
+            p_message => 'Remote MFCS endpoint returned.',
+            p_detail_payload => '{"httpStatus":' || coalesce(to_char(l_http_status), 'null')
+                || ',"responseBytes":' || coalesce(to_char(dbms_lob.getlength(l_response)), '0') || '}'
+        );
 
         if l_http_status between 200 and 299 then
             office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'SUCCEEDED', l_http_status, l_response);
@@ -1425,6 +1652,17 @@ create or replace package body office_mfcs_client_pkg as
         end if;
     exception
         when others then
+            office_mfcs_request_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'HTTP_CALL_EXCEPTION',
+                p_step_code => p_step_code,
+                p_attempt_id => l_attempt_id,
+                p_event_level => 'ERROR',
+                p_message => substr(sqlerrm, 1, 1000),
+                p_detail_payload => '{"sqlcode":' || sqlcode
+                    || ',"endpointKey":"' || log_escape(p_endpoint_key) || '"}'
+            );
+
             if sqlcode in (-20950, -20951, -20952) then
                 raise;
             end if;
@@ -1562,6 +1800,24 @@ create or replace package body office_mfcs_orchestrator_pkg as
         return l_payload;
     end;
 
+    function log_escape(p_value in varchar2) return varchar2 is
+    begin
+        if p_value is null then
+            return null;
+        end if;
+
+        return replace(
+                   replace(
+                       replace(
+                           replace(p_value, '\', '\\'),
+                           '"', '\"'
+                       ),
+                       chr(10), '\n'
+                   ),
+                   chr(13), '\r'
+               );
+    end;
+
     function operation_name(p_action_request_id in varchar2) return varchar2 is
         l_operation varchar2(30);
     begin
@@ -1660,6 +1916,143 @@ create or replace package body office_mfcs_orchestrator_pkg as
         end if;
     end;
 
+    function first_reserved_item(p_response in clob) return varchar2 is
+        l_item varchar2(30);
+    begin
+        select coalesce(
+                   json_value(p_response, '$.items[0].item' returning varchar2(30) null on error),
+                   json_value(p_response, '$.item' returning varchar2(30) null on error),
+                   json_value(p_response, '$.STYLE' returning varchar2(30) null on error)
+               )
+          into l_item
+          from dual;
+
+        if l_item is null then
+            raise_application_error(-20830, 'MFCS item-number reservation response did not contain an item number.');
+        end if;
+
+        return l_item;
+    end;
+
+    procedure reserve_item_numbers_chunked(
+        p_action_request_id in varchar2,
+        p_user_id           in varchar2
+    ) is
+        l_payload clob := request_payload(p_action_request_id);
+        l_source_system varchar2(60) := office_mfcs_mapping_pkg.source_system(l_payload);
+        l_source_style_ref varchar2(120) := office_mfcs_mapping_pkg.source_style_ref(l_payload);
+        l_request_payload clob;
+        l_response clob;
+        l_style_no varchar2(30);
+        l_sku_no varchar2(30);
+        l_days number := to_number(office_mfcs_request_pkg.get_config('MFCS_ITEM_NUMBER_RESERVATION_DAYS_UNTIL_EXPIRY', '14'));
+    begin
+        l_request_payload := '{"itemNumberType":"ITEM","quantity":1,"daysUntilExpiry":' || l_days || '}';
+
+        office_mfcs_request_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'RESERVE_CHUNK_START',
+            p_step_code => 'RESERVE_ITEM_NUMBERS',
+            p_message => 'Starting chunked item-number reservation.',
+            p_detail_payload => '{"sourceSystem":"' || log_escape(l_source_system)
+                || '","sourceStyleRef":"' || log_escape(l_source_style_ref)
+                || '","daysUntilExpiry":' || l_days || '}'
+        );
+
+        office_mfcs_request_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'RESERVE_STYLE_START',
+            p_step_code => 'RESERVE_ITEM_NUMBERS',
+            p_message => 'Reserving MFCS item number for style.'
+        );
+
+        l_response := office_mfcs_client_pkg.call_service(
+            p_action_request_id => p_action_request_id,
+            p_step_code => 'RESERVE_ITEM_NUMBERS',
+            p_http_method => 'POST',
+            p_endpoint_key => 'ENDPOINT.ITEM_NUMBERS_MANAGE',
+            p_request_payload => l_request_payload,
+            p_user_id => p_user_id
+        );
+
+        l_style_no := first_reserved_item(l_response);
+
+        office_mfcs_request_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'RESERVE_STYLE_SUCCEEDED',
+            p_step_code => 'RESERVE_ITEM_NUMBERS',
+            p_message => 'Reserved MFCS style item number.',
+            p_detail_payload => '{"mfcsStyleNo":"' || log_escape(l_style_no) || '"}'
+        );
+
+        office_mfcs_request_pkg.save_generated_identifier(
+            p_action_request_id => p_action_request_id,
+            p_source_system => l_source_system,
+            p_source_style_ref => l_source_style_ref,
+            p_mfcs_style_no => l_style_no
+        );
+
+        for v in (
+            select source_variant_ref, sku_size, sku_width
+              from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
+                  columns
+                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
+                      sku_size varchar2(60) path '$.SKU_SIZE',
+                      sku_width varchar2(60) path '$.SKU_WIDTH'
+              )
+        ) loop
+            office_mfcs_request_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'RESERVE_SKU_START',
+                p_step_code => 'RESERVE_ITEM_NUMBERS',
+                p_message => 'Reserving MFCS item number for SKU.',
+                p_detail_payload => '{"sourceVariantRef":"' || log_escape(v.source_variant_ref)
+                    || '","skuSize":"' || log_escape(v.sku_size)
+                    || '","skuWidth":"' || log_escape(v.sku_width) || '"}'
+            );
+
+            l_response := office_mfcs_client_pkg.call_service(
+                p_action_request_id => p_action_request_id,
+                p_step_code => 'RESERVE_ITEM_NUMBERS',
+                p_http_method => 'POST',
+                p_endpoint_key => 'ENDPOINT.ITEM_NUMBERS_MANAGE',
+                p_request_payload => l_request_payload,
+                p_user_id => p_user_id
+            );
+
+            l_sku_no := first_reserved_item(l_response);
+
+            office_mfcs_request_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'RESERVE_SKU_SUCCEEDED',
+                p_step_code => 'RESERVE_ITEM_NUMBERS',
+                p_message => 'Reserved MFCS SKU item number.',
+                p_detail_payload => '{"sourceVariantRef":"' || log_escape(v.source_variant_ref)
+                    || '","mfcsSkuNo":"' || log_escape(l_sku_no)
+                    || '","mfcsStyleNo":"' || log_escape(l_style_no) || '"}'
+            );
+
+            office_mfcs_request_pkg.save_generated_identifier(
+                p_action_request_id => p_action_request_id,
+                p_source_system => l_source_system,
+                p_source_style_ref => l_source_style_ref,
+                p_mfcs_style_no => l_style_no,
+                p_source_variant_ref => v.source_variant_ref,
+                p_mfcs_sku_no => l_sku_no,
+                p_sku_size => v.sku_size,
+                p_sku_width => v.sku_width
+            );
+        end loop;
+
+        office_mfcs_request_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'RESERVE_CHUNK_COMPLETE',
+            p_step_code => 'RESERVE_ITEM_NUMBERS',
+            p_message => 'Chunked item-number reservation completed.',
+            p_detail_payload => '{"mfcsStyleNo":"' || log_escape(l_style_no) || '"}'
+        );
+    end;
+
     procedure persist_po_number(
         p_action_request_id in varchar2,
         p_response          in clob
@@ -1691,8 +2084,12 @@ create or replace package body office_mfcs_orchestrator_pkg as
     begin
         case p_step_code
             when 'RESERVE_ITEM_NUMBERS' then return office_mfcs_mapping_pkg.build_item_number_request(p_action_request_id);
+            when 'CREATE_PARENT_ITEM_HIERARCHY' then return office_mfcs_mapping_pkg.build_parent_item_create_request(p_action_request_id);
+            when 'CREATE_CHILD_ITEM_HIERARCHY' then return office_mfcs_mapping_pkg.build_child_item_create_request(p_action_request_id);
             when 'CREATE_ITEM_HIERARCHY' then return office_mfcs_mapping_pkg.build_item_create_request(p_action_request_id);
+            when 'CREATE_PARENT_ITEM_SOURCING' then return office_mfcs_mapping_pkg.build_parent_item_sourcing_request(p_action_request_id);
             when 'CREATE_ITEM_SOURCING' then return office_mfcs_mapping_pkg.build_item_sourcing_request(p_action_request_id);
+            when 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE' then return office_mfcs_mapping_pkg.build_item_country_of_manufacture_request(p_action_request_id);
             when 'CREATE_ITEM_UDAS' then return office_mfcs_mapping_pkg.build_item_uda_request(p_action_request_id);
             when 'CREATE_ITEM_LOCATIONS' then return office_mfcs_mapping_pkg.build_item_location_request(p_action_request_id);
             when 'APPROVE_ITEMS' then return office_mfcs_mapping_pkg.build_item_approval_request(p_action_request_id);
@@ -1708,14 +2105,18 @@ create or replace package body office_mfcs_orchestrator_pkg as
     begin
         case p_step_code
             when 'RESERVE_ITEM_NUMBERS' then return 'ENDPOINT.ITEM_NUMBERS_MANAGE';
+            when 'CREATE_PARENT_ITEM_HIERARCHY' then return 'ENDPOINT.ITEMS_CREATE';
+            when 'CREATE_CHILD_ITEM_HIERARCHY' then return 'ENDPOINT.ITEMS_CREATE';
             when 'CREATE_ITEM_HIERARCHY' then
                 if p_operation = 'MODIFY_STYLE' then
                     return 'ENDPOINT.ITEMS_UPDATE';
                 end if;
                 return 'ENDPOINT.ITEMS_CREATE';
+            when 'CREATE_PARENT_ITEM_SOURCING' then return 'ENDPOINT.ITEM_SOURCING_CREATE';
             when 'CREATE_ITEM_SOURCING' then
                 if p_operation = 'MODIFY_STYLE' then return 'ENDPOINT.ITEM_SOURCING_UPDATE'; end if;
                 return 'ENDPOINT.ITEM_SOURCING_CREATE';
+            when 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE' then return 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE';
             when 'CREATE_ITEM_UDAS' then
                 if p_operation = 'MODIFY_STYLE' then return 'ENDPOINT.ITEM_UDAS_UPDATE'; end if;
                 return 'ENDPOINT.ITEM_UDAS_CREATE';
@@ -1737,6 +2138,8 @@ create or replace package body office_mfcs_orchestrator_pkg as
     begin
         if p_step_code = 'VERIFY_PURCHASE_ORDER' then
             return 'GET';
+        elsif p_step_code = 'APPROVE_ITEMS' then
+            return 'PUT';
         elsif p_operation = 'MODIFY_STYLE'
               and p_step_code in ('CREATE_ITEM_HIERARCHY', 'CREATE_ITEM_SOURCING', 'CREATE_ITEM_UDAS', 'CREATE_ITEM_LOCATIONS', 'APPROVE_ITEMS') then
             return 'PUT';
@@ -1760,6 +2163,8 @@ create or replace package body office_mfcs_orchestrator_pkg as
         l_recovery_status varchar2(30);
         l_started_at timestamp with time zone := systimestamp;
         l_budget_seconds number := to_number(office_mfcs_request_pkg.get_config('INTERNAL_TIME_BUDGET_SECONDS', '240'));
+        l_verify_retry_count number := to_number(office_mfcs_request_pkg.get_config('MFCS_ORDER_VERIFY_RETRY_COUNT', '12'));
+        l_verify_retry_sleep number := to_number(office_mfcs_request_pkg.get_config('MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS', '10'));
     begin
         if l_operation = 'CREATE_ALL'
            and office_mfcs_request_pkg.get_config('BATCH_WINDOW_ACTIVE_YN', 'N') = 'Y'
@@ -1773,6 +2178,14 @@ create or replace package body office_mfcs_orchestrator_pkg as
         end if;
 
         office_mfcs_request_pkg.set_request_status(p_action_request_id, 'IN_PROGRESS');
+        office_mfcs_request_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'REQUEST_EXECUTE_START',
+            p_message => 'MFCS orchestration started.',
+            p_detail_payload => '{"operationName":"' || log_escape(l_operation)
+                || '","userId":"' || log_escape(l_user_id)
+                || '","budgetSeconds":' || l_budget_seconds || '}'
+        );
         office_mfcs_request_pkg.set_step_status(p_action_request_id, 'VALIDATE_REQUEST', 'SUCCEEDED');
 
         loop
@@ -1816,14 +2229,69 @@ create or replace package body office_mfcs_orchestrator_pkg as
             l_request_payload := payload_for_step(p_action_request_id, l_step);
 
             office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'IN_PROGRESS');
-            l_response := office_mfcs_client_pkg.call_service(
+            office_mfcs_request_pkg.log_event(
                 p_action_request_id => p_action_request_id,
+                p_event_phase => 'STEP_START',
                 p_step_code => l_step,
-                p_http_method => l_method,
-                p_endpoint_key => l_endpoint_key,
-                p_request_payload => l_request_payload,
-                p_user_id => l_user_id
+                p_message => 'MFCS orchestration step started.',
+                p_detail_payload => '{"endpointKey":"' || log_escape(l_endpoint_key)
+                    || '","method":"' || log_escape(l_method)
+                    || '","requestBytes":' || coalesce(to_char(dbms_lob.getlength(l_request_payload)), '0') || '}'
             );
+
+            if l_step = 'RESERVE_ITEM_NUMBERS'
+               and to_number(office_mfcs_request_pkg.get_config('MFCS_ITEM_NUMBER_RESERVATION_CHUNK_SIZE', '1')) = 1 then
+                reserve_item_numbers_chunked(p_action_request_id, l_user_id);
+                office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'SUCCEEDED');
+                office_mfcs_request_pkg.log_event(
+                    p_action_request_id => p_action_request_id,
+                    p_event_phase => 'STEP_SUCCEEDED',
+                    p_step_code => l_step,
+                    p_message => 'MFCS orchestration step succeeded.'
+                );
+                continue;
+            end if;
+
+            if l_step = 'VERIFY_PURCHASE_ORDER' then
+                for i in 1 .. greatest(1, l_verify_retry_count) loop
+                    begin
+                        l_response := office_mfcs_client_pkg.call_service(
+                            p_action_request_id => p_action_request_id,
+                            p_step_code => l_step,
+                            p_http_method => l_method,
+                            p_endpoint_key => l_endpoint_key,
+                            p_request_payload => l_request_payload,
+                            p_user_id => l_user_id
+                        );
+                        exit;
+                    exception
+                        when office_mfcs_client_pkg.e_downstream_failure then
+                            if i >= greatest(1, l_verify_retry_count) then
+                                raise;
+                            end if;
+                            office_mfcs_request_pkg.log_event(
+                                p_action_request_id => p_action_request_id,
+                                p_event_phase => 'VERIFY_RETRY_WAIT',
+                                p_step_code => l_step,
+                                p_event_level => 'WARN',
+                                p_message => 'Purchase order verification failed; waiting before retry.',
+                                p_detail_payload => '{"retryNumber":' || i
+                                    || ',"maxRetries":' || greatest(1, l_verify_retry_count)
+                                    || ',"sleepSeconds":' || l_verify_retry_sleep || '}'
+                            );
+                            dbms_session.sleep(l_verify_retry_sleep);
+                    end;
+                end loop;
+            else
+                l_response := office_mfcs_client_pkg.call_service(
+                    p_action_request_id => p_action_request_id,
+                    p_step_code => l_step,
+                    p_http_method => l_method,
+                    p_endpoint_key => l_endpoint_key,
+                    p_request_payload => l_request_payload,
+                    p_user_id => l_user_id
+                );
+            end if;
 
             if l_step = 'RESERVE_ITEM_NUMBERS' then
                 persist_item_numbers(p_action_request_id, l_response);
@@ -1832,6 +2300,12 @@ create or replace package body office_mfcs_orchestrator_pkg as
             end if;
 
             office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'SUCCEEDED');
+            office_mfcs_request_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'STEP_SUCCEEDED',
+                p_step_code => l_step,
+                p_message => 'MFCS orchestration step succeeded.'
+            );
         end loop;
 
         office_mfcs_request_pkg.set_request_status(
@@ -1839,11 +2313,32 @@ create or replace package body office_mfcs_orchestrator_pkg as
             'COMPLETED',
             office_mfcs_request_pkg.build_status_response(p_action_request_id, 'COMPLETED')
         );
+        office_mfcs_request_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'REQUEST_COMPLETED',
+            p_message => 'MFCS orchestration completed.'
+        );
     exception
         when office_mfcs_client_pkg.e_outcome_unknown then
+            office_mfcs_request_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'STEP_OUTCOME_UNKNOWN',
+                p_step_code => l_step,
+                p_event_level => 'WARN',
+                p_message => substr(sqlerrm, 1, 1000),
+                p_detail_payload => '{"sqlcode":' || sqlcode || '}'
+            );
             office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'OUTCOME_UNKNOWN', null, 'OUTCOME_UNKNOWN', sqlerrm);
             office_mfcs_request_pkg.set_request_status(p_action_request_id, 'OUTCOME_UNKNOWN', office_mfcs_request_pkg.build_status_response(p_action_request_id, 'OUTCOME_UNKNOWN'));
         when others then
+            office_mfcs_request_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'STEP_EXCEPTION',
+                p_step_code => l_step,
+                p_event_level => 'ERROR',
+                p_message => substr(sqlerrm, 1, 1000),
+                p_detail_payload => '{"sqlcode":' || sqlcode || '}'
+            );
             if l_step is not null then
                 office_mfcs_request_pkg.set_step_status(p_action_request_id, l_step, 'FAILED', null, to_char(sqlcode), sqlerrm);
             end if;

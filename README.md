@@ -89,6 +89,8 @@ Non-secret configuration lives in `OFFICE_MFCS_CONFIG`.
 Important keys:
 
 - `MFCS_CLIENT_MODE`: `MOCK` for PL/SQL tests, `PUBLIC_MOCK` for the Node HTTP simulator, `LOCAL_MFCS` for the stateful Oracle simulator, or a production mode for real MFCS calls
+- `MFCS_AUTH_MODE`: `OAUTH_CLIENT_CREDENTIALS` by default, or `STATIC_BEARER` to use a manually refreshed token
+- `MFCS_BEARER_TOKEN_REF`: secret reference used when `MFCS_AUTH_MODE = STATIC_BEARER`; defaults to `MFCS_BEARER_TOKEN`
 - `MFCS_BASE_URL`
 - `MFCS_TOKEN_URL`
 - `MFCS_CLIENT_ID`
@@ -106,6 +108,8 @@ Endpoint paths are configurable because the Office tenant OpenAPI document is au
 ## Public-Contract Simulator
 
 `mock-mfcs` is a stateful Node.js simulator for the complete item-to-order chain used by this controller. It covers OAuth, item-number reservation, item create/update, suppliers, UDAs, locations, approval fields, pre-issued order numbers, purchase-order create/update, order verification, and correlation-status lookup.
+
+For the currently deployed actual-MFCS `CREATE_STYLE` and `CREATE_ALL` flow, including the inbound payload, MFCS endpoint sequence, successful smoke-test payloads, and current tenant assumptions, see [Actual MFCS Call Flow](docs/mfcs-actual-call-flow.md).
 
 The routes and public mapper follow Oracle's published contracts for [items](https://docs.oracle.com/en/industries/retail/retail-merchandising-foundation-cloud/latest/rmsob/items-rest.htm), [purchase orders](https://docs.oracle.com/en/industries/retail/retail-merchandising-foundation-cloud/latest/rmsob/purch-ord-rest.htm), and [REST service status](https://docs.oracle.com/en/industries/retail/retail-merchandising-foundation-cloud/latest/rmsob/rest-admin.htm). This is the full chain needed by this project, not an implementation of every MFCS service.
 
@@ -127,6 +131,31 @@ The simulator is based on Oracle's public service and functional documentation a
 Secrets are not stored in `OFFICE_MFCS_CONFIG`. `MFCS_CLIENT_SECRET_REF` is only a reference.
 
 `OFFICE_MFCS_CLIENT_PKG.get_secret` is a replaceable hook. Wire it to the approved RDS secret-storage mechanism before enabling real MFCS calls. The package caches OAuth client-credentials tokens until shortly before expiry and never logs bearer tokens or client secrets.
+
+For interim dev testing before OAuth generation is wired, set `MFCS_AUTH_MODE = STATIC_BEARER` and update `OFFICE_MFCS_SECRET` externally:
+
+```sql
+merge into office_mfcs_secret s
+using (
+    select 'MFCS_BEARER_TOKEN' secret_ref,
+           '<paste-token-with-or-without-Bearer-prefix>' secret_value
+      from dual
+) x
+on (s.secret_ref = x.secret_ref)
+when matched then update set
+    s.secret_value = x.secret_value,
+    s.updated_at = systimestamp
+when not matched then insert (
+    secret_ref,
+    secret_value,
+    description
+) values (
+    x.secret_ref,
+    x.secret_value,
+    'Externally refreshed MFCS bearer token for dev testing'
+);
+commit;
+```
 
 ## OpenAPI Schemas
 

@@ -82,6 +82,16 @@ create or replace package office_mfcs_request_pkg authid definer as
         p_response_payload in clob default null
     );
 
+    procedure log_event(
+        p_action_request_id in varchar2,
+        p_event_phase       in varchar2,
+        p_step_code         in varchar2 default null,
+        p_attempt_id        in number default null,
+        p_message           in varchar2 default null,
+        p_detail_payload    in clob default null,
+        p_event_level       in varchar2 default 'INFO'
+    );
+
     function build_status_response(
         p_action_request_id in varchar2,
         p_status_override   in varchar2 default null
@@ -104,8 +114,13 @@ create or replace package office_mfcs_mapping_pkg authid definer as
     function user_id(p_payload in clob) return varchar2;
 
     function build_item_number_request(p_action_request_id in varchar2) return clob;
+    function build_parent_item_create_request(p_action_request_id in varchar2) return clob;
+    function build_child_item_create_request(p_action_request_id in varchar2) return clob;
     function build_item_create_request(p_action_request_id in varchar2) return clob;
+    function build_parent_item_sourcing_request(p_action_request_id in varchar2) return clob;
+    function build_child_item_sourcing_request(p_action_request_id in varchar2) return clob;
     function build_item_sourcing_request(p_action_request_id in varchar2) return clob;
+    function build_item_country_of_manufacture_request(p_action_request_id in varchar2) return clob;
     function build_item_uda_request(p_action_request_id in varchar2) return clob;
     function build_item_location_request(p_action_request_id in varchar2) return clob;
     function build_item_approval_request(p_action_request_id in varchar2) return clob;

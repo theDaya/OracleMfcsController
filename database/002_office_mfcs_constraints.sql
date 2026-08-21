@@ -29,9 +29,6 @@ alter table office_mfcs_request add constraint office_mfcs_request_oper_ck
 alter table office_mfcs_request add constraint office_mfcs_request_payload_json_ck
     check (request_payload is json);
 
-alter table office_mfcs_request add constraint office_mfcs_response_payload_json_ck
-    check (response_payload is json);
-
 alter table office_mfcs_step add constraint office_mfcs_step_pk
     primary key (action_request_id, step_code);
 
@@ -68,14 +65,26 @@ alter table office_mfcs_attempt add constraint office_mfcs_attempt_status_ck
 alter table office_mfcs_attempt add constraint office_mfcs_attempt_json_req_ck
     check (request_payload is json);
 
-alter table office_mfcs_attempt add constraint office_mfcs_attempt_json_resp_ck
-    check (response_payload is json);
-
 alter table office_mfcs_attempt add constraint office_mfcs_attempt_corr_uk
     unique (correlation_id);
 
 create unique index office_mfcs_attempt_uk1
     on office_mfcs_attempt (action_request_id, step_code, attempt_number);
+
+alter table office_mfcs_event_log add constraint office_mfcs_event_log_pk
+    primary key (log_id);
+
+alter table office_mfcs_event_log add constraint office_mfcs_event_level_ck
+    check (event_level in ('DEBUG', 'INFO', 'WARN', 'ERROR'));
+
+alter table office_mfcs_event_log add constraint office_mfcs_event_detail_json_ck
+    check (detail_payload is null or detail_payload is json);
+
+create index office_mfcs_event_log_ix1
+    on office_mfcs_event_log (action_request_id, created_at);
+
+create index office_mfcs_event_log_ix2
+    on office_mfcs_event_log (event_phase, created_at);
 
 create unique index office_mfcs_entity_style_uk
     on office_mfcs_entity_map (
@@ -97,6 +106,9 @@ alter table office_mfcs_config add constraint office_mfcs_config_json_ck
         or config_key not like 'JSON:%'
         or config_value is json
     );
+
+alter table office_mfcs_secret add constraint office_mfcs_secret_pk
+    primary key (secret_ref);
 
 create index office_mfcs_request_status_ix
     on office_mfcs_request (request_status, last_updated_at);
