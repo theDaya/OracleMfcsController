@@ -5,3 +5,7 @@ __pycache__/
 .env.*
 *.log
 .local-tls/
+
+# UI build output and dependencies
+ui/node_modules/
+ui/dist/

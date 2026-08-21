@@ -173,6 +173,23 @@ create or replace package office_mfcs_orchestrator_pkg authid definer as
     procedure resume_request(
         p_action_request_id in varchar2
     );
+
+    -- Pure resolvers, exposed so the preview layer can describe the planned MFCS
+    -- calls without duplicating the step-to-endpoint mapping. No side effects.
+    function endpoint_for_step(
+        p_step_code in varchar2,
+        p_operation in varchar2
+    ) return varchar2;
+
+    function method_for_step(
+        p_step_code in varchar2,
+        p_operation in varchar2
+    ) return varchar2;
+
+    function payload_for_step(
+        p_action_request_id in varchar2,
+        p_step_code         in varchar2
+    ) return clob;
 end office_mfcs_orchestrator_pkg;
 /
 

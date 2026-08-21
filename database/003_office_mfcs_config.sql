@@ -1,13 +1,14 @@
 set define off
 
+-- This integration always talks to the real MFCS tenant. There is no client-mode
+-- switch: the simulators and MOCK/PUBLIC_MOCK/LOCAL_MFCS modes were removed.
 prompt Seeding OFFICE MFCS non-secret configuration
 
 merge into office_mfcs_config c
 using (
-    select 'DEFAULT' environment, 'MFCS_CLIENT_MODE' config_key, 'ACTUAL_MFCS' config_value, 'Y' enabled_ind from dual union all
-    select 'DEFAULT', 'MFCS_AUTH_MODE', 'STATIC_BEARER', 'Y' from dual union all
+    select 'DEFAULT' environment, 'MFCS_AUTH_MODE' config_key, 'STATIC_BEARER' config_value, 'Y' enabled_ind from dual union all
     select 'DEFAULT', 'MFCS_BASE_URL', 'https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs', 'Y' from dual union all
-    select 'DEFAULT', 'MFCS_TOKEN_URL', 'https://office-hostname/oauth2/v1/token', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_TOKEN_URL', 'https://idcs-c994c399babd4611b2505c507dbcf5a5.identity.oraclecloud.com/oauth2/v1/token', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_CLIENT_ID', 'replace-with-client-id', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_SCOPE', 'urn:opc:idm:__myscopes__', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_CLIENT_SECRET_REF', 'replace-with-rds-secret-reference', 'Y' from dual union all
@@ -29,7 +30,6 @@ using (
     select 'DEFAULT', 'MFCS_PARENT_DIFF2_GROUP', 'ALL', 'Y' from dual union all
     select 'DEFAULT', 'INTERNAL_TIME_BUDGET_SECONDS', '240', 'Y' from dual union all
     select 'DEFAULT', 'HTTP_TRANSFER_TIMEOUT_SECONDS', '45', 'Y' from dual union all
-    select 'DEFAULT', 'MFCS_SCHEMA_READY_YN', 'N', 'Y' from dual union all
     select 'DEFAULT', 'FEATURE_INITIAL_RETAIL_YN', 'N', 'Y' from dual union all
     select 'DEFAULT', 'FEATURE_ITEM_LOCATIONS_YN', 'N', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_RESERVATION_DAYS_UNTIL_EXPIRY', '1', 'Y' from dual union all
@@ -106,6 +106,10 @@ when not matched then insert (
     s.config_value,
     s.enabled_ind
 );
+
+delete from office_mfcs_config
+ where config_key in ('MFCS_CLIENT_MODE', 'MFCS_SCHEMA_READY_YN')
+    or config_key like 'MOCK_%';
 
 commit;
 

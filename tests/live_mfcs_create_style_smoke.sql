@@ -10,12 +10,6 @@ declare
     l_source_ref varchar2(120) :=
         'Dayalan test ' || to_char(systimestamp, 'YYYY-MM-DD HH24:MI:SS.FF3');
 begin
-    update office_mfcs_config
-       set config_value = 'ACTUAL_MFCS',
-           updated_at = systimestamp
-     where environment = 'DEFAULT'
-       and config_key = 'MFCS_CLIENT_MODE';
-    commit;
 
     l_payload := '{'
         || '"ACTION_REQUEST_ID":"' || l_action_request_id || '",'
@@ -48,12 +42,6 @@ begin
     dbms_output.put_line('RESPONSE=' || dbms_lob.substr(l_response, 4000, 1));
 exception
     when others then
-        update office_mfcs_config
-           set config_value = 'ACTUAL_MFCS',
-               updated_at = systimestamp
-         where environment = 'DEFAULT'
-           and config_key = 'MFCS_CLIENT_MODE';
-        commit;
         raise;
 end;
 /

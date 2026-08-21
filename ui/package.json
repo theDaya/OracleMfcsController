@@ -1,0 +1,20 @@
+{
+  "name": "office-mfcs-console",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Entry screen for Office MFCS style and order transactions, showing both the inbound interface payload and the outbound MFCS call plan.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}

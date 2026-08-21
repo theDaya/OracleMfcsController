@@ -1,0 +1,2310 @@
+{
+  "info": {
+    "name": "Oracle MFCS - Office Integration Bridge",
+    "description": "Live Oracle MFCS calls used by the Office integration bridge (OracleMfcsController).\n\nWrite payloads here are taken from requests that actually succeeded against the dev tenant (smoke runs DAYALAN-TEST-20260817164337108 and DAYALAN-ALL-20260821120647643), not from generic documentation. Read paths are split into confirmed and candidate - see folder 01.\n\n## Two hosts, two variables\n\n- `tokenUrl` - IDCS identity domain, issues the bearer token\n- `baseUrl` - MFCS service host, serves every MerchIntegrations path\n\nThey are different hosts. Only the token request uses `tokenUrl`.\n\n## Order of operations\n\nThe folders chain. Reserved item and order numbers are captured into collection variables automatically, so `Create Parent Style Item` already knows the number that `Reserve Item Number - Parent Style` just got.\n\nFull CREATE_ALL sequence: 00 auth -> 02 reserve x3 -> 03 create parent -> 04 parent sourcing -> 03 create children -> 04 child sourcing -> 04 countries of manufacture -> 05 UDAs -> 03 approve -> 07 reserve order -> 07 create PO -> 07 verify PO.\n\n## Credentials\n\nNothing secret is stored in this file. Put clientId/clientSecret in the environment. The token request prints a MERGE statement for OFFICE_MFCS_SECRET, so the database only ever holds the short-lived bearer token - never the client secret.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Fresh correlation ID per request - MFCS uses it for idempotency and status lookup.",
+          "pm.collectionVariables.set('correlationId', pm.variables.replaceIn('{{$guid}}'));",
+          "",
+          "// Warn early instead of failing with a confusing 401.",
+          "var expiry = pm.collectionVariables.get('tokenExpiresAt');",
+          "if (expiry && new Date(expiry) < new Date()) {",
+          "  console.warn('Bearer token expired at ' + expiry + ' - re-run 00 - Authentication & Discovery.');",
+          "}",
+          "",
+          "// Date helpers so order dates are never stale.",
+          "function isoDay(offset) {",
+          "  var d = new Date();",
+          "  d.setDate(d.getDate() + offset);",
+          "  return d.toISOString().slice(0, 10);",
+          "}",
+          "pm.collectionVariables.set('today', isoDay(0));",
+          "['notBeforeDate', 'notAfterDate', 'writtenDate', 'earliestShipDate'].forEach(function (k) {",
+          "  if (!pm.collectionVariables.get(k)) { pm.collectionVariables.set(k, isoDay(0)); }",
+          "});",
+          "if (!pm.collectionVariables.get('otbEowDate')) { pm.collectionVariables.set('otbEowDate', isoDay(2)); }",
+          "if (!pm.collectionVariables.get('latestShipDate')) { pm.collectionVariables.set('latestShipDate', isoDay(19)); }"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs",
+      "type": "string"
+    },
+    {
+      "key": "tokenUrl",
+      "value": "https://idcs-c994c399babd4611b2505c507dbcf5a5.identity.oraclecloud.com/oauth2/v1/token",
+      "type": "string"
+    },
+    {
+      "key": "clientId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "clientSecret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "scope",
+      "value": "urn:opc:idm:__myscopes__",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenExpiresAt",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "bearerTokenRef",
+      "value": "MFCS_BEARER_TOKEN",
+      "type": "string"
+    },
+    {
+      "key": "secretMergeSql",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "principalUser",
+      "value": "office.buyer@example.com",
+      "type": "string"
+    },
+    {
+      "key": "correlationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "itemDescription",
+      "value": "Postman test style",
+      "type": "string"
+    },
+    {
+      "key": "dept",
+      "value": "1517",
+      "type": "string"
+    },
+    {
+      "key": "class",
+      "value": "6892",
+      "type": "string"
+    },
+    {
+      "key": "subclass",
+      "value": "1128",
+      "type": "string"
+    },
+    {
+      "key": "supplier",
+      "value": "700087",
+      "type": "string"
+    },
+    {
+      "key": "originCountry",
+      "value": "GB",
+      "type": "string"
+    },
+    {
+      "key": "importCountry",
+      "value": "GB",
+      "type": "string"
+    },
+    {
+      "key": "currencyCode",
+      "value": "ZAR",
+      "type": "string"
+    },
+    {
+      "key": "manufacturerCountry",
+      "value": "VN",
+      "type": "string"
+    },
+    {
+      "key": "colourDiff",
+      "value": "08610",
+      "type": "string"
+    },
+    {
+      "key": "parentDiff1Group",
+      "value": "RMS_ALL_C",
+      "type": "string"
+    },
+    {
+      "key": "parentDiff2Group",
+      "value": "ALL",
+      "type": "string"
+    },
+    {
+      "key": "size1Display",
+      "value": "7",
+      "type": "string"
+    },
+    {
+      "key": "size1Diff",
+      "value": "070",
+      "type": "string"
+    },
+    {
+      "key": "size2Display",
+      "value": "8",
+      "type": "string"
+    },
+    {
+      "key": "size2Diff",
+      "value": "080",
+      "type": "string"
+    },
+    {
+      "key": "widthDisplay",
+      "value": "ALL",
+      "type": "string"
+    },
+    {
+      "key": "unitCost",
+      "value": "48.49",
+      "type": "string"
+    },
+    {
+      "key": "retailPrice",
+      "value": "100",
+      "type": "string"
+    },
+    {
+      "key": "costZoneGroupId",
+      "value": "2000",
+      "type": "string"
+    },
+    {
+      "key": "defaultUop",
+      "value": "EA",
+      "type": "string"
+    },
+    {
+      "key": "costUom",
+      "value": "EA",
+      "type": "string"
+    },
+    {
+      "key": "supplierPackSize",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "innerPackSize",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "purchaseType",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "storeOrderMultiple",
+      "value": "E",
+      "type": "string"
+    },
+    {
+      "key": "taxableInd",
+      "value": "Y",
+      "type": "string"
+    },
+    {
+      "key": "locationHierarchyLevel",
+      "value": "CH",
+      "type": "string"
+    },
+    {
+      "key": "locationHierarchyValue",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "parentItem",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "childItem1",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "childItem2",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lookupItem",
+      "value": "11743",
+      "type": "string"
+    },
+    {
+      "key": "orderNo",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderType",
+      "value": "N/B",
+      "type": "string"
+    },
+    {
+      "key": "orderStatus",
+      "value": "A",
+      "type": "string"
+    },
+    {
+      "key": "orderOrigin",
+      "value": "2",
+      "type": "string"
+    },
+    {
+      "key": "orderTerms",
+      "value": "34",
+      "type": "string"
+    },
+    {
+      "key": "orderLocation",
+      "value": "19271",
+      "type": "string"
+    },
+    {
+      "key": "orderLocationType",
+      "value": "W",
+      "type": "string"
+    },
+    {
+      "key": "freightTerms",
+      "value": "PREPAID",
+      "type": "string"
+    },
+    {
+      "key": "exchangeRate",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "notBeforeDate",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notAfterDate",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otbEowDate",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "earliestShipDate",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "latestShipDate",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "writtenDate",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "today",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Authentication & Discovery",
+      "description": "Get a bearer token, prove it works, and pull the tenant's own OpenAPI document.\n\nThe token lives only in Postman. The database never needs the client secret - only the short-lived bearer, loaded via the MERGE statement this folder generates.",
+      "item": [
+        {
+          "name": "Get OAuth Token (client_credentials)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{tokenUrl}}",
+              "host": [
+                "{{tokenUrl}}"
+              ]
+            },
+            "description": "OAuth2 client-credentials grant against the tenant IDCS domain.\n\nNote this host is DIFFERENT from the MFCS API host - `tokenUrl` is IDCS, `baseUrl` is the MFCS service. Both are collection variables.\n\nSet clientId and clientSecret in the environment first. On success the token is saved to `accessToken` (inherited by every other request) and a MERGE statement for OFFICE_MFCS_SECRET is written to the Postman console.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{clientId}}"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{clientSecret}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "{{scope}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Store the token and print the SQL to load it into OFFICE_MFCS_SECRET.",
+                  "pm.test('Token issued', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "var token = body.access_token;",
+                  "if (!token) { throw new Error('No access_token in response'); }",
+                  "",
+                  "pm.collectionVariables.set('accessToken', token);",
+                  "var ttl = Number(body.expires_in || 3600);",
+                  "pm.collectionVariables.set('tokenExpiresAt', new Date(Date.now() + ttl * 1000).toISOString());",
+                  "console.log('Token stored. Expires in ' + ttl + 's at ' + pm.collectionVariables.get('tokenExpiresAt'));",
+                  "",
+                  "// Paste the statement below into SQLcl / SQL*Plus against the integration schema.",
+                  "// The controller reads this row in STATIC_BEARER mode (MFCS_BEARER_TOKEN_REF).",
+                  "var ref = pm.collectionVariables.get('bearerTokenRef') || 'MFCS_BEARER_TOKEN';",
+                  "var sql = [",
+                  "  'merge into office_mfcs_secret s',",
+                  "  'using (',",
+                  "  \"    select '\" + ref + \"' secret_ref,\",",
+                  "  \"           '\" + token.replace(/'/g, \"''\") + \"' secret_value\",",
+                  "  '      from dual',",
+                  "  ') x',",
+                  "  'on (s.secret_ref = x.secret_ref)',",
+                  "  'when matched then update set',",
+                  "  '    s.secret_value = x.secret_value,',",
+                  "  '    s.updated_at = systimestamp',",
+                  "  'when not matched then insert (secret_ref, secret_value, description)',",
+                  "  \"values (x.secret_ref, x.secret_value, 'Postman-issued MFCS bearer token');\",",
+                  "  'commit;',",
+                  "].join('\\n');",
+                  "",
+                  "console.log('--- Copy into the database ---');",
+                  "console.log(sql);",
+                  "pm.collectionVariables.set('secretMergeSql', sql);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Token (REST Service Status)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/administration/operations/restService/status?xCorrelationId={{correlationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "administration",
+                "operations",
+                "restService",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "xCorrelationId",
+                  "value": "{{correlationId}}"
+                }
+              ]
+            },
+            "description": "Cheapest authenticated call in the tenant. A 200 proves token, base URL and network path before you try anything that writes."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Tenant OpenAPI Spec",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/yaml, text/yaml, */*"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/openapi.yaml",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "openapi.yaml"
+              ]
+            },
+            "description": "Authoritative contract for this tenant. Every GET path in folder 01 that is marked 'candidate' should be checked against this document.\n\nThe test script prints the path list to the console. Save the raw response to disk and grep it if the list is long."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "// The tenant OpenAPI doc is the ONLY authoritative list of GET paths and query params.",
+                  "// Use it to confirm or correct every request in '01 - Master Data (GET)'.",
+                  "var text = pm.response.text();",
+                  "console.log('Spec length: ' + text.length + ' bytes');",
+                  "var gets = text.match(/^\\s{2,}\\/[^\\s:]+:/gm) || [];",
+                  "console.log('Paths found: ' + gets.length);",
+                  "gets.slice(0, 400).forEach(function (p) { console.log(p.trim()); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Master Data (GET)",
+      "description": "Read-only calls for a style/order viewer. Every path here was swept against the live tenant on 2026-08-21 with a real bearer token, so these are measurements rather than guesses.\n\n## The tenant's naming pattern\n\nResources are SINGULAR, and the same path serves both shapes:\n\n- `foundation/item/11743` - one record\n- `foundation/item?dept=1517` - a list\n\nPlural paths (`items`, `stores`, `udas`, `suppliers`) all return a Tomcat 404. So do `merchandiseHierarchy`, `department`, `class`, `subclass`, `diff`, `diffGroup`, `location`, `itemSupplier` and `itemLocation` - none of them are routed on this tenant, and they have been removed from this collection rather than left as noise.\n\n## Two kinds of 404\n\nWorth knowing when you probe further: an HTML Tomcat 404 means no route exists at all, while a JSON `{\"status\":\"ERROR\",\"message\":\"Resource not Found\"}` means the route matched but the record did not. Only the JSON form is worth iterating on.\n\n## Publish-feed caveat\n\nList responses carry `\"action\": \"INSERT\"` while single-record reads carry `\"action\": null`. These list endpoints look like integration publish feeds, not general queries over the master tables. Confirm coverage before assuming a viewer built on them shows everything.",
+      "item": [
+        {
+          "name": "Confirmed - returns data",
+          "item": [
+            {
+              "name": "Get Item by Number",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{correlationId}}"
+                  },
+                  {
+                    "key": "X-Client-Principal-User",
+                    "value": "{{principalUser}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/MerchIntegrations/services/foundation/item/{{lookupItem}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "MerchIntegrations",
+                    "services",
+                    "foundation",
+                    "item",
+                    "{{lookupItem}}"
+                  ]
+                },
+                "description": "VERIFIED 200 against the tenant on 2026-08-21.\n\nDirect read of one item, returned with `\"action\": null`. Rich payload (~12KB) - includes deptName, className, subclassName, diff IDs, costZoneGroupId, standardUom and the supplier structure. This is the single most useful call for a style viewer.\n\nItem 11743 is the known-good reference item: BLAZER MID 77, dept 1517 Unisex Sports, class 6892 Nike, subclass 1128 Nike Trainers, diff1 RMS_ALL_C, costZoneGroupId 2000."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                      "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Search Items",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{correlationId}}"
+                  },
+                  {
+                    "key": "X-Client-Principal-User",
+                    "value": "{{principalUser}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/MerchIntegrations/services/foundation/item?dept={{dept}}&limit=25",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "MerchIntegrations",
+                    "services",
+                    "foundation",
+                    "item"
+                  ],
+                  "query": [
+                    {
+                      "key": "dept",
+                      "value": "{{dept}}"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "25"
+                    },
+                    {
+                      "key": "itemLevel",
+                      "value": "1",
+                      "disabled": true
+                    },
+                    {
+                      "key": "itemParent",
+                      "value": "{{parentItem}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "VERIFIED 200 against the tenant on 2026-08-21.\n\nSame path as the single-item read, but with query parameters instead of a path segment. That is the naming pattern across this tenant: singular resource + /{id} = one record, singular resource + ?filters = a list.\n\nIMPORTANT CAVEAT: rows come back with `\"action\": \"INSERT\"`, while the by-number read returns `\"action\": null`. That strongly suggests this is a publish/download feed - records queued for integration - rather than a general query over the item master. Do not assume it returns every item in the tenant. Verify coverage before building a browser on it."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                      "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Purchase Order by Number",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{correlationId}}"
+                  },
+                  {
+                    "key": "X-Client-Principal-User",
+                    "value": "{{principalUser}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/MerchIntegrations/services/procurement/order/{{orderNo}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "MerchIntegrations",
+                    "services",
+                    "procurement",
+                    "order",
+                    "{{orderNo}}"
+                  ]
+                },
+                "description": "VERIFIED 200 against the tenant on 2026-08-21 (order 25005 from live run DAYALAN-ALL-20260821120647643).\n\nHeader plus details: status, orderType, dept/deptName, supplier, currency, terms + termsCode, freightTerms, ship dates, physicalLocation, virtualWarehouse and per-item quantityOrdered. The backbone of an order viewer."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                      "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Search Purchase Orders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{correlationId}}"
+                  },
+                  {
+                    "key": "X-Client-Principal-User",
+                    "value": "{{principalUser}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/MerchIntegrations/services/procurement/order?limit=25",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "MerchIntegrations",
+                    "services",
+                    "procurement",
+                    "order"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "25"
+                    },
+                    {
+                      "key": "supplier",
+                      "value": "{{supplier}}",
+                      "disabled": true
+                    },
+                    {
+                      "key": "dept",
+                      "value": "{{dept}}",
+                      "disabled": true
+                    },
+                    {
+                      "key": "status",
+                      "value": "A",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "VERIFIED 200 against the tenant on 2026-08-21. Works with no filters at all, and with supplier / dept / status.\n\nThis is what makes an order browser possible - the by-number read alone would limit you to orders whose numbers you already hold in OFFICE_MFCS_ENTITY_MAP.\n\nSame publish-feed caveat as Search Items: rows carry `\"action\": \"INSERT\"`."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                      "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "REST Service Status by Correlation ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{correlationId}}"
+                  },
+                  {
+                    "key": "X-Client-Principal-User",
+                    "value": "{{principalUser}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/MerchIntegrations/services/administration/operations/restService/status?xCorrelationId={{correlationId}}&includePayload=Y",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "MerchIntegrations",
+                    "services",
+                    "administration",
+                    "operations",
+                    "restService",
+                    "status"
+                  ],
+                  "query": [
+                    {
+                      "key": "xCorrelationId",
+                      "value": "{{correlationId}}"
+                    },
+                    {
+                      "key": "includePayload",
+                      "value": "Y"
+                    }
+                  ]
+                },
+                "description": "VERIFIED 200 against the tenant on 2026-08-21.\n\n`xCorrelationId` is MANDATORY and must be a QUERY PARAMETER - sending it only as a header returns HTTP 400 'Query Parameter xCorrelationId is mandatory'.\n\nReturns the standard paging envelope: {items, hasMore, limit, count, links}."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                      "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "description": "Verified 200 WITH rows on 2026-08-21. Safe to build a viewer on these."
+        },
+        {
+          "name": "Routed but empty",
+          "item": [
+            {
+              "name": "Search Suppliers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{correlationId}}"
+                  },
+                  {
+                    "key": "X-Client-Principal-User",
+                    "value": "{{principalUser}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/MerchIntegrations/services/foundation/supplier?limit=25",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "MerchIntegrations",
+                    "services",
+                    "foundation",
+                    "supplier"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "25"
+                    },
+                    {
+                      "key": "supplier",
+                      "value": "{{supplier}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Route EXISTS (HTTP 200, valid paging envelope) but returned zero rows on 2026-08-21 - including when filtered to supplier 700087, which definitely exists in the tenant.\n\nMost likely a publish/download feed with nothing currently queued, rather than a query over the supplier master. Worth retrying after supplier data is touched in MFCS."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                      "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Search UDAs",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{correlationId}}"
+                  },
+                  {
+                    "key": "X-Client-Principal-User",
+                    "value": "{{principalUser}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/MerchIntegrations/services/foundation/uda?limit=25",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "MerchIntegrations",
+                    "services",
+                    "foundation",
+                    "uda"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "25"
+                    }
+                  ]
+                },
+                "description": "Route EXISTS (HTTP 200) but empty on 2026-08-21. Note the path is SINGULAR `uda` - the plural `udas` returns a Tomcat 404.\n\nIf this ever returns rows it resolves the tenant UDA definitions the bridge currently works around by sending an empty uda array."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                      "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Search Stores",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{correlationId}}"
+                  },
+                  {
+                    "key": "X-Client-Principal-User",
+                    "value": "{{principalUser}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/MerchIntegrations/services/foundation/store?limit=25",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "MerchIntegrations",
+                    "services",
+                    "foundation",
+                    "store"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "25"
+                    }
+                  ]
+                },
+                "description": "Route EXISTS (HTTP 200) but empty on 2026-08-21. Singular path; plural `stores` 404s."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                      "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Search Warehouses",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Correlation-ID",
+                    "value": "{{correlationId}}"
+                  },
+                  {
+                    "key": "X-Client-Principal-User",
+                    "value": "{{principalUser}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/MerchIntegrations/services/foundation/warehouse?limit=25",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "MerchIntegrations",
+                    "services",
+                    "foundation",
+                    "warehouse"
+                  ],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "25"
+                    }
+                  ]
+                },
+                "description": "Route EXISTS (HTTP 200) but empty on 2026-08-21. Singular path; plural `warehouses` 404s.\n\nRelevant to FEATURE_ITEM_LOCATIONS_YN: if this starts returning rows it should supply the location hierarchy value that is currently blocking item locations."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                      "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "description": "Verified 200 with a valid paging envelope but zero rows. The route exists; the data does not come back. Retry periodically - these are the endpoints that would unblock UDAs and item locations."
+        }
+      ]
+    },
+    {
+      "name": "02 - Item Number Reservation",
+      "description": "Reserve MFCS item numbers before creating anything. The bridge uses chunk size 1, so it calls once for the parent style and once per child SKU.\n\nEach response is captured into a collection variable, so the create requests in folder 03 already know the numbers.",
+      "item": [
+        {
+          "name": "Reserve Item Number - Parent Style",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/itemNumbers/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "itemNumbers",
+                "reserve"
+              ]
+            },
+            "description": "Saves the reserved number to `parentItem`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemNumberType\": \"ITEM\",\n  \"quantity\": 1,\n  \"daysUntilExpiry\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "var body = pm.response.json();",
+                  "var reserved = (body.items && body.items[0] && body.items[0].item) || null;",
+                  "if (reserved) {",
+                  "  pm.collectionVariables.set('parentItem', String(reserved));",
+                  "  console.log('Reserved parentItem = ' + reserved + ' (expires ' + body.items[0].expiryDate + ')');",
+                  "} else { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reserve Item Number - Child SKU 1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/itemNumbers/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "itemNumbers",
+                "reserve"
+              ]
+            },
+            "description": "Saves the reserved number to `childItem1`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemNumberType\": \"ITEM\",\n  \"quantity\": 1,\n  \"daysUntilExpiry\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "var body = pm.response.json();",
+                  "var reserved = (body.items && body.items[0] && body.items[0].item) || null;",
+                  "if (reserved) {",
+                  "  pm.collectionVariables.set('childItem1', String(reserved));",
+                  "  console.log('Reserved childItem1 = ' + reserved + ' (expires ' + body.items[0].expiryDate + ')');",
+                  "} else { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reserve Item Number - Child SKU 2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/itemNumbers/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "itemNumbers",
+                "reserve"
+              ]
+            },
+            "description": "Saves the reserved number to `childItem2`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemNumberType\": \"ITEM\",\n  \"quantity\": 1,\n  \"daysUntilExpiry\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "var body = pm.response.json();",
+                  "var reserved = (body.items && body.items[0] && body.items[0].item) || null;",
+                  "if (reserved) {",
+                  "  pm.collectionVariables.set('childItem2', String(reserved));",
+                  "  console.log('Reserved childItem2 = ' + reserved + ' (expires ' + body.items[0].expiryDate + ')');",
+                  "} else { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Style / Item Hierarchy",
+      "description": "Parent style at itemLevel 1 / tranLevel 2, child SKUs at itemLevel 2 / tranLevel 2.\n\nThe rule that costs the most time when got wrong: the parent carries differentiator GROUPS (RMS_ALL_C / ALL) while children carry CONCRETE diff IDs (colour 08610, size 070 / 080).\n\nApproval comes last - MFCS rejects it until sourcing AND country of manufacture exist.",
+      "item": [
+        {
+          "name": "Create Parent Style Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/items/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "items",
+                "create"
+              ]
+            },
+            "description": "itemLevel 1, tranLevel 2, status W, approveInd N. Uses tenant differentiator groups.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 1,\n  \"items\": [\n    {\n      \"item\": \"{{parentItem}}\",\n      \"itemDescription\": \"{{itemDescription}}\",\n      \"shortDescription\": \"{{itemDescription}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"itemNumberType\": \"ITEM\",\n      \"itemLevel\": 1,\n      \"tranLevel\": 2,\n      \"dept\": {{dept}},\n      \"class\": {{class}},\n      \"subclass\": {{subclass}},\n      \"status\": \"W\",\n      \"approveInd\": \"N\",\n      \"standardUom\": \"EA\",\n      \"merchandiseInd\": \"Y\",\n      \"inventoryInd\": \"Y\",\n      \"sellableInd\": \"Y\",\n      \"orderableInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"originalRetail\": {{retailPrice}},\n      \"costZoneGroupId\": {{costZoneGroupId}},\n      \"diff1\": \"{{parentDiff1Group}}\",\n      \"diff1Type\": \"C\",\n      \"diff2\": \"{{parentDiff2Group}}\",\n      \"diff2Type\": \"S\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Child SKU Items",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/items/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "items",
+                "create"
+              ]
+            },
+            "description": "itemLevel 2 with itemParent set to the reserved parent. diff1 is the concrete colour ID, diff2 the concrete size ID.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 2,\n  \"items\": [\n    {\n      \"item\": \"{{childItem1}}\",\n      \"itemDescription\": \"{{itemDescription}} {{size1Display}} {{widthDisplay}}\",\n      \"shortDescription\": \"{{itemDescription}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"itemParent\": \"{{parentItem}}\",\n      \"itemNumberType\": \"ITEM\",\n      \"itemLevel\": 2,\n      \"tranLevel\": 2,\n      \"dept\": {{dept}},\n      \"class\": {{class}},\n      \"subclass\": {{subclass}},\n      \"status\": \"W\",\n      \"approveInd\": \"N\",\n      \"standardUom\": \"EA\",\n      \"merchandiseInd\": \"Y\",\n      \"inventoryInd\": \"Y\",\n      \"sellableInd\": \"Y\",\n      \"orderableInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"originalRetail\": {{retailPrice}},\n      \"costZoneGroupId\": {{costZoneGroupId}},\n      \"diff1\": \"{{colourDiff}}\",\n      \"diff1Type\": \"C\",\n      \"diff2\": \"{{size1Diff}}\",\n      \"diff2Type\": \"S\"\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"itemDescription\": \"{{itemDescription}} {{size2Display}} {{widthDisplay}}\",\n      \"shortDescription\": \"{{itemDescription}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"itemParent\": \"{{parentItem}}\",\n      \"itemNumberType\": \"ITEM\",\n      \"itemLevel\": 2,\n      \"tranLevel\": 2,\n      \"dept\": {{dept}},\n      \"class\": {{class}},\n      \"subclass\": {{subclass}},\n      \"status\": \"W\",\n      \"approveInd\": \"N\",\n      \"standardUom\": \"EA\",\n      \"merchandiseInd\": \"Y\",\n      \"inventoryInd\": \"Y\",\n      \"sellableInd\": \"Y\",\n      \"orderableInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"originalRetail\": {{retailPrice}},\n      \"costZoneGroupId\": {{costZoneGroupId}},\n      \"diff1\": \"{{colourDiff}}\",\n      \"diff1Type\": \"C\",\n      \"diff2\": \"{{size2Diff}}\",\n      \"diff2Type\": \"S\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Items",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/items/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "items",
+                "update"
+              ]
+            },
+            "description": "General item update. storeOrderMultiple and dataLoadingDestination are required by tenant validation even on a partial update.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 1,\n  \"items\": [\n    {\n      \"item\": \"{{parentItem}}\",\n      \"itemDescription\": \"{{itemDescription}} (updated)\",\n      \"shortDescription\": \"{{itemDescription}}\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"dataLoadingDestination\": \"RMS\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Approve Items (parent + children)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/items/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "items",
+                "update"
+              ]
+            },
+            "description": "Approval is the item update endpoint with status A / approveInd Y. Run only after sourcing and countries of manufacture succeed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 3,\n  \"items\": [\n    {\n      \"item\": \"{{parentItem}}\",\n      \"itemDescription\": \"{{itemDescription}}\",\n      \"shortDescription\": \"{{itemDescription}}\",\n      \"status\": \"A\",\n      \"approveInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"dataLoadingDestination\": \"RMS\"\n    },\n    {\n      \"item\": \"{{childItem1}}\",\n      \"itemDescription\": \"{{itemDescription}}\",\n      \"shortDescription\": \"{{itemDescription}}\",\n      \"status\": \"A\",\n      \"approveInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"dataLoadingDestination\": \"RMS\"\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"itemDescription\": \"{{itemDescription}}\",\n      \"shortDescription\": \"{{itemDescription}}\",\n      \"status\": \"A\",\n      \"approveInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"dataLoadingDestination\": \"RMS\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Item Sourcing & Country of Manufacture",
+      "description": "Supplier, origin country and cost. The dev tenant requires defaultUop, costUom, supplierPackSize, innerPackSize and purchaseType during sourcing - omit any one and the create fails.\n\nCountry of manufacture is not optional: MFCS refuses to approve items without it.",
+      "item": [
+        {
+          "name": "Create Parent Item Supplier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/suppliers/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "suppliers",
+                "create"
+              ]
+            },
+            "description": "Sourcing for the parent style.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 1,\n  \"items\": [\n    {\n      \"item\": \"{{parentItem}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"primarySupplierInd\": \"Y\",\n          \"countryOfSourcing\": [\n            {\n              \"originCountry\": \"{{originCountry}}\",\n              \"primaryCountryInd\": \"Y\",\n              \"unitCost\": {{unitCost}},\n              \"defaultUop\": \"{{defaultUop}}\",\n              \"costUom\": \"{{costUom}}\",\n              \"supplierPackSize\": {{supplierPackSize}},\n              \"innerPackSize\": {{innerPackSize}},\n              \"purchaseType\": {{purchaseType}}\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Child Item Suppliers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/suppliers/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "suppliers",
+                "create"
+              ]
+            },
+            "description": "Sourcing for both child SKUs in one collection.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 2,\n  \"items\": [\n    {\n      \"item\": \"{{childItem1}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"primarySupplierInd\": \"Y\",\n          \"countryOfSourcing\": [\n            {\n              \"originCountry\": \"{{originCountry}}\",\n              \"primaryCountryInd\": \"Y\",\n              \"unitCost\": {{unitCost}},\n              \"defaultUop\": \"{{defaultUop}}\",\n              \"costUom\": \"{{costUom}}\",\n              \"supplierPackSize\": {{supplierPackSize}},\n              \"innerPackSize\": {{innerPackSize}},\n              \"purchaseType\": {{purchaseType}}\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"primarySupplierInd\": \"Y\",\n          \"countryOfSourcing\": [\n            {\n              \"originCountry\": \"{{originCountry}}\",\n              \"primaryCountryInd\": \"Y\",\n              \"unitCost\": {{unitCost}},\n              \"defaultUop\": \"{{defaultUop}}\",\n              \"costUom\": \"{{costUom}}\",\n              \"supplierPackSize\": {{supplierPackSize}},\n              \"innerPackSize\": {{innerPackSize}},\n              \"purchaseType\": {{purchaseType}}\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Item Supplier",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/suppliers/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "suppliers",
+                "update"
+              ]
+            },
+            "description": "Same shape as create - use to correct unit cost or primary flags on an existing sourcing record.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 1,\n  \"items\": [\n    {\n      \"item\": \"{{parentItem}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"primarySupplierInd\": \"Y\",\n          \"countryOfSourcing\": [\n            {\n              \"originCountry\": \"{{originCountry}}\",\n              \"primaryCountryInd\": \"Y\",\n              \"unitCost\": {{unitCost}},\n              \"defaultUop\": \"{{defaultUop}}\",\n              \"costUom\": \"{{costUom}}\",\n              \"supplierPackSize\": {{supplierPackSize}},\n              \"innerPackSize\": {{innerPackSize}},\n              \"purchaseType\": {{purchaseType}}\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Countries of Manufacture",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/supplier/countriesOfManufacture/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "supplier",
+                "countriesOfManufacture",
+                "create"
+              ]
+            },
+            "description": "Required before approval. manufacturerCountry defaults to VN, taken from the known-good tenant SKU.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 3,\n  \"items\": [\n    {\n      \"item\": \"{{parentItem}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"countryOfManufacture\": [\n            {\n              \"manufacturerCountry\": \"{{manufacturerCountry}}\",\n              \"primaryManufacturerCountryInd\": \"Y\"\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"item\": \"{{childItem1}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"countryOfManufacture\": [\n            {\n              \"manufacturerCountry\": \"{{manufacturerCountry}}\",\n              \"primaryManufacturerCountryInd\": \"Y\"\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"countryOfManufacture\": [\n            {\n              \"manufacturerCountry\": \"{{manufacturerCountry}}\",\n              \"primaryManufacturerCountryInd\": \"Y\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Item UDAs",
+      "description": "User-defined attributes. The bridge sends an empty `uda` array so the step stays explicitly logged - tenant UDA definitions have never been resolved. Populate the array once 'Get UDA Definitions' in folder 01 finds a working endpoint.",
+      "item": [
+        {
+          "name": "Create Item UDAs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/uda/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "uda",
+                "create"
+              ]
+            },
+            "description": "Empty uda array is accepted by the tenant. Replace with real entries when the definitions are known.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 2,\n  \"items\": [\n    {\n      \"item\": \"{{childItem1}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"uda\": []\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"uda\": []\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Item UDAs",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/uda/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "uda",
+                "update"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 2,\n  \"items\": [\n    {\n      \"item\": \"{{childItem1}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"uda\": []\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"uda\": []\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 - Item Locations (feature disabled)",
+      "description": "Turned off in the bridge (FEATURE_ITEM_LOCATIONS_YN = N). The schema is known; what is missing is a store/warehouse/chain hierarchy value the tenant accepts.\n\nUse these to hunt for a working hierarchyLevel / hierarchyValue pair. When one lands, set MFCS_LOCATION_HIERARCHY_LEVEL / MFCS_LOCATION_HIERARCHY_VALUE and flip the flag.",
+      "item": [
+        {
+          "name": "Create Item Locations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/locations/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "locations",
+                "create"
+              ]
+            },
+            "description": "hierarchyLevel CH = chain, S = store, W = warehouse. Try W with 19271 if CH/1 is rejected.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 2,\n  \"items\": [\n    {\n      \"item\": \"{{childItem1}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"hierarchyLevel\": \"{{locationHierarchyLevel}}\",\n      \"locations\": [\n        {\n          \"hierarchyValue\": {{locationHierarchyValue}},\n          \"status\": \"A\",\n          \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n          \"taxableInd\": \"{{taxableInd}}\"\n        }\n      ]\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"hierarchyLevel\": \"{{locationHierarchyLevel}}\",\n      \"locations\": [\n        {\n          \"hierarchyValue\": {{locationHierarchyValue}},\n          \"status\": \"A\",\n          \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n          \"taxableInd\": \"{{taxableInd}}\"\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Item Locations",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/locations/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "locations",
+                "update"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 2,\n  \"items\": [\n    {\n      \"item\": \"{{childItem1}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"hierarchyLevel\": \"{{locationHierarchyLevel}}\",\n      \"locations\": [\n        {\n          \"hierarchyValue\": {{locationHierarchyValue}},\n          \"status\": \"A\",\n          \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n          \"taxableInd\": \"{{taxableInd}}\"\n        }\n      ]\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"hierarchyLevel\": \"{{locationHierarchyLevel}}\",\n      \"locations\": [\n        {\n          \"hierarchyValue\": {{locationHierarchyValue}},\n          \"status\": \"A\",\n          \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n          \"taxableInd\": \"{{taxableInd}}\"\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 - Purchase Orders",
+      "description": "Order-number reservation, create, verify and update. Always preserve \"dataLoadingDestination\": \"RMS\".\n\nMind the publish delay: a successful create does NOT mean the procurement GET will find the order immediately. The bridge retries verification 12 times at 10-second intervals for exactly this reason.",
+      "item": [
+        {
+          "name": "Reserve Pre-Issued Order Number",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/purchaseOrder/preIssuedOrderNumber/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "purchaseOrder",
+                "preIssuedOrderNumber",
+                "create"
+              ]
+            },
+            "description": "Saves the reserved number to `orderNo`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 1,\n  \"daysUntilExpiry\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "var body = pm.response.json();",
+                  "var n = (body.orderNumbers && body.orderNumbers[0] && body.orderNumbers[0].orderNo) || null;",
+                  "if (n) {",
+                  "  pm.collectionVariables.set('orderNo', String(n));",
+                  "  console.log('Reserved orderNo = ' + n + ' (expires ' + body.orderNumbers[0].expiryDate + ')');",
+                  "} else { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Purchase Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/purchaseOrders/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "purchaseOrders",
+                "create"
+              ]
+            },
+            "description": "Header plus details in one call. `location` is the MFCS VIRTUAL warehouse (19271), not the Office physical location (1927).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"orderNo\": {{orderNo}},\n      \"supplier\": {{supplier}},\n      \"currencyCode\": \"{{currencyCode}}\",\n      \"terms\": \"{{orderTerms}}\",\n      \"notBeforeDate\": \"{{notBeforeDate}}\",\n      \"notAfterDate\": \"{{notAfterDate}}\",\n      \"otbEowDate\": \"{{otbEowDate}}\",\n      \"earliestShipDate\": \"{{earliestShipDate}}\",\n      \"latestShipDate\": \"{{latestShipDate}}\",\n      \"dept\": {{dept}},\n      \"status\": \"{{orderStatus}}\",\n      \"exchangeRate\": {{exchangeRate}},\n      \"includeOnOrderInd\": \"Y\",\n      \"writtenDate\": \"{{writtenDate}}\",\n      \"origin\": \"{{orderOrigin}}\",\n      \"ediPoInd\": \"N\",\n      \"preMarkInd\": \"N\",\n      \"approvedBy\": \"{{principalUser}}\",\n      \"commentDesc\": \"{{itemDescription}}-PO\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"importCountry\": \"{{importCountry}}\",\n      \"orderType\": \"{{orderType}}\",\n      \"location\": {{orderLocation}},\n      \"locationType\": \"{{orderLocationType}}\",\n      \"qualityControlInd\": \"N\",\n      \"freightTerms\": \"{{freightTerms}}\",\n      \"details\": [\n        {\n          \"item\": \"{{childItem1}}\",\n          \"location\": {{orderLocation}},\n          \"locationType\": \"{{orderLocationType}}\",\n          \"unitCost\": {{unitCost}},\n          \"originCountry\": \"{{originCountry}}\",\n          \"supplierPackSize\": {{supplierPackSize}},\n          \"quantityOrdered\": 1,\n          \"earliestShipDate\": \"{{earliestShipDate}}\",\n          \"latestShipDate\": \"{{latestShipDate}}\"\n        },\n        {\n          \"item\": \"{{childItem2}}\",\n          \"location\": {{orderLocation}},\n          \"locationType\": \"{{orderLocationType}}\",\n          \"unitCost\": {{unitCost}},\n          \"originCountry\": \"{{originCountry}}\",\n          \"supplierPackSize\": {{supplierPackSize}},\n          \"quantityOrdered\": 1,\n          \"earliestShipDate\": \"{{earliestShipDate}}\",\n          \"latestShipDate\": \"{{latestShipDate}}\"\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Purchase Order (verify)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/procurement/order/{{orderNo}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "procurement",
+                "order",
+                "{{orderNo}}"
+              ]
+            },
+            "description": "Verification read. Expect 404 for a short window after create - retry rather than assuming the create failed."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// MFCS accepts purchaseOrders/create before the order is visible here.",
+                  "// The bridge retries this GET 12 times, 10s apart. Do the same by hand.",
+                  "if (pm.response.code === 404) {",
+                  "  console.log('Order not published yet - wait ~10s and retry. Expected immediately after create.');",
+                  "} else {",
+                  "  pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "}",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Purchase Order",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/purchaseOrders/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "purchaseOrders",
+                "update"
+              ]
+            },
+            "description": "Amend quantities or header attributes on an existing order.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"orderNo\": {{orderNo}},\n      \"dataLoadingDestination\": \"RMS\",\n      \"commentDesc\": \"{{itemDescription}}-PO updated\",\n      \"details\": [\n        {\n          \"item\": \"{{childItem1}}\",\n          \"location\": {{orderLocation}},\n          \"locationType\": \"{{orderLocationType}}\",\n          \"unitCost\": {{unitCost}},\n          \"originCountry\": \"{{originCountry}}\",\n          \"supplierPackSize\": {{supplierPackSize}},\n          \"quantityOrdered\": 2\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 - Diagnostics & Recovery",
+      "description": "When a call times out ambiguously you cannot safely repeat an identifier-generating request - look the outcome up by correlation ID instead. This is what OFFICE_MFCS_RECOVERY_PKG does in the bridge.",
+      "item": [
+        {
+          "name": "REST Service Status by Correlation ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/administration/operations/restService/status?xCorrelationId={{correlationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "administration",
+                "operations",
+                "restService",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "xCorrelationId",
+                  "value": "{{correlationId}}"
+                }
+              ]
+            },
+            "description": "Pass the X-Correlation-ID from the ambiguous call. Correlation IDs from live runs are in OFFICE_MFCS_ATTEMPT.CORRELATION_ID."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "try { console.log(JSON.stringify(pm.response.json(), null, 2)); } catch (e) { console.log(pm.response.text()); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

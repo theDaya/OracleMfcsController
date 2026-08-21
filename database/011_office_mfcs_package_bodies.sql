@@ -1054,37 +1054,6 @@ create or replace package body office_mfcs_mapping_pkg as
         return l_payload;
     end;
 
-    procedure assert_mapper_ready(p_mapper in varchar2) is
-    begin
-        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') not in ('MOCK', 'PUBLIC_MOCK', 'LOCAL_MFCS')
-           and office_mfcs_request_pkg.get_config('MFCS_SCHEMA_READY_YN', 'N') <> 'Y' then
-            raise_application_error(
-                -20810,
-                p_mapper || ' requires the authoritative Office MFCS OpenAPI schema before production payloads can be emitted.'
-            );
-        end if;
-    end;
-
-    function public_contract_request(
-        p_action_request_id in varchar2,
-        p_mapper_name       in varchar2
-    ) return clob is
-        l_payload clob;
-    begin
-        execute immediate
-            'begin :x := office_mfcs_public_contract_pkg.build_request(:a,:b); end;'
-            using out l_payload, p_action_request_id, p_mapper_name;
-        return l_payload;
-    exception
-        when others then
-            raise_application_error(-20811, 'Public contract mapper is unavailable for ' || p_mapper_name || ': ' || sqlerrm);
-    end;
-
-    function use_public_contract return boolean is
-    begin
-        return office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') in ('PUBLIC_MOCK', 'LOCAL_MFCS', 'ACTUAL_MFCS');
-    end;
-
     function source_system(p_payload in clob) return varchar2 is
         l_value varchar2(60);
     begin
@@ -1125,144 +1094,80 @@ create or replace package body office_mfcs_mapping_pkg as
         return l_value;
     end;
 
-    function envelope(
-        p_action_request_id in varchar2,
-        p_mapper_name       in varchar2,
-        p_endpoint_key      in varchar2
-    ) return clob is
-        l_obj json_object_t := json_object_t();
-        l_payload clob := request_payload(p_action_request_id);
-    begin
-        assert_mapper_ready(p_mapper_name);
-        l_obj.put('mappingStatus', 'MOCK_OR_SCHEMA_PENDING');
-        l_obj.put('mapperMethod', p_mapper_name);
-        l_obj.put('endpointKey', p_endpoint_key);
-        l_obj.put('actionRequestId', p_action_request_id);
-        l_obj.put('sourcePayload', json_element_t.parse(l_payload));
-        return l_obj.to_clob;
-    end;
-
     function build_item_number_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_item_number_request');
-        end if;
-        return envelope(p_action_request_id, 'build_item_number_request', 'ENDPOINT.ITEM_NUMBERS_MANAGE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_item_number_request');
     end;
 
     function build_parent_item_create_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_parent_item_create_request');
-        end if;
-        return envelope(p_action_request_id, 'build_parent_item_create_request', 'ENDPOINT.ITEMS_CREATE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_parent_item_create_request');
     end;
 
     function build_child_item_create_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_child_item_create_request');
-        end if;
-        return envelope(p_action_request_id, 'build_child_item_create_request', 'ENDPOINT.ITEMS_CREATE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_child_item_create_request');
     end;
 
     function build_item_create_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_item_create_request');
-        end if;
-        return envelope(p_action_request_id, 'build_item_create_request', 'ENDPOINT.ITEMS_CREATE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_item_create_request');
     end;
 
     function build_parent_item_sourcing_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_parent_item_sourcing_request');
-        end if;
-        return envelope(p_action_request_id, 'build_parent_item_sourcing_request', 'ENDPOINT.ITEM_SOURCING_CREATE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_parent_item_sourcing_request');
     end;
 
     function build_child_item_sourcing_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_child_item_sourcing_request');
-        end if;
-        return envelope(p_action_request_id, 'build_child_item_sourcing_request', 'ENDPOINT.ITEM_SOURCING_CREATE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_child_item_sourcing_request');
     end;
 
     function build_item_sourcing_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_item_sourcing_request');
-        end if;
-        return envelope(p_action_request_id, 'build_item_sourcing_request', 'ENDPOINT.ITEM_SOURCING_CREATE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_item_sourcing_request');
     end;
 
     function build_item_country_of_manufacture_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_item_country_of_manufacture_request');
-        end if;
-        return envelope(p_action_request_id, 'build_item_country_of_manufacture_request', 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_item_country_of_manufacture_request');
     end;
 
     function build_item_uda_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_item_uda_request');
-        end if;
-        return envelope(p_action_request_id, 'build_item_uda_request', 'ENDPOINT.ITEM_UDAS_CREATE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_item_uda_request');
     end;
 
     function build_item_location_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_item_location_request');
-        end if;
-        return envelope(p_action_request_id, 'build_item_location_request', 'ENDPOINT.ITEM_LOCATIONS_CREATE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_item_location_request');
     end;
 
     function build_item_approval_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_item_approval_request');
-        end if;
-        return envelope(p_action_request_id, 'build_item_approval_request', 'ENDPOINT.ITEM_APPROVE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_item_approval_request');
     end;
 
     function build_initial_retail_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_initial_retail_request');
-        end if;
-        return envelope(p_action_request_id, 'build_initial_retail_request', 'ENDPOINT.INITIAL_RETAIL');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_initial_retail_request');
     end;
 
     function build_po_number_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_po_number_request');
-        end if;
-        return envelope(p_action_request_id, 'build_po_number_request', 'ENDPOINT.PO_PREISSUED_CREATE');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_po_number_request');
     end;
 
     function build_purchase_order_request(p_action_request_id in varchar2) return clob is
-        l_obj json_object_t;
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_purchase_order_request');
-        end if;
-        l_obj := json_object_t.parse(envelope(p_action_request_id, 'build_purchase_order_request', 'ENDPOINT.PURCHASE_ORDERS_CREATE'));
-        l_obj.put('dataLoadingDestination', 'RMS');
-        return l_obj.to_clob;
+        -- dataLoadingDestination = RMS is emitted by the payload mapper itself.
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_purchase_order_request');
     end;
 
     function build_purchase_order_verify_request(p_action_request_id in varchar2) return clob is
     begin
-        if use_public_contract then
-            return public_contract_request(p_action_request_id, 'build_purchase_order_verify_request');
-        end if;
-        return envelope(p_action_request_id, 'build_purchase_order_verify_request', 'ENDPOINT.PURCHASE_ORDER_GET');
+        return office_mfcs_payload_pkg.build_request(p_action_request_id, 'build_purchase_order_verify_request');
     end;
 end office_mfcs_mapping_pkg;
 /
@@ -1292,11 +1197,6 @@ create or replace package body office_mfcs_client_pkg as
     function get_secret(p_secret_ref in varchar2) return varchar2 is
         l_secret varchar2(32767);
     begin
-        if office_mfcs_request_pkg.get_config('MFCS_AUTH_MODE', 'OAUTH_CLIENT_CREDENTIALS') <> 'STATIC_BEARER'
-           and office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') in ('PUBLIC_MOCK', 'LOCAL_MFCS') then
-            return 'public-mock-client-secret';
-        end if;
-
         begin
             select dbms_lob.substr(secret_value, 32767, 1)
               into l_secret
@@ -1335,28 +1235,6 @@ create or replace package body office_mfcs_client_pkg as
     function https_host return varchar2 is
     begin
         return office_mfcs_request_pkg.get_config('MFCS_HTTPS_HOST', null);
-    end;
-
-    function local_resource(p_endpoint_key in varchar2) return varchar2 is
-    begin
-        return case p_endpoint_key
-            when 'ENDPOINT.ITEM_NUMBERS_MANAGE' then 'RESERVE_ITEM_NUMBERS'
-            when 'ENDPOINT.ITEMS_CREATE' then 'ITEMS'
-            when 'ENDPOINT.ITEMS_UPDATE' then 'ITEMS_UPDATE'
-            when 'ENDPOINT.ITEM_APPROVE' then 'ITEMS_UPDATE'
-            when 'ENDPOINT.INITIAL_RETAIL' then 'ITEMS_UPDATE'
-            when 'ENDPOINT.ITEM_SOURCING_CREATE' then 'ITEM_SUPPLIERS'
-            when 'ENDPOINT.ITEM_SOURCING_UPDATE' then 'ITEM_SUPPLIERS'
-            when 'ENDPOINT.ITEM_UDAS_CREATE' then 'ITEM_UDAS'
-            when 'ENDPOINT.ITEM_UDAS_UPDATE' then 'ITEM_UDAS'
-            when 'ENDPOINT.ITEM_LOCATIONS_CREATE' then 'ITEM_LOCATIONS'
-            when 'ENDPOINT.ITEM_LOCATIONS_UPDATE' then 'ITEM_LOCATIONS'
-            when 'ENDPOINT.PO_PREISSUED_CREATE' then 'RESERVE_ORDER_NUMBERS'
-            when 'ENDPOINT.PURCHASE_ORDERS_CREATE' then 'PURCHASE_ORDERS'
-            when 'ENDPOINT.PURCHASE_ORDERS_UPDATE' then 'PURCHASE_ORDERS'
-            when 'ENDPOINT.PURCHASE_ORDER_GET' then 'GET_ORDER'
-            else null
-        end;
     end;
 
     function access_token return varchar2 is
@@ -1421,30 +1299,6 @@ create or replace package body office_mfcs_client_pkg as
         return g_access_token;
     end;
 
-    function call_mock(
-        p_action_request_id in varchar2,
-        p_step_code         in varchar2,
-        p_http_method       in varchar2,
-        p_endpoint          in varchar2,
-        p_request_payload   in clob,
-        p_correlation_id    in varchar2,
-        p_user_id           in varchar2
-    ) return clob is
-        l_response clob;
-    begin
-        execute immediate
-            'begin :x := office_mfcs_mock_pkg.invoke(:a,:b,:c,:d,:e,:f,:g); end;'
-            using out l_response,
-                  p_action_request_id,
-                  p_step_code,
-                  p_http_method,
-                  p_endpoint,
-                  p_request_payload,
-                  p_correlation_id,
-                  p_user_id;
-        return l_response;
-    end;
-
     function call_service(
         p_action_request_id in varchar2,
         p_step_code         in varchar2,
@@ -1460,9 +1314,7 @@ create or replace package body office_mfcs_client_pkg as
         l_correlation_id varchar2(80);
         l_response clob;
         l_http_status number;
-        l_mock_attempt_status varchar2(30);
         l_order_no varchar2(30);
-        l_local_resource varchar2(100);
     begin
         l_base_url := office_mfcs_request_pkg.get_config('MFCS_BASE_URL');
         l_endpoint_path := office_mfcs_request_pkg.get_config(p_endpoint_key);
@@ -1496,104 +1348,8 @@ create or replace package body office_mfcs_client_pkg as
             p_detail_payload => '{"endpointKey":"' || log_escape(p_endpoint_key)
                 || '","endpoint":"' || log_escape(l_endpoint)
                 || '","method":"' || log_escape(p_http_method)
-                || '","clientMode":"' || log_escape(office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK'))
                 || '","requestBytes":' || coalesce(to_char(dbms_lob.getlength(p_request_payload)), '0') || '}'
         );
-
-        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'MOCK' then
-            office_mfcs_request_pkg.log_event(
-                p_action_request_id => p_action_request_id,
-                p_event_phase => 'MOCK_CALL_START',
-                p_step_code => p_step_code,
-                p_attempt_id => l_attempt_id,
-                p_message => 'Calling package mock MFCS service.'
-            );
-
-            l_response := call_mock(
-                p_action_request_id,
-                p_step_code,
-                p_http_method,
-                l_endpoint,
-                p_request_payload,
-                l_correlation_id,
-                p_user_id
-            );
-
-            select json_value(l_response, '$.mock.httpStatus' returning number default 200 on error),
-                   json_value(l_response, '$.mock.attemptStatus' returning varchar2(30) default 'SUCCEEDED' on error)
-              into l_http_status, l_mock_attempt_status
-              from dual;
-
-            office_mfcs_request_pkg.log_event(
-                p_action_request_id => p_action_request_id,
-                p_event_phase => 'MOCK_CALL_RESPONSE',
-                p_step_code => p_step_code,
-                p_attempt_id => l_attempt_id,
-                p_event_level => case when l_mock_attempt_status = 'SUCCEEDED' then 'INFO' else 'ERROR' end,
-                p_message => 'Package mock MFCS service returned.',
-                p_detail_payload => '{"httpStatus":' || coalesce(to_char(l_http_status), 'null')
-                    || ',"attemptStatus":"' || log_escape(l_mock_attempt_status)
-                    || '","responseBytes":' || coalesce(to_char(dbms_lob.getlength(l_response)), '0') || '}'
-            );
-
-            if l_mock_attempt_status = 'OUTCOME_UNKNOWN' then
-                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'OUTCOME_UNKNOWN', l_http_status, l_response);
-                raise_application_error(-20952, 'MFCS call timed out after request was sent.');
-            elsif l_http_status >= 500 then
-                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'FAILED', l_http_status, l_response);
-                raise_application_error(-20950, 'MFCS downstream failure at ' || p_endpoint_key);
-            elsif l_http_status >= 400 then
-                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'FAILED', l_http_status, l_response);
-                raise_application_error(-20950, 'MFCS rejected request at ' || p_endpoint_key);
-            end if;
-
-            office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'SUCCEEDED', l_http_status, l_response);
-            return l_response;
-        end if;
-
-        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'LOCAL_MFCS' then
-            l_local_resource := local_resource(p_endpoint_key);
-            if l_local_resource is null then
-                raise_application_error(-20950, 'Local MFCS resource mapping is missing for ' || p_endpoint_key);
-            end if;
-
-            office_mfcs_request_pkg.log_event(
-                p_action_request_id => p_action_request_id,
-                p_event_phase => 'LOCAL_MFCS_CALL_START',
-                p_step_code => p_step_code,
-                p_attempt_id => l_attempt_id,
-                p_message => 'Calling local MFCS service.',
-                p_detail_payload => '{"resource":"' || log_escape(l_local_resource) || '"}'
-            );
-
-            execute immediate
-                'begin local_mfcs_service_pkg.handle(:a,:b,:c,:d,:e,null,:f,:g); end;'
-                using l_local_resource,
-                      p_http_method,
-                      p_request_payload,
-                      l_correlation_id,
-                      l_order_no,
-                      out l_http_status,
-                      out l_response;
-
-            office_mfcs_request_pkg.log_event(
-                p_action_request_id => p_action_request_id,
-                p_event_phase => 'LOCAL_MFCS_CALL_RESPONSE',
-                p_step_code => p_step_code,
-                p_attempt_id => l_attempt_id,
-                p_event_level => case when l_http_status between 200 and 299 then 'INFO' else 'ERROR' end,
-                p_message => 'Local MFCS call returned.',
-                p_detail_payload => '{"httpStatus":' || coalesce(to_char(l_http_status), 'null')
-                    || ',"responseBytes":' || coalesce(to_char(dbms_lob.getlength(l_response)), '0') || '}'
-            );
-
-            if l_http_status between 200 and 299 then
-                office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'SUCCEEDED', l_http_status, l_response);
-                return l_response;
-            end if;
-            office_mfcs_request_pkg.complete_attempt(l_attempt_id, 'FAILED', l_http_status, l_response);
-            raise_application_error(-20950, 'Local MFCS rejected request at ' || p_endpoint_key);
-        end if;
 
         apex_web_service.g_request_headers.delete;
         apex_web_service.g_request_headers(1).name := 'Authorization';
@@ -1686,20 +1442,6 @@ create or replace package body office_mfcs_client_pkg as
         l_endpoint varchar2(1000);
         l_http_status number;
     begin
-        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'MOCK' then
-            execute immediate
-                'begin :x := office_mfcs_mock_pkg.correlation_status(:a,:b); end;'
-                using out l_response, p_action_request_id, p_correlation_id;
-            return l_response;
-        end if;
-
-        if office_mfcs_request_pkg.get_config('MFCS_CLIENT_MODE', 'MOCK') = 'LOCAL_MFCS' then
-            execute immediate
-                'begin local_mfcs_service_pkg.handle(''GET_STATUS'',''GET'',null,:a,null,:b,:c,:d); end;'
-                using lower(rawtohex(sys_guid())), p_correlation_id, out l_http_status, out l_response;
-            return l_response;
-        end if;
-
         l_endpoint := rtrim(office_mfcs_request_pkg.get_config('MFCS_BASE_URL'), '/')
             || office_mfcs_request_pkg.get_config('ENDPOINT.REST_SERVICE_STATUS')
             || '?xCorrelationId=' || p_correlation_id
