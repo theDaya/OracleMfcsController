@@ -58,6 +58,12 @@ Do not grant or use `UTL_HTTP`; this implementation uses `APEX_WEB_SERVICE`.
 | `POST` | `/office-mfcs/v1/transactions/{actionRequestId}/resume` | Resume a partial request |
 | `GET` | `/office-mfcs/v1/reference-data` | Config-driven reference data for the UI |
 | `GET` | `/office-mfcs/v1/requests` | Recent requests |
+| `GET` | `/office-mfcs/v1/styles` | List styles live from MFCS |
+| `GET` | `/office-mfcs/v1/styles/{item}` | One item |
+| `GET` | `/office-mfcs/v1/orders` | List orders live from MFCS |
+| `GET` | `/office-mfcs/v1/orders/{orderNo}` | One order, enriched with parent style and display sizes |
+| `GET` | `/office-mfcs/v1/master-data` | Cached foundation data |
+| `POST` | `/office-mfcs/v1/master-data` | Refresh the cache from MFCS |
 
 The resume endpoint is protected by the ORDS privilege `office-mfcs-resume-support`, bound to role
 `office-mfcs-integration-support`. Normal callers retry by resending the original payload with the same
@@ -134,6 +140,17 @@ suppressed. Orders appear only when `ORDHEAD.STATUS` is A, W, S or C with a non-
 
 Resources are singular, and one path serves both shapes: `foundation/item/{id}` for one record,
 `foundation/item?filters` for a list. Plural paths return 404.
+
+### Foundation services that are empty on this tenant
+
+`merchhier/deps`, `merchhier/class`, `merchhier/subclass`, `diffid`, `difftype`, `diffgroup`,
+`supplier`, `store`, `warehouse` and `uda` all return HTTP 200 with zero rows — publish queues that
+have never been seeded, and `since` / `before` does not change it. Only `item/brands`,
+`item/foundation/seasons` and `orghier` return foundation rows directly.
+
+`office_mfcs_master_pkg` therefore derives hierarchy, differentiator and supplier values from the item
+and order feeds instead, and records the source against every cached row so the difference stays
+visible rather than being quietly presented as authoritative master data.
 
 ## Inspecting requests
 

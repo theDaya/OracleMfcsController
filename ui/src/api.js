@@ -99,3 +99,26 @@ export function buildInboundPayload(form) {
 
   return payload;
 }
+
+// ---------------------------------------------------------------- master data
+export const getMasterData = () => call('/master-data');
+export const refreshMasterData = () => call('/master-data', { method: 'POST' });
+
+// ---------------------------------------------------------------- browse
+export const listStyles = (params = {}) => {
+  const q = new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v !== '' && v != null),
+  ).toString();
+  return call(`/styles${q ? `?${q}` : ''}`);
+};
+
+export const getStyle = (item) => call(`/styles/${encodeURIComponent(item)}`);
+
+export const listOrders = (params = {}) => {
+  const q = new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v !== '' && v != null),
+  ).toString();
+  return call(`/orders${q ? `?${q}` : ''}`);
+};
+
+export const getOrder = (orderNo) => call(`/orders/${encodeURIComponent(orderNo)}`);
