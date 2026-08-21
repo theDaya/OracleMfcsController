@@ -1,4 +1,4 @@
--- Run as OFFICE_MFCS. Post-install verification.
+-- Run as MFCS_INTEGRATION. Post-install verification.
 
 set lines 200 pages 200 feedback off
 set serveroutput on
@@ -40,20 +40,20 @@ select m.uri_prefix, t.uri_template, h.method, h.source_type
  order by t.uri_template, h.method;
 
 prompt
-prompt === Runtime mode configuration ===
+prompt === Runtime configuration ===
 col config_key for a34
-col config_value for a72
+col config_value for a90
 select config_key, config_value
-  from office_mfcs_config
+  from config
  where config_key in (
-        'MFCS_CLIENT_MODE', 'MFCS_AUTH_MODE', 'MFCS_BASE_URL', 'MFCS_TOKEN_URL',
-        'MFCS_BEARER_TOKEN_REF', 'MFCS_SCHEMA_READY_YN',
+        'MFCS_AUTH_MODE', 'MFCS_BASE_URL', 'MFCS_TOKEN_URL',
+        'MFCS_BEARER_TOKEN_REF',
         'FEATURE_ITEM_LOCATIONS_YN', 'FEATURE_INITIAL_RETAIL_YN')
  order by config_key;
 
 prompt
 prompt === Config row count ===
-select count(*) config_rows from office_mfcs_config;
+select count(*) config_rows from config;
 
 prompt
 prompt === Bearer token loaded? ===
@@ -61,5 +61,5 @@ select case when count(*) = 0
             then 'NO - load MFCS_BEARER_TOKEN before any live call'
             else 'YES - ' || count(*) || ' secret row(s) present'
        end bearer_token_status
-  from office_mfcs_secret
+  from secret
  where secret_ref = 'MFCS_BEARER_TOKEN';

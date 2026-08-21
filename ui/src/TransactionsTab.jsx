@@ -363,7 +363,7 @@ export default function TransactionsTab({ form, setForm, masterData }) {
         {tab === 'inbound' && (
           <div className="tab-body">
             <p className="explain">
-              What a caller posts to <code>POST /office-mfcs/v1/transactions</code> — the legacy
+              What a caller posts to <code>POST /mfcs/v1/transactions</code> — the legacy
               PLM/Office shape, one document describing the whole intent before any decomposition.
             </p>
             <JsonBlock value={inbound} />
@@ -402,7 +402,7 @@ export default function TransactionsTab({ form, setForm, masterData }) {
         {tab === 'result' && submitResult && (
           <div className="tab-body">
             <p className="explain">
-              HTTP {submitResult.status} from <code>POST /office-mfcs/v1/transactions</code>.
+              HTTP {submitResult.status} from <code>POST /mfcs/v1/transactions</code>.
             </p>
             <JsonBlock value={submitResult.body} />
           </div>

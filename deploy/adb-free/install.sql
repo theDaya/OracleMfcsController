@@ -1,5 +1,10 @@
--- Run as OFFICE_MFCS. Installs the Office MFCS integration layer in order.
--- Every call goes to the real MFCS tenant; there are no simulators or client modes.
+-- Installs the MFCS integration layer into the current schema.
+--
+-- Everything targets the real MFCS tenant; there are no simulators or client modes.
+--
+-- Order is dependency-driven, not arbitrary. Each package is a single file holding
+-- its spec and body, so a package must be preceded by everything its body calls.
+-- The numbering in 20_packages/ encodes that order.
 
 set define off
 set echo off
@@ -7,30 +12,40 @@ set feedback on
 whenever sqlerror exit failure
 
 prompt ==========================================
-prompt Office MFCS integration layer install
+prompt  MFCS integration layer
 prompt ==========================================
 
-@@../../database/001_office_mfcs_tables.sql
-@@../../database/002_office_mfcs_constraints.sql
-@@../../database/003_office_mfcs_config.sql
-@@../../database/004_office_mfcs_event_log.sql
-@@../../database/005_office_mfcs_master_data.sql
-@@../../database/006_office_mfcs_ords_util.sql
-@@../../database/010_office_mfcs_package_specs.sql
+prompt
+prompt -- Tables and seed data
+@@../../database/10_tables/01_core.sql
+@@../../database/10_tables/02_constraints.sql
+@@../../database/10_tables/03_config_seed.sql
+@@../../database/10_tables/04_event_log.sql
+@@../../database/10_tables/05_master_data.sql
 
--- The payload mapper must load before the package bodies: office_mfcs_mapping_pkg
--- now calls office_mfcs_payload_pkg.build_request statically, so the dependency is
--- checked at compile time. It needs only the specs from 010, so this order is safe.
-@@../../database/013_office_mfcs_payload_pkg.sql
+prompt
+prompt -- Packages
+@@../../database/20_packages/01_config_pkg.sql
+@@../../database/20_packages/02_event_pkg.sql
+@@../../database/20_packages/03_request_pkg.sql
+@@../../database/20_packages/04_step_pkg.sql
+@@../../database/20_packages/05_validation_pkg.sql
+@@../../database/20_packages/06_payload_pkg.sql
+@@../../database/20_packages/07_client_pkg.sql
+@@../../database/20_packages/08_recovery_pkg.sql
+@@../../database/20_packages/09_orchestrator_pkg.sql
+@@../../database/20_packages/10_preview_pkg.sql
+@@../../database/20_packages/11_master_pkg.sql
+@@../../database/20_packages/12_browse_pkg.sql
+@@../../database/20_packages/13_api_pkg.sql
+@@../../database/20_packages/14_ords_util_pkg.sql
 
-@@../../database/011_office_mfcs_package_bodies.sql
-@@../../database/012_office_mfcs_preview_pkg.sql
-@@../../database/014_office_mfcs_master_pkg.sql
-
-@@../../database/020_office_mfcs_ords.sql
-@@../../database/021_office_mfcs_preview_ords.sql
-@@../../database/022_office_mfcs_browse_ords.sql
+prompt
+prompt -- ORDS
+@@../../database/30_ords/01_transactions.sql
+@@../../database/30_ords/02_preview.sql
+@@../../database/30_ords/03_console.sql
 
 prompt ==========================================
-prompt Install complete
+prompt  Install complete
 prompt ==========================================

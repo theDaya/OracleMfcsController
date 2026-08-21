@@ -1,8 +1,10 @@
 set define off
 
-prompt Creating OFFICE MFCS preview package
+-- Builds the MFCS call plan without sending anything.
 
-create or replace package office_mfcs_preview_pkg authid definer as
+prompt Creating preview_pkg
+
+create or replace package preview_pkg authid definer as
     -- Builds, but does not send, the full MFCS call plan for an Office payload.
     --
     -- Returns both halves of the picture in one response:
@@ -18,19 +20,19 @@ create or replace package office_mfcs_preview_pkg authid definer as
         o_http_status  out number,
         o_response     out clob
     );
-end office_mfcs_preview_pkg;
+end preview_pkg;
 /
 
 show errors
 
-create or replace package body office_mfcs_preview_pkg as
+create or replace package body preview_pkg as
 
     procedure purge_preview(p_action_request_id in varchar2) is
     begin
-        delete from office_mfcs_event_log where action_request_id = p_action_request_id;
-        delete from office_mfcs_attempt where action_request_id = p_action_request_id;
-        delete from office_mfcs_step where action_request_id = p_action_request_id;
-        delete from office_mfcs_request where action_request_id = p_action_request_id;
+        delete from event_log where action_request_id = p_action_request_id;
+        delete from attempt where action_request_id = p_action_request_id;
+        delete from step where action_request_id = p_action_request_id;
+        delete from request where action_request_id = p_action_request_id;
         commit;
     exception
         when others then
@@ -97,7 +99,7 @@ create or replace package body office_mfcs_preview_pkg as
         end if;
 
         -- Validate before touching any table.
-        l_valid := office_mfcs_validation_pkg.validate_request(p_payload, l_errors);
+        l_valid := validation_pkg.validate_request(p_payload, l_errors);
         if not l_valid then
             l_root.put('VALID', false);
             l_root.put('ERRORS', as_json(l_errors));
@@ -112,27 +114,27 @@ create or replace package body office_mfcs_preview_pkg as
         -- and an existing ACTION_REQUEST_ID is never disturbed.
         l_preview_id := 'PREVIEW-' || lower(rawtohex(sys_guid()));
 
-        office_mfcs_request_pkg.register_request(
+        request_pkg.register_request(
             p_action_request_id => l_preview_id,
             p_operation_name => l_operation,
-            p_payload_hash => office_mfcs_request_pkg.payload_hash(p_payload),
+            p_payload_hash => request_pkg.payload_hash(p_payload),
             p_payload => p_payload,
             o_result => l_result,
             o_status => l_status,
             o_response_payload => l_existing
         );
 
-        office_mfcs_request_pkg.initialize_steps(l_preview_id, l_operation);
+        step_pkg.initialize_steps(l_preview_id, l_operation);
 
-        l_base := rtrim(office_mfcs_request_pkg.get_config('MFCS_BASE_URL'), '/');
+        l_base := rtrim(config_pkg.get_config('MFCS_BASE_URL'), '/');
 
         for s in (
             select step_code, step_sequence
-              from office_mfcs_step
+              from step
              where action_request_id = l_preview_id
              order by step_sequence
         ) loop
-            l_endpoint_key := office_mfcs_orchestrator_pkg.endpoint_for_step(s.step_code, l_operation);
+            l_endpoint_key := orchestrator_pkg.endpoint_for_step(s.step_code, l_operation);
 
             l_call := json_object_t();
             l_call.put('sequence', s.step_sequence);
@@ -144,11 +146,11 @@ create or replace package body office_mfcs_preview_pkg as
                 l_call.put('method', 'LOCAL');
                 l_call.put('description', 'Performed inside the integration layer; no MFCS call.');
             else
-                l_method := office_mfcs_orchestrator_pkg.method_for_step(s.step_code, l_operation);
-                l_endpoint_path := office_mfcs_request_pkg.get_config(l_endpoint_key);
+                l_method := orchestrator_pkg.method_for_step(s.step_code, l_operation);
+                l_endpoint_path := config_pkg.get_config(l_endpoint_key);
 
                 begin
-                    l_step_payload := office_mfcs_orchestrator_pkg.payload_for_step(l_preview_id, s.step_code);
+                    l_step_payload := orchestrator_pkg.payload_for_step(l_preview_id, s.step_code);
                 exception
                     when others then
                         l_step_payload := null;
@@ -187,9 +189,7 @@ create or replace package body office_mfcs_preview_pkg as
             o_response := '{"VALID":false,"ERRORS":[{"FIELD":null,"CODE":"PREVIEW_FAILED","MESSAGE":"'
                 || replace(replace(substr(sqlerrm, 1, 500), '\', '\\'), '"', '\"') || '"}],"MFCS_CALLS":[]}';
     end;
-end office_mfcs_preview_pkg;
+end preview_pkg;
 /
 
 show errors
-
-prompt OFFICE MFCS preview package created

@@ -8,7 +8,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // ORDS runs on the adb-free container with a self-signed certificate.
 // Proxying through Vite avoids both the CORS preflight and the cert warning.
 const ORDS = process.env.ORDS_URL || 'https://localhost:8443';
-const SCHEMA = process.env.ORDS_SCHEMA || 'office_mfcs';
+const SCHEMA = process.env.ORDS_SCHEMA || 'mfcs_integration';
 
 export default defineConfig({
   plugins: [react()],
@@ -22,7 +22,7 @@ export default defineConfig({
         target: ORDS,
         changeOrigin: true,
         secure: false,
-        rewrite: (p) => p.replace(/^\/api/, `/ords/${SCHEMA}/office-mfcs/v1`),
+        rewrite: (p) => p.replace(/^\/api/, `/ords/${SCHEMA}/mfcs/v1`),
       },
     },
   },

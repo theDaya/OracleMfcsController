@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $basePayload = Get-Content -Raw "$PSScriptRoot\sample_create_all.json" | ConvertFrom-Json
-$endpoint = 'https://localhost:8443/ords/office_mfcs_app/office-mfcs/v1/transactions'
+$endpoint = 'https://localhost:8443/ords/mfcs_integration/mfcs/v1/transactions'
 $validateEndpoint = "$endpoint/validate"
 $operations = @(
     'CREATE_ALL',

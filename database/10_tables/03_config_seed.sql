@@ -4,7 +4,7 @@ set define off
 -- switch: the simulators and MOCK/PUBLIC_MOCK/LOCAL_MFCS modes were removed.
 prompt Seeding OFFICE MFCS non-secret configuration
 
-merge into office_mfcs_config c
+merge into config c
 using (
     select 'DEFAULT' environment, 'MFCS_AUTH_MODE' config_key, 'STATIC_BEARER' config_value, 'Y' enabled_ind from dual union all
     select 'DEFAULT', 'MFCS_BASE_URL', 'https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs', 'Y' from dual union all
@@ -107,7 +107,7 @@ when not matched then insert (
     s.enabled_ind
 );
 
-delete from office_mfcs_config
+delete from config
  where config_key in ('MFCS_CLIENT_MODE', 'MFCS_SCHEMA_READY_YN')
     or config_key like 'MOCK_%';
 

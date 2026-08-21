@@ -97,7 +97,7 @@ export function orderToForm(order, existing) {
   // read does not carry but MODIFY_ORDER validation demands: the parent style
   // behind the SKUs, and each line's display size reverse-mapped from its size
   // diff. Without these the request fails validation on STYLE and SKU_SIZE.
-  const meta = order.officeMfcs || {};
+  const meta = order.resolved || {};
   return {
     ...existing,
     operationName: 'MODIFY_ORDER',
@@ -122,7 +122,7 @@ export function orderToForm(order, existing) {
     latestShipDate: order.latestShipDate || existing.latestShipDate,
     sizeCurve: details.map((d, i) => ({
       sourceVariantRef: `ord-${order.orderNo}-${i + 1}`,
-      size: d.officeMfcs?.displaySize || '',
+      size: d.resolved?.displaySize || '',
       width: 'ALL',
       qty: qtyOf(d) != null ? String(qtyOf(d)) : '1',
       skuId: String(d.item ?? ''),

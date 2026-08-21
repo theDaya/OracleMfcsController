@@ -1,6 +1,6 @@
--- Run as OFFICE_MFCS. READ-ONLY probe against the live MFCS tenant.
--- Creates nothing. Uses the same token handling as OFFICE_MFCS_CLIENT_PKG.access_token
--- in STATIC_BEARER mode: read OFFICE_MFCS_SECRET, trim, strip any 'Bearer ' prefix.
+-- Run as MFCS_INTEGRATION. READ-ONLY probe against the live MFCS tenant.
+-- Creates nothing. Uses the same token handling as CLIENT_PKG.access_token
+-- in STATIC_BEARER mode: read SECRET, trim, strip any 'Bearer ' prefix.
 
 set serveroutput on
 set lines 220
@@ -14,7 +14,7 @@ declare
         l_v varchar2(4000);
     begin
         select dbms_lob.substr(config_value, 4000, 1) into l_v
-          from office_mfcs_config
+          from config
          where config_key = p_key and environment = 'DEFAULT' and enabled_ind = 'Y';
         return l_v;
     exception
@@ -57,7 +57,7 @@ begin
 
     begin
         select dbms_lob.substr(secret_value, 32767, 1) into l_token
-          from office_mfcs_secret where secret_ref = l_ref;
+          from secret where secret_ref = l_ref;
     exception
         when no_data_found then
             dbms_output.put_line('No secret row for ref ' || l_ref || ' - nothing to test.');

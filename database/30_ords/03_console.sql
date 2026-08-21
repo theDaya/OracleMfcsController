@@ -4,15 +4,15 @@ prompt Creating OFFICE MFCS browse and master-data ORDS handlers
 
 begin
     -- Live style listing for the browse screen.
-    ords.define_template(p_module_name => 'office-mfcs-v1', p_pattern => 'styles');
+    ords.define_template(p_module_name => 'mfcs-v1', p_pattern => 'styles');
     ords.define_handler(
-        p_module_name => 'office-mfcs-v1',
+        p_module_name => 'mfcs-v1',
         p_pattern => 'styles',
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
         p_source => q'[
 begin
-    office_mfcs_ords_util_pkg.emit_json(office_mfcs_master_pkg.list_styles(
+    ords_util_pkg.emit_json(browse_pkg.list_styles(
         p_limit => to_number(nvl(:limit, '50')),
         p_dept => :dept,
         p_item_level => nvl(:itemLevel, '1')
@@ -21,28 +21,28 @@ end;
 ]'
     );
 
-    ords.define_template(p_module_name => 'office-mfcs-v1', p_pattern => 'styles/:item');
+    ords.define_template(p_module_name => 'mfcs-v1', p_pattern => 'styles/:item');
     ords.define_handler(
-        p_module_name => 'office-mfcs-v1',
+        p_module_name => 'mfcs-v1',
         p_pattern => 'styles/:item',
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
         p_source => q'[
 begin
-    office_mfcs_ords_util_pkg.emit_json(office_mfcs_master_pkg.get_style(:item));
+    ords_util_pkg.emit_json(browse_pkg.get_style(:item));
 end;
 ]'
     );
 
-    ords.define_template(p_module_name => 'office-mfcs-v1', p_pattern => 'orders');
+    ords.define_template(p_module_name => 'mfcs-v1', p_pattern => 'orders');
     ords.define_handler(
-        p_module_name => 'office-mfcs-v1',
+        p_module_name => 'mfcs-v1',
         p_pattern => 'orders',
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
         p_source => q'[
 begin
-    office_mfcs_ords_util_pkg.emit_json(office_mfcs_master_pkg.list_orders(
+    ords_util_pkg.emit_json(browse_pkg.list_orders(
         p_limit => to_number(nvl(:limit, '50')),
         p_supplier => :supplier
     ));
@@ -50,38 +50,38 @@ end;
 ]'
     );
 
-    ords.define_template(p_module_name => 'office-mfcs-v1', p_pattern => 'orders/:orderNo');
+    ords.define_template(p_module_name => 'mfcs-v1', p_pattern => 'orders/:orderNo');
     ords.define_handler(
-        p_module_name => 'office-mfcs-v1',
+        p_module_name => 'mfcs-v1',
         p_pattern => 'orders/:orderNo',
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
         p_source => q'[
 begin
-    office_mfcs_ords_util_pkg.emit_json(office_mfcs_master_pkg.get_order(:orderNo, nvl(:enrich, 'Y')));
+    ords_util_pkg.emit_json(browse_pkg.get_order(:orderNo, nvl(:enrich, 'Y')));
 end;
 ]'
     );
 
     -- Bearer token health, so an expired credential is visible in the console
     -- instead of showing up as unexplained blank listings.
-    ords.define_template(p_module_name => 'office-mfcs-v1', p_pattern => 'token-status');
+    ords.define_template(p_module_name => 'mfcs-v1', p_pattern => 'token-status');
     ords.define_handler(
-        p_module_name => 'office-mfcs-v1',
+        p_module_name => 'mfcs-v1',
         p_pattern => 'token-status',
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
         p_source => q'[
 begin
-    office_mfcs_ords_util_pkg.emit_json(office_mfcs_master_pkg.token_status);
+    ords_util_pkg.emit_json(client_pkg.token_status);
 end;
 ]'
     );
 
     -- Cached master data, grouped by type, for dropdowns and the browse screen.
-    ords.define_template(p_module_name => 'office-mfcs-v1', p_pattern => 'master-data');
+    ords.define_template(p_module_name => 'mfcs-v1', p_pattern => 'master-data');
     ords.define_handler(
-        p_module_name => 'office-mfcs-v1',
+        p_module_name => 'mfcs-v1',
         p_pattern => 'master-data',
         p_method => 'GET',
         p_source_type => ords.source_type_plsql,
@@ -97,7 +97,7 @@ begin
     l_arr := json_array_t();
     for r in (
         select data_type, data_code, parent_code, description
-          from office_mfcs_master_data
+          from master_data
          order by data_type,
                   case when regexp_like(data_code, '^\d+$') then lpad(data_code, 20, '0') else data_code end
     ) loop
@@ -122,7 +122,7 @@ begin
     for r in (
         select data_type, source, http_status, row_count, message,
                to_char(completed_at, 'YYYY-MM-DD"T"HH24:MI:SS') completed
-          from office_mfcs_master_refresh order by data_type
+          from master_refresh order by data_type
     ) loop
         l_row := json_object_t();
         l_row.put('dataType', r.data_type);
@@ -135,13 +135,13 @@ begin
     end loop;
     l_root.put('log', l_log);
 
-    office_mfcs_ords_util_pkg.emit_json(l_root.to_clob);
+    ords_util_pkg.emit_json(l_root.to_clob);
 end;
 ]'
     );
 
     ords.define_handler(
-        p_module_name => 'office-mfcs-v1',
+        p_module_name => 'mfcs-v1',
         p_pattern => 'master-data',
         p_method => 'POST',
         p_source_type => ords.source_type_plsql,
@@ -149,8 +149,8 @@ end;
 declare
     l_summary clob;
 begin
-    office_mfcs_master_pkg.refresh_all(l_summary);
-    office_mfcs_ords_util_pkg.emit_json(l_summary);
+    master_pkg.refresh_all(l_summary);
+    ords_util_pkg.emit_json(l_summary);
 end;
 ]'
     );

@@ -2,7 +2,7 @@ set define off
 
 prompt Creating OFFICE MFCS integration tables
 
-create table office_mfcs_request (
+create table request (
     action_request_id varchar2(80) not null,
     operation_name    varchar2(30) not null,
     source_system     varchar2(60),
@@ -21,7 +21,7 @@ create table office_mfcs_request (
     last_updated_at   timestamp with time zone default systimestamp not null
 );
 
-create table office_mfcs_step (
+create table step (
     action_request_id   varchar2(80) not null,
     step_code           varchar2(60) not null,
     step_sequence       number(5) not null,
@@ -33,7 +33,7 @@ create table office_mfcs_step (
     last_error_message  varchar2(4000)
 );
 
-create table office_mfcs_attempt (
+create table attempt (
     attempt_id       number not null,
     action_request_id varchar2(80) not null,
     step_code        varchar2(60) not null,
@@ -49,7 +49,7 @@ create table office_mfcs_attempt (
     completed_at     timestamp with time zone
 );
 
-create table office_mfcs_event_log (
+create table event_log (
     log_id            number not null,
     action_request_id varchar2(80),
     step_code         varchar2(60),
@@ -61,7 +61,7 @@ create table office_mfcs_event_log (
     created_at        timestamp with time zone default systimestamp not null
 );
 
-create table office_mfcs_entity_map (
+create table entity_map (
     source_system      varchar2(60) not null,
     source_style_ref   varchar2(120),
     mfcs_style_no      varchar2(30),
@@ -75,7 +75,7 @@ create table office_mfcs_entity_map (
     last_updated_at    timestamp with time zone default systimestamp not null
 );
 
-create table office_mfcs_config (
+create table config (
     config_key    varchar2(200) not null,
     config_value  clob,
     environment   varchar2(40) default 'DEFAULT' not null,
@@ -84,7 +84,7 @@ create table office_mfcs_config (
     updated_at    timestamp with time zone default systimestamp not null
 );
 
-create table office_mfcs_secret (
+create table secret (
     secret_ref    varchar2(200) not null,
     secret_value  clob not null,
     description   varchar2(400),
@@ -92,7 +92,7 @@ create table office_mfcs_secret (
     updated_at    timestamp with time zone default systimestamp not null
 );
 
-create sequence office_mfcs_attempt_seq start with 1 increment by 1 nocache;
-create sequence office_mfcs_event_log_seq start with 1 increment by 1 nocache;
+create sequence attempt_seq start with 1 increment by 1 nocache;
+create sequence event_log_seq start with 1 increment by 1 nocache;
 
 prompt OFFICE MFCS tables created

@@ -11,7 +11,7 @@ Four top-level tabs over the live MFCS tenant.
 
 The Transactions tab shows both halves of the picture:
 
-- **Inbound** — the Office/PLM-shaped document posted to *our* interface (`POST /office-mfcs/v1/transactions`)
+- **Inbound** — the Office/PLM-shaped document posted to *our* interface (`POST /mfcs/v1/transactions`)
 - **Outbound** — the ordered per-endpoint payloads this layer would send to *MFCS*
 
 ## Running it
@@ -26,7 +26,7 @@ npm run dev
 
 Then open <http://localhost:5173>.
 
-Vite proxies `/api/*` to `https://localhost:8443/ords/office_mfcs/office-mfcs/v1/*`. That handles both
+Vite proxies `/api/*` to `https://localhost:8443/ords/mfcs_integration/mfcs/v1/*`. That handles both
 the CORS preflight and ORDS's self-signed certificate, so no browser exceptions are needed. Override
 with `ORDS_URL` / `ORDS_SCHEMA` env vars if your container differs.
 
@@ -36,22 +36,23 @@ Deliberately almost all of it is in PL/SQL. The React app holds no mapping rules
 
 | Concern | Lives in |
 | --- | --- |
-| Field validation | `office_mfcs_validation_pkg` |
-| Step graph per operation | `office_mfcs_request_pkg.initialize_steps` |
-| Step → endpoint / HTTP method | `office_mfcs_orchestrator_pkg` |
-| MFCS payload construction | `office_mfcs_mapping_pkg` → `office_mfcs_payload_pkg` |
-| Assembling the preview | `office_mfcs_preview_pkg` |
-| Master-data fetch and cache | `office_mfcs_master_pkg` -> `OFFICE_MFCS_MASTER_DATA` |
-| Browse reads and order enrichment | `office_mfcs_master_pkg` |
-| Dropdown reference data | `GET /reference-data`, read from `OFFICE_MFCS_CONFIG` |
+| Field validation | `validation_pkg` |
+| Step graph per operation | `request_pkg.initialize_steps` |
+| Step → endpoint / HTTP method | `orchestrator_pkg` |
+| MFCS payload construction | `mapping_pkg` → `payload_pkg` |
+| Assembling the preview | `preview_pkg` |
+| Master-data fetch and cache | `master_pkg` -> `MASTER_DATA` |
+| Credentials and outbound HTTP | `client_pkg` (sole owner) |
+| Browse reads and order enrichment | `browse_pkg` |
+| Dropdown reference data | `GET /reference-data`, read from `CONFIG` |
 
 The browser builds only the inbound document (`buildInboundPayload` in `src/api.js`), which is just a
 shape, not business logic. Everything downstream of that comes from the database.
 
-`office_mfcs_preview_pkg` reuses the orchestrator's own step graph and endpoint resolution rather than
+`preview_pkg` reuses the orchestrator's own step graph and endpoint resolution rather than
 reimplementing them, so the preview cannot drift from what execution would really do. It registers a
 throwaway `PREVIEW-` request so the existing mappers can run, then deletes it — previews leave no
-trace in `OFFICE_MFCS_REQUEST` and never appear in the request list.
+trace in `REQUEST` and never appear in the request list.
 
 ## Two buttons
 
@@ -102,7 +103,7 @@ bridges both spellings.
 
 ## Master data tab
 
-Caches foundation data into `OFFICE_MFCS_MASTER_DATA` so the entry form can offer dropdowns. Two
+Caches foundation data into `MASTER_DATA` so the entry form can offer dropdowns. Two
 population routes, recorded per row:
 
 - `ENDPOINT:` read straight from a foundation service that returns rows — brands, seasons, org hierarchy

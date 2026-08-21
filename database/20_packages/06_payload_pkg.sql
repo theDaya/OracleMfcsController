@@ -1,29 +1,87 @@
--- Builds the MFCS request payload for each orchestration step.
---
--- This is THE production mapper. office_mfcs_mapping_pkg delegates every
--- build_*_request call here. It previously lived under tests/ and was described
--- as simulator-only, which was wrong and produced ORA-20811 on any install that
--- followed the old README order.
-
 set define off
 
-prompt Creating OFFICE MFCS MFCS payload mapper package
+-- Reads the Office document and builds each MFCS request payload.
 
-create or replace package office_mfcs_payload_pkg authid definer as
+prompt Creating payload_pkg
+
+create or replace package payload_pkg authid definer as
     function build_request(
         p_action_request_id in varchar2,
         p_mapper_name       in varchar2
     ) return clob;
-end office_mfcs_payload_pkg;
+
+    -- Readers for the stored Office request document. These moved here from
+    -- mapping_pkg, which existed only to switch between the mock and
+    -- real mappers and became a forwarding layer once the simulators were removed.
+    function source_system(p_payload in clob) return varchar2;
+    function source_style_ref(p_payload in clob) return varchar2;
+    function source_order_ref(p_payload in clob) return varchar2;
+    function user_id(p_payload in clob) return varchar2;
+    function request_payload(p_action_request_id in varchar2) return clob;
+end payload_pkg;
 /
 
-create or replace package body office_mfcs_payload_pkg as
+show errors
+
+create or replace package body payload_pkg as
+
+    function request_payload(p_action_request_id in varchar2) return clob is
+        l_payload clob;
+    begin
+        select request_payload
+          into l_payload
+          from request
+         where action_request_id = p_action_request_id;
+
+        return l_payload;
+    end;
+
+    function source_system(p_payload in clob) return varchar2 is
+        l_value varchar2(60);
+    begin
+        select json_value(p_payload, '$.SOURCE_SYSTEM' returning varchar2(60) null on error)
+          into l_value
+          from dual;
+        return l_value;
+    end;
+
+    function source_style_ref(p_payload in clob) return varchar2 is
+        l_value varchar2(120);
+    begin
+        select json_value(p_payload, '$.SOURCE_STYLE_REF' returning varchar2(120) null on error)
+          into l_value
+          from dual;
+        return l_value;
+    end;
+
+    function source_order_ref(p_payload in clob) return varchar2 is
+        l_value varchar2(120);
+    begin
+        select json_value(p_payload, '$.SOURCE_ORDER_REF' returning varchar2(120) null on error)
+          into l_value
+          from dual;
+        return l_value;
+    end;
+
+    function user_id(p_payload in clob) return varchar2 is
+        l_value varchar2(120);
+    begin
+        select coalesce(
+                   json_value(p_payload, '$.USER_ID' returning varchar2(120) null on error),
+                   json_value(p_payload, '$.APPROVED_BY' returning varchar2(120) null on error),
+                   'INTEGRATION'
+               )
+          into l_value
+          from dual;
+        return l_value;
+    end;
+
     function payload(p_action_request_id in varchar2) return clob is
         l_payload clob;
     begin
         select request_payload
           into l_payload
-          from office_mfcs_request
+          from request
          where action_request_id = p_action_request_id;
         return l_payload;
     end;
@@ -46,14 +104,14 @@ create or replace package body office_mfcs_payload_pkg as
         if p_value is null then
             return null;
         end if;
-        return office_mfcs_request_pkg.get_config(p_prefix || upper(p_value), p_value);
+        return config_pkg.get_config(p_prefix || upper(p_value), p_value);
     end;
 
     function request_style(p_action_request_id in varchar2) return varchar2 is
         l_style varchar2(30);
     begin
         select style_no into l_style
-          from office_mfcs_request
+          from request
          where action_request_id = p_action_request_id;
         return l_style;
     end;
@@ -62,7 +120,7 @@ create or replace package body office_mfcs_payload_pkg as
         l_order varchar2(30);
     begin
         select order_no into l_order
-          from office_mfcs_request
+          from request
          where action_request_id = p_action_request_id;
         return l_order;
     end;
@@ -87,7 +145,7 @@ create or replace package body office_mfcs_payload_pkg as
 
         select max(mfcs_sku_no)
           into l_sku
-          from office_mfcs_entity_map
+          from entity_map
          where source_system = l_source_system
            and source_style_ref = l_source_style_ref
            and source_variant_ref = p_source_variant_ref;
@@ -120,13 +178,13 @@ create or replace package body office_mfcs_payload_pkg as
         p_color       in varchar2
     ) is
         l_cost_zone_group_id number :=
-            to_number(office_mfcs_request_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000'));
+            to_number(config_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000'));
         l_parent_diff1 varchar2(80) :=
-            office_mfcs_request_pkg.get_config('MFCS_PARENT_DIFF1_GROUP', 'RMS_ALL_C');
+            config_pkg.get_config('MFCS_PARENT_DIFF1_GROUP', 'RMS_ALL_C');
         l_parent_diff2 varchar2(80) :=
-            office_mfcs_request_pkg.get_config('MFCS_PARENT_DIFF2_GROUP', 'ALL');
+            config_pkg.get_config('MFCS_PARENT_DIFF2_GROUP', 'ALL');
         l_store_order_multiple varchar2(1) :=
-            office_mfcs_request_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E');
+            config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E');
         l_item json_object_t := json_object_t();
     begin
         l_item.put('item', p_style);
@@ -171,9 +229,9 @@ create or replace package body office_mfcs_payload_pkg as
         p_color       in varchar2
     ) is
         l_cost_zone_group_id number :=
-            to_number(office_mfcs_request_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000'));
+            to_number(config_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000'));
         l_store_order_multiple varchar2(1) :=
-            office_mfcs_request_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E');
+            config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E');
         l_item json_object_t;
         l_sku varchar2(30);
     begin
@@ -297,7 +355,7 @@ create or replace package body office_mfcs_payload_pkg as
         l_source_ref varchar2(120);
         l_color varchar2(10);
         l_cost_zone_group_id number :=
-            to_number(office_mfcs_request_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000'));
+            to_number(config_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000'));
         l_root json_object_t := json_object_t();
         l_items json_array_t := json_array_t();
     begin
@@ -335,11 +393,11 @@ create or replace package body office_mfcs_payload_pkg as
         l_country_node.put('originCountry', p_country);
         l_country_node.put('primaryCountryInd', 'Y');
         l_country_node.put('unitCost', p_cost);
-        l_country_node.put('defaultUop', office_mfcs_request_pkg.get_config('MFCS_DEFAULT_UOP', 'EA'));
-        l_country_node.put('costUom', office_mfcs_request_pkg.get_config('MFCS_COST_UOM', 'EA'));
-        l_country_node.put('supplierPackSize', to_number(office_mfcs_request_pkg.get_config('MFCS_SUPPLIER_PACK_SIZE', '1')));
-        l_country_node.put('innerPackSize', to_number(office_mfcs_request_pkg.get_config('MFCS_INNER_PACK_SIZE', '1')));
-        l_country_node.put('purchaseType', to_number(office_mfcs_request_pkg.get_config('MFCS_PURCHASE_TYPE', '0')));
+        l_country_node.put('defaultUop', config_pkg.get_config('MFCS_DEFAULT_UOP', 'EA'));
+        l_country_node.put('costUom', config_pkg.get_config('MFCS_COST_UOM', 'EA'));
+        l_country_node.put('supplierPackSize', to_number(config_pkg.get_config('MFCS_SUPPLIER_PACK_SIZE', '1')));
+        l_country_node.put('innerPackSize', to_number(config_pkg.get_config('MFCS_INNER_PACK_SIZE', '1')));
+        l_country_node.put('purchaseType', to_number(config_pkg.get_config('MFCS_PURCHASE_TYPE', '0')));
         l_countries := json_array_t();
         l_countries.append(l_country_node);
 
@@ -424,7 +482,7 @@ create or replace package body office_mfcs_payload_pkg as
         l_manufacturers json_array_t;
         l_supplier number;
         l_manufacturer_country varchar2(3) :=
-            office_mfcs_request_pkg.get_config('MFCS_MANUFACTURER_COUNTRY', 'VN');
+            config_pkg.get_config('MFCS_MANUFACTURER_COUNTRY', 'VN');
 
         procedure append_item(p_item in varchar2) is
         begin
@@ -506,18 +564,18 @@ create or replace package body office_mfcs_payload_pkg as
         l_delivery number;
         l_hierarchy_value number;
         l_hierarchy_level varchar2(2) :=
-            office_mfcs_request_pkg.get_config('MFCS_LOCATION_HIERARCHY_LEVEL', 'CH');
+            config_pkg.get_config('MFCS_LOCATION_HIERARCHY_LEVEL', 'CH');
         l_store_order_multiple varchar2(1) :=
-            office_mfcs_request_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E');
+            config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E');
         l_taxable_ind varchar2(1) :=
-            office_mfcs_request_pkg.get_config('MFCS_TAXABLE_IND', 'Y');
+            config_pkg.get_config('MFCS_TAXABLE_IND', 'Y');
         l_sku varchar2(30);
     begin
         select json_value(l_payload, '$.DELIVERY_LOC' returning number)
           into l_delivery from dual;
         l_hierarchy_value := coalesce(
             l_delivery,
-            to_number(office_mfcs_request_pkg.get_config('MFCS_LOCATION_HIERARCHY_VALUE', '1'))
+            to_number(config_pkg.get_config('MFCS_LOCATION_HIERARCHY_VALUE', '1'))
         );
         for v in (
             select source_variant_ref, sku_id
@@ -554,7 +612,7 @@ create or replace package body office_mfcs_payload_pkg as
         l_items json_array_t := json_array_t();
         l_item json_object_t;
         l_store_order_multiple varchar2(1) :=
-            office_mfcs_request_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E');
+            config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E');
         l_source_ref varchar2(120);
         l_sku varchar2(30);
     begin
@@ -627,7 +685,7 @@ create or replace package body office_mfcs_payload_pkg as
     begin
         l_root.put('supplier', number_value(l_payload, 'SUPPLIER'));
         l_root.put('quantity', 1);
-        l_root.put('expiryDays', to_number(office_mfcs_request_pkg.get_config('MFCS_ORDER_RESERVATION_DAYS_UNTIL_EXPIRY', '1')));
+        l_root.put('expiryDays', to_number(config_pkg.get_config('MFCS_ORDER_RESERVATION_DAYS_UNTIL_EXPIRY', '1')));
         return l_root.to_clob;
     end;
 
@@ -659,9 +717,9 @@ create or replace package body office_mfcs_payload_pkg as
     begin
         l_delivery := to_char(optional_number(p_payload, 'DELIVERY_LOC'));
         if l_delivery is not null then
-            l_location := office_mfcs_request_pkg.get_config('MAP.ORDER_LOCATION.' || l_delivery, l_delivery);
+            l_location := config_pkg.get_config('MAP.ORDER_LOCATION.' || l_delivery, l_delivery);
         else
-            l_location := office_mfcs_request_pkg.get_config('MFCS_ORDER_DEFAULT_LOCATION', null);
+            l_location := config_pkg.get_config('MFCS_ORDER_DEFAULT_LOCATION', null);
         end if;
         return to_number(l_location);
     end;
@@ -676,13 +734,13 @@ create or replace package body office_mfcs_payload_pkg as
         l_sku varchar2(30);
         l_operation varchar2(30);
         l_order_location number := order_location(l_payload);
-        l_location_type varchar2(1) := office_mfcs_request_pkg.get_config('MFCS_ORDER_LOCATION_TYPE', 'W');
+        l_location_type varchar2(1) := config_pkg.get_config('MFCS_ORDER_LOCATION_TYPE', 'W');
         l_written_date varchar2(10) := substr(coalesce(optional_string(l_payload, 'WRITTEN_DATE'), to_char(sysdate, 'YYYY-MM-DD')), 1, 10);
         l_import_country varchar2(3) := coalesce(
             optional_string(l_payload, 'IMPORT_COUNTRY'),
-            office_mfcs_request_pkg.get_config('MFCS_ORDER_DEFAULT_IMPORT_COUNTRY', string_value(l_payload, 'ORIGIN_COUNTRY'))
+            config_pkg.get_config('MFCS_ORDER_DEFAULT_IMPORT_COUNTRY', string_value(l_payload, 'ORIGIN_COUNTRY'))
         );
-        l_terms varchar2(15) := coalesce(optional_string(l_payload, 'TERMS'), office_mfcs_request_pkg.get_config('MFCS_ORDER_DEFAULT_TERMS', null));
+        l_terms varchar2(15) := coalesce(optional_string(l_payload, 'TERMS'), config_pkg.get_config('MFCS_ORDER_DEFAULT_TERMS', null));
     begin
         select json_value(l_payload, '$.OPERATION_NAME' returning varchar2(30)) into l_operation from dual;
         l_order.put('orderNo', to_number(request_order(p_action_request_id)));
@@ -699,25 +757,25 @@ create or replace package body office_mfcs_payload_pkg as
         l_order.put('earliestShipDate', string_value(l_payload, 'EARLIEST_SHIP_DATE'));
         l_order.put('latestShipDate', string_value(l_payload, 'LATEST_SHIP_DATE'));
         l_order.put('dept', number_value(l_payload, 'DEPARTMENT'));
-        l_order.put('status', office_mfcs_request_pkg.get_config('MFCS_ORDER_STATUS', 'A'));
+        l_order.put('status', config_pkg.get_config('MFCS_ORDER_STATUS', 'A'));
         l_order.put('exchangeRate', coalesce(optional_number(l_payload, 'ORDER_EXCHANGE_RATE'), 1));
-        l_order.put('includeOnOrderInd', office_mfcs_request_pkg.get_config('MFCS_INCLUDE_ON_ORDER_IND', 'Y'));
+        l_order.put('includeOnOrderInd', config_pkg.get_config('MFCS_INCLUDE_ON_ORDER_IND', 'Y'));
         l_order.put('writtenDate', l_written_date);
-        l_order.put('origin', office_mfcs_request_pkg.get_config('MFCS_ORDER_ORIGIN', '2'));
-        l_order.put('ediPoInd', office_mfcs_request_pkg.get_config('MFCS_EDI_PO_IND', 'N'));
-        l_order.put('preMarkInd', office_mfcs_request_pkg.get_config('MFCS_PRE_MARK_IND', 'N'));
-        l_order.put('approvedBy', office_mfcs_mapping_pkg.user_id(l_payload));
-        l_order.put('commentDesc', coalesce(optional_string(l_payload, 'ORDER_AMEND_MSG'), optional_string(l_payload, 'SPECIAL_INSTRUCTION'), office_mfcs_mapping_pkg.source_order_ref(l_payload)));
+        l_order.put('origin', config_pkg.get_config('MFCS_ORDER_ORIGIN', '2'));
+        l_order.put('ediPoInd', config_pkg.get_config('MFCS_EDI_PO_IND', 'N'));
+        l_order.put('preMarkInd', config_pkg.get_config('MFCS_PRE_MARK_IND', 'N'));
+        l_order.put('approvedBy', user_id(l_payload));
+        l_order.put('commentDesc', coalesce(optional_string(l_payload, 'ORDER_AMEND_MSG'), optional_string(l_payload, 'SPECIAL_INSTRUCTION'), source_order_ref(l_payload)));
         l_order.put('dataLoadingDestination', 'RMS');
         l_order.put('importCountry', l_import_country);
-        l_order.put('orderType', office_mfcs_request_pkg.get_config('MFCS_ORDER_TYPE', 'N/B'));
+        l_order.put('orderType', config_pkg.get_config('MFCS_ORDER_TYPE', 'N/B'));
         if optional_string(l_payload, 'PO_TYPE') is not null then
             l_order.put('purchaseOrderType', optional_string(l_payload, 'PO_TYPE'));
         end if;
         l_order.put('location', l_order_location);
         l_order.put('locationType', l_location_type);
-        l_order.put('qualityControlInd', office_mfcs_request_pkg.get_config('MFCS_QUALITY_CONTROL_IND', 'N'));
-        l_order.put('freightTerms', office_mfcs_request_pkg.get_config('MFCS_FREIGHT_TERMS', 'PREPAID'));
+        l_order.put('qualityControlInd', config_pkg.get_config('MFCS_QUALITY_CONTROL_IND', 'N'));
+        l_order.put('freightTerms', config_pkg.get_config('MFCS_FREIGHT_TERMS', 'PREPAID'));
 
         for v in (
             select source_variant_ref, sku_id, sku_qty
@@ -734,7 +792,7 @@ create or replace package body office_mfcs_payload_pkg as
             l_detail.put('locationType', l_location_type);
             l_detail.put('unitCost', number_value(l_payload, 'UNIT_COST'));
             l_detail.put('originCountry', string_value(l_payload, 'ORIGIN_COUNTRY'));
-            l_detail.put('supplierPackSize', to_number(office_mfcs_request_pkg.get_config('MFCS_SUPPLIER_PACK_SIZE', '1')));
+            l_detail.put('supplierPackSize', to_number(config_pkg.get_config('MFCS_SUPPLIER_PACK_SIZE', '1')));
             l_detail.put('quantityOrdered', v.sku_qty);
             l_detail.put('earliestShipDate', string_value(l_payload, 'EARLIEST_SHIP_DATE'));
             l_detail.put('latestShipDate', string_value(l_payload, 'LATEST_SHIP_DATE'));
@@ -770,9 +828,7 @@ create or replace package body office_mfcs_payload_pkg as
             else raise_application_error(-20820, 'Unsupported public mapper: ' || p_mapper_name);
         end case;
     end;
-end office_mfcs_payload_pkg;
+end payload_pkg;
 /
 
 show errors
-
-prompt OFFICE MFCS MFCS payload mapper package created

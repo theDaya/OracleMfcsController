@@ -53,7 +53,7 @@ export default function MasterDataTab({ masterData, reloadMasterData }) {
       </div>
 
       <p className="explain">
-        Cached locally in <code>OFFICE_MFCS_MASTER_DATA</code> so the entry form can offer dropdowns
+        Cached locally in <code>MASTER_DATA</code> so the entry form can offer dropdowns
         without a call per keystroke. Each row records where it came from.
       </p>
 
@@ -63,7 +63,7 @@ export default function MasterDataTab({ masterData, reloadMasterData }) {
         <div className="banner error">
           <strong>MFCS rejected the bearer token (HTTP 401).</strong> The stored token has most likely
           expired — they last one hour. Re-run <em>Get OAuth Token</em> in the Postman collection and
-          apply the <code>MERGE</code> it prints to <code>OFFICE_MFCS_SECRET</code>, then refresh again.
+          apply the <code>MERGE</code> it prints to <code>SECRET</code>, then refresh again.
           Nothing was cached from this attempt.
         </div>
       )}

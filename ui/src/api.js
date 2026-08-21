@@ -1,4 +1,4 @@
-// All calls go through the Vite proxy at /api -> ORDS /ords/<schema>/office-mfcs/v1.
+// All calls go through the Vite proxy at /api -> ORDS /ords/<schema>/mfcs/v1.
 
 async function call(path, options = {}) {
   const res = await fetch(`/api${path}`, {

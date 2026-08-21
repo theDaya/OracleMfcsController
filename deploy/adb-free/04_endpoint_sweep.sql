@@ -1,5 +1,5 @@
 set define off
--- Run as OFFICE_MFCS. READ-ONLY sweep of candidate master-data endpoints.
+-- Run as MFCS_INTEGRATION. READ-ONLY sweep of candidate master-data endpoints.
 -- Resolves which GET paths this tenant actually exposes, so the Postman
 -- collection's "candidate" list can be reduced to facts.
 --
@@ -18,7 +18,7 @@ declare
         l_v varchar2(4000);
     begin
         select dbms_lob.substr(config_value, 4000, 1) into l_v
-          from office_mfcs_config
+          from config
          where config_key = p_key and environment = 'DEFAULT' and enabled_ind = 'Y';
         return l_v;
     exception
@@ -63,7 +63,7 @@ declare
 begin
     l_ref := cfg('MFCS_BEARER_TOKEN_REF', 'MFCS_BEARER_TOKEN');
     select dbms_lob.substr(secret_value, 32767, 1) into l_token
-      from office_mfcs_secret where secret_ref = l_ref;
+      from secret where secret_ref = l_ref;
     l_token := trim(l_token);
     if lower(substr(l_token, 1, 7)) = 'bearer ' then
         l_token := trim(substr(l_token, 8));

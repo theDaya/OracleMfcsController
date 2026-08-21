@@ -35,7 +35,7 @@ short-lived bearer token in the database.
    against the integration schema and the controller picks the token up on its next call.
 
 The client secret never leaves Postman. The database only ever holds `MFCS_BEARER_TOKEN` in
-`OFFICE_MFCS_SECRET`, which is exactly what `MFCS_AUTH_MODE = STATIC_BEARER` expects.
+`SECRET`, which is exactly what `MFCS_AUTH_MODE = STATIC_BEARER` expects.
 
 The collection pre-request script warns in the console once the stored token has expired, rather
 than letting you chase a confusing 401.
@@ -92,7 +92,7 @@ assuming a viewer built on them shows everything in the tenant.
 
 `xCorrelationId` on the status endpoint must be a **query parameter**. Sending it only as a header
 returns HTTP 400 `Query Parameter xCorrelationId is mandatory`. The bridge already does this
-correctly in `office_mfcs_client_pkg.correlation_status`.
+correctly in `client_pkg.correlation_status`.
 
 ## Running the full chain
 

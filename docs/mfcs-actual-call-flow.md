@@ -16,7 +16,7 @@ The current deployed route is:
 - `MFCS_CLIENT_MODE = ACTUAL_MFCS`
 - `MFCS_AUTH_MODE = STATIC_BEARER`
 - `MFCS_BASE_URL = https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs`
-- Bearer token stored externally in `OFFICE_MFCS_SECRET` under config ref `MFCS_BEARER_TOKEN_REF`
+- Bearer token stored externally in `SECRET` under config ref `MFCS_BEARER_TOKEN_REF`
 - Item locations disabled by default with `FEATURE_ITEM_LOCATIONS_YN = N`
 - Initial retail disabled by default with `FEATURE_INITIAL_RETAIL_YN = N`
 - Purchase-order verification retry enabled with `MFCS_ORDER_VERIFY_RETRY_COUNT = 12` and `MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS = 10`
@@ -30,7 +30,7 @@ Item locations are disabled because the item-location create schema is now known
 
 ## Integration Payload Received
 
-The integration layer receives the PLM/Office-style request through `office_mfcs_api_pkg.submit_transaction` or `POST /office-mfcs/v1/transactions`.
+The integration layer receives the PLM/Office-style request through `api_pkg.submit_transaction` or `POST /mfcs/v1/transactions`.
 
 ```jsonc
 {
@@ -104,7 +104,7 @@ The orchestrator runs these steps for `CREATE_STYLE`:
 
 ## Step 20: Reserve Item Numbers
 
-The configured reservation chunk size is `1`, so the integration calls MFCS once for the parent and once per child SKU. The response is persisted to `OFFICE_MFCS_ENTITY_MAP`.
+The configured reservation chunk size is `1`, so the integration calls MFCS once for the parent and once per child SKU. The response is persisted to `ENTITY_MAP`.
 
 ```jsonc
 // POST /MerchIntegrations/services/item/itemNumbers/reserve
@@ -603,7 +603,7 @@ The purchase-order endpoint names and payload fields follow Oracle's published P
 
 ## Step 90: Reserve Order Number
 
-The order number is reserved before the purchase-order create call, then stored in `OFFICE_MFCS_ENTITY_MAP`.
+The order number is reserved before the purchase-order create call, then stored in `ENTITY_MAP`.
 
 ```jsonc
 // POST /MerchIntegrations/services/purchaseOrder/preIssuedOrderNumber/create
@@ -789,23 +789,23 @@ For every request, inspect:
 
 ```sql
 select *
-  from office_mfcs_request
+  from request
  where action_request_id = :action_request_id;
 
 select *
-  from office_mfcs_step
+  from step
  where action_request_id = :action_request_id
  order by step_sequence;
 
 select *
-  from office_mfcs_attempt
+  from attempt
  where action_request_id = :action_request_id
  order by attempt_id;
 
 select *
-  from office_mfcs_event_log
+  from event_log
  where action_request_id = :action_request_id
  order by event_id;
 ```
 
-`OFFICE_MFCS_ATTEMPT` contains the outbound request payload, HTTP status, response payload, endpoint, method, attempt number, and correlation ID. `OFFICE_MFCS_EVENT_LOG` is autonomous and records progress even when a downstream step fails.
+`ATTEMPT` contains the outbound request payload, HTTP status, response payload, endpoint, method, attempt number, and correlation ID. `EVENT_LOG` is autonomous and records progress even when a downstream step fails.

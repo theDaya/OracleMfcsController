@@ -10,13 +10,13 @@ declare
     l_source_ref varchar2(120) :=
         'Dayalan all ' || to_char(systimestamp, 'YYYY-MM-DD HH24:MI:SS.FF3');
 begin
-    update office_mfcs_config
+    update config
        set config_value = 'ACTUAL_MFCS',
            updated_at = systimestamp
      where environment = 'DEFAULT'
        and config_key = 'MFCS_CLIENT_MODE';
 
-    update office_mfcs_config
+    update config
        set config_value = 'N',
            updated_at = systimestamp
      where environment = 'DEFAULT'
@@ -61,7 +61,7 @@ begin
         || '"ORDER_EXCHANGE_RATE":1'
         || '}';
 
-    office_mfcs_api_pkg.submit_transaction(l_payload, l_http, l_response);
+    api_pkg.submit_transaction(l_payload, l_http, l_response);
 
     dbms_output.put_line('ACTION_REQUEST_ID=' || l_action_request_id);
     dbms_output.put_line('HTTP_STATUS=' || l_http);

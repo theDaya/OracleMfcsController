@@ -17,10 +17,10 @@ prompt Creating OFFICE MFCS master-data cache
 declare
     l_exists number;
 begin
-    select count(*) into l_exists from user_tables where table_name = 'OFFICE_MFCS_MASTER_DATA';
+    select count(*) into l_exists from user_tables where table_name = 'MASTER_DATA';
     if l_exists = 0 then
         execute immediate q'[
-            create table office_mfcs_master_data (
+            create table master_data (
                 data_type    varchar2(40)  not null,
                 data_code    varchar2(120) not null,
                 parent_code  varchar2(120) default '~' not null,
@@ -30,9 +30,9 @@ begin
                 refreshed_at timestamp with time zone default systimestamp not null
             )
         ]';
-        execute immediate 'alter table office_mfcs_master_data add constraint office_mfcs_master_data_pk '
+        execute immediate 'alter table master_data add constraint master_data_pk '
                        || 'primary key (data_type, data_code, parent_code)';
-        execute immediate 'create index office_mfcs_master_data_ix1 on office_mfcs_master_data (data_type, parent_code)';
+        execute immediate 'create index master_data_ix1 on master_data (data_type, parent_code)';
     end if;
 end;
 /
@@ -40,10 +40,10 @@ end;
 declare
     l_exists number;
 begin
-    select count(*) into l_exists from user_tables where table_name = 'OFFICE_MFCS_MASTER_REFRESH';
+    select count(*) into l_exists from user_tables where table_name = 'MASTER_REFRESH';
     if l_exists = 0 then
         execute immediate q'[
-            create table office_mfcs_master_refresh (
+            create table master_refresh (
                 data_type    varchar2(40) not null,
                 source       varchar2(200),
                 http_status  number,
@@ -53,7 +53,7 @@ begin
                 completed_at timestamp with time zone
             )
         ]';
-        execute immediate 'alter table office_mfcs_master_refresh add constraint office_mfcs_master_refresh_pk '
+        execute immediate 'alter table master_refresh add constraint master_refresh_pk '
                        || 'primary key (data_type)';
     end if;
 end;

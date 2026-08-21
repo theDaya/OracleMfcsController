@@ -35,7 +35,7 @@ begin
         || '"SKU_SIZE":"8","SKU_WIDTH":"ALL","SKU_QTY":1,"SKU_ID":null}'
         || ']}';
 
-    office_mfcs_api_pkg.submit_transaction(l_payload, l_http, l_response);
+    api_pkg.submit_transaction(l_payload, l_http, l_response);
 
     dbms_output.put_line('ACTION_REQUEST_ID=' || l_action_request_id);
     dbms_output.put_line('HTTP_STATUS=' || l_http);

@@ -1,5 +1,5 @@
 -- Run as ADMIN.
--- Allows APEX_WEB_SERVICE calls from OFFICE_MFCS out to the MFCS service host
+-- Allows APEX_WEB_SERVICE calls from MFCS_INTEGRATION out to the MFCS service host
 -- and the IDCS identity domain that issues the bearer token.
 --
 -- These are two different hosts and both are required:
@@ -27,7 +27,7 @@ begin
             upper_port => 443,
             ace => xs$ace_type(
                 privilege_list => xs$name_list('connect', 'http'),
-                principal_name => 'OFFICE_MFCS',
+                principal_name => 'MFCS_INTEGRATION',
                 principal_type => xs_acl.ptype_db
             )
         );
@@ -37,7 +37,7 @@ begin
             host => l_hosts(i),
             ace => xs$ace_type(
                 privilege_list => xs$name_list('resolve'),
-                principal_name => 'OFFICE_MFCS',
+                principal_name => 'MFCS_INTEGRATION',
                 principal_type => xs_acl.ptype_db
             )
         );
@@ -56,5 +56,5 @@ col principal for a14
 col privilege for a10
 select host, lower_port, upper_port, principal, privilege, grant_type
   from dba_host_aces
- where principal = 'OFFICE_MFCS'
+ where principal = 'MFCS_INTEGRATION'
  order by host, privilege;

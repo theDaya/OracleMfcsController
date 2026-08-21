@@ -1,4 +1,4 @@
--- Run as OFFICE_MFCS.
+-- Run as MFCS_INTEGRATION.
 -- Proves DNS resolution, the network ACL and TLS trust are all working, without
 -- needing a bearer token. An HTTP 401 is a PASS here: it means the request
 -- reached MFCS and was rejected on credentials, not on plumbing.
@@ -38,14 +38,14 @@ declare
     end;
 begin
     select dbms_lob.substr(config_value, 4000, 1) into l_url
-      from office_mfcs_config
+      from config
      where config_key = 'MFCS_BASE_URL' and environment = 'DEFAULT';
 
     probe('MFCS', rtrim(l_url, '/')
         || '/MerchIntegrations/services/administration/operations/restService/status');
 
     select dbms_lob.substr(config_value, 4000, 1) into l_url
-      from office_mfcs_config
+      from config
      where config_key = 'MFCS_TOKEN_URL' and environment = 'DEFAULT';
 
     probe('IDCS', l_url);

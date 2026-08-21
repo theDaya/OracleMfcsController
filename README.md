@@ -12,9 +12,14 @@ The approval workflow and APEX user interface are out of scope.
 
 ## Layout
 
+Everything lives in one schema, `MFCS_INTEGRATION`. Objects inside it carry no
+prefix — the schema name already says what they are.
+
 | Path | What it is |
 | --- | --- |
-| `database/` | Tables, config, packages and ORDS module — the integration layer |
+| `database/10_tables/` | Tables, constraints, config seed |
+| `database/20_packages/` | One file per package, numbered in dependency order |
+| `database/30_ords/` | ORDS module and handlers |
 | `deploy/adb-free/` | Scripts to install and verify against a local adb-free container |
 | `docs/` | The live call flow, plus the tenant OpenAPI spec |
 | `postman/` | Collection for calling MFCS by hand and issuing bearer tokens |
@@ -29,9 +34,9 @@ Run as the schema owner that will expose the ORDS module:
 @deploy/adb-free/install.sql
 ```
 
-That script encodes the correct order. If you install by hand, note that
-`013_office_mfcs_payload_pkg.sql` must load **after** the specs in `010` but **before** the bodies in
-`011`, because `office_mfcs_mapping_pkg` calls `office_mfcs_payload_pkg.build_request` statically.
+That script encodes the correct order. Each package is a single file holding its
+spec and body, so a package must be preceded by everything its body calls — the
+numbering in `20_packages/` is that dependency order, not decoration.
 
 For a local adb-free container, run `deploy/adb-free/00_create_schema.sql` and
 `01_network_acl.sql` as `ADMIN` first. See `deploy/adb-free/` for the full sequence including
@@ -51,23 +56,47 @@ Do not grant or use `UTL_HTTP`; this implementation uses `APEX_WEB_SERVICE`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/office-mfcs/v1/transactions` | Submit a transaction |
-| `POST` | `/office-mfcs/v1/transactions/validate` | Validate without executing |
-| `POST` | `/office-mfcs/v1/transactions/preview` | Build the full MFCS call plan without sending |
-| `GET` | `/office-mfcs/v1/transactions/{actionRequestId}` | Request status |
-| `POST` | `/office-mfcs/v1/transactions/{actionRequestId}/resume` | Resume a partial request |
-| `GET` | `/office-mfcs/v1/reference-data` | Config-driven reference data for the UI |
-| `GET` | `/office-mfcs/v1/requests` | Recent requests |
-| `GET` | `/office-mfcs/v1/styles` | List styles live from MFCS |
-| `GET` | `/office-mfcs/v1/styles/{item}` | One item |
-| `GET` | `/office-mfcs/v1/orders` | List orders live from MFCS |
-| `GET` | `/office-mfcs/v1/orders/{orderNo}` | One order, enriched with parent style and display sizes |
-| `GET` | `/office-mfcs/v1/master-data` | Cached foundation data |
-| `POST` | `/office-mfcs/v1/master-data` | Refresh the cache from MFCS |
+| `POST` | `/mfcs/v1/transactions` | Submit a transaction |
+| `POST` | `/mfcs/v1/transactions/validate` | Validate without executing |
+| `POST` | `/mfcs/v1/transactions/preview` | Build the full MFCS call plan without sending |
+| `GET` | `/mfcs/v1/transactions/{actionRequestId}` | Request status |
+| `POST` | `/mfcs/v1/transactions/{actionRequestId}/resume` | Resume a partial request |
+| `GET` | `/mfcs/v1/reference-data` | Config-driven reference data for the UI |
+| `GET` | `/mfcs/v1/requests` | Recent requests |
+| `GET` | `/mfcs/v1/styles` | List styles live from MFCS |
+| `GET` | `/mfcs/v1/styles/{item}` | One item |
+| `GET` | `/mfcs/v1/orders` | List orders live from MFCS |
+| `GET` | `/mfcs/v1/orders/{orderNo}` | One order, enriched with parent style and display sizes |
+| `GET` | `/mfcs/v1/master-data` | Cached foundation data |
+| `POST` | `/mfcs/v1/master-data` | Refresh the cache from MFCS |
 
-The resume endpoint is protected by the ORDS privilege `office-mfcs-resume-support`, bound to role
-`office-mfcs-integration-support`. Normal callers retry by resending the original payload with the same
+The resume endpoint is protected by the ORDS privilege `mfcs-resume-support`, bound to role
+`mfcs-integration-support`. Normal callers retry by resending the original payload with the same
 `ACTION_REQUEST_ID`.
+
+## Packages
+
+| Package | Responsibility |
+| --- | --- |
+| `config_pkg` | Environment configuration lookup |
+| `event_pkg` | Autonomous event log |
+| `request_pkg` | Request lifecycle, idempotency hashing, generated identifiers |
+| `step_pkg` | Step graph state and attempt journalling |
+| `validation_pkg` | Field-level validation of the inbound document |
+| `payload_pkg` | Reads the Office document, builds each MFCS request body |
+| `client_pkg` | Sole owner of credentials and outbound HTTP |
+| `recovery_pkg` | Resolves ambiguous outcomes by correlation ID |
+| `orchestrator_pkg` | Step graph, endpoint resolution, execution |
+| `preview_pkg` | Builds the call plan without sending |
+| `master_pkg` | Foundation-data cache and refresh |
+| `browse_pkg` | Live style and order reads, order enrichment |
+| `api_pkg` | Public entry points behind the ORDS handlers |
+| `ords_util_pkg` | Chunked ORDS response output |
+
+`client_pkg` holds the only implementation of token resolution and outbound HTTP.
+`master_pkg` and `browse_pkg` call `client_pkg.get_json` rather than keeping copies —
+an earlier duplicate is what allowed a stale cached token to survive in one path and
+not another.
 
 ## Operations
 
@@ -92,7 +121,7 @@ Two rules that cost the most time when got wrong:
 
 ## Configuration
 
-Non-secret configuration lives in `OFFICE_MFCS_CONFIG`. Key entries:
+Non-secret configuration lives in `CONFIG`. Key entries:
 
 - `MFCS_BASE_URL` — the MFCS service host
 - `MFCS_TOKEN_URL` — the IDCS identity domain (a **different** host)
@@ -111,8 +140,8 @@ hierarchy value has been confirmed.
 
 ## Credentials
 
-Secrets are never stored in `OFFICE_MFCS_CONFIG`. `OFFICE_MFCS_CLIENT_PKG.get_secret` reads
-`OFFICE_MFCS_SECRET`, falling back to `SYS_CONTEXT('OFFICE_MFCS_CTX', ...)`.
+Secrets are never stored in `CONFIG`. `CLIENT_PKG.get_secret` reads
+`SECRET`, falling back to `SYS_CONTEXT('MFCS_INTEGRATION_CTX', ...)`.
 
 The intended flow keeps the client secret out of the database entirely: authenticate in Postman, then
 store only the short-lived bearer token. The collection in `postman/` prints a ready-to-run `MERGE`
@@ -148,7 +177,7 @@ Resources are singular, and one path serves both shapes: `foundation/item/{id}` 
 have never been seeded, and `since` / `before` does not change it. Only `item/brands`,
 `item/foundation/seasons` and `orghier` return foundation rows directly.
 
-`office_mfcs_master_pkg` therefore derives hierarchy, differentiator and supplier values from the item
+`master_pkg` therefore derives hierarchy, differentiator and supplier values from the item
 and order feeds instead, and records the source against every cached row so the difference stays
 visible rather than being quietly presented as authoritative master data.
 
@@ -156,24 +185,37 @@ visible rather than being quietly presented as authoritative master data.
 
 ```sql
 select action_request_id, operation_name, request_status, style_no, order_no, last_updated_at
-  from office_mfcs_request order by last_updated_at desc;
+  from request order by last_updated_at desc;
 
 select step_sequence, step_code, step_status, entity_identifier, last_error_code, last_error_message
-  from office_mfcs_step where action_request_id = :id order by step_sequence;
+  from step where action_request_id = :id order by step_sequence;
 
 select attempt_number, step_code, correlation_id, http_status, attempt_status, started_at, completed_at
-  from office_mfcs_attempt where action_request_id = :id order by attempt_id;
+  from attempt where action_request_id = :id order by attempt_id;
 
-select * from office_mfcs_event_log where action_request_id = :id order by event_id;
+select * from event_log where action_request_id = :id order by event_id;
 ```
 
-`OFFICE_MFCS_EVENT_LOG` is autonomous and records progress even when a step fails.
+`EVENT_LOG` is autonomous and records progress even when a step fails.
 
 ## Testing
 
-Test coverage is currently **live-only**. Removing the simulators also removed the offline PL/SQL suites
-that depended on `MFCS_CLIENT_MODE = MOCK`; rebuilding equivalent coverage against recorded fixtures is
-outstanding work.
+Tests run against the **real tenant**. Rather than simulating failures, the coverage
+suite makes MFCS itself reject a call by pointing one `MAP.*` entry at foundation data
+that does not exist, so the orchestrator meets a genuine 4xx.
+
+```sql
+@tests/resume_coverage_tests.sql
+```
+
+Twenty assertions across five scenarios: validation failure with no side effects, a
+mid-chain MFCS rejection, resume after correcting the configuration, idempotent replay,
+and a changed payload under an existing `ACTION_REQUEST_ID`. The load-bearing assertion
+is that a resume does **not** re-call steps that already succeeded.
+
+Because failures happen for real, a failed scenario leaves items in the tenant in
+Worksheet status and the resume scenario then approves them. That is deliberate — a
+resume cannot be proven without something real to resume — but it means dev tenant only.
 
 ```sql
 @tests/live_mfcs_create_style_smoke.sql
@@ -181,7 +223,7 @@ outstanding work.
 ```
 
 ```powershell
-.\tests\office_mfcs_ords_operation_smoke.ps1
+.\tests\ords_operation_smoke.ps1
 ```
 
 These create real records in the dev tenant. The `preview` endpoint and the UI's preview button are the

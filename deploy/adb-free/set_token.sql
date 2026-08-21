@@ -1,8 +1,8 @@
--- Run as OFFICE_MFCS. Loads a Postman-issued bearer token, and repairs the
+-- Run as MFCS_INTEGRATION. Loads a Postman-issued bearer token, and repairs the
 -- secret_ref if a previous load used the wrong one.
 --
 -- Usage:
---   sqlplus office_mfcs/<pw>@myatp_low @set_token.sql "<paste-token>"
+--   sqlplus mfcs_integration/<pw>@myatp_low @set_token.sql "<paste-token>"
 --
 -- The token may be pasted with or without a leading "Bearer ".
 --
@@ -21,7 +21,7 @@ declare
     l_other number;
     l_len   number;
 begin
-    l_ref := office_mfcs_request_pkg.get_config('MFCS_BEARER_TOKEN_REF', 'MFCS_BEARER_TOKEN');
+    l_ref := request_pkg.get_config('MFCS_BEARER_TOKEN_REF', 'MFCS_BEARER_TOKEN');
 
     if lower(substr(l_token, 1, 7)) = 'bearer ' then
         l_token := trim(substr(l_token, 8));
@@ -33,18 +33,18 @@ begin
 
     -- Repair: fold any row stored under a different ref into the configured one.
     select count(*) into l_other
-      from office_mfcs_secret
+      from secret
      where secret_ref <> l_ref
        and secret_ref not like 'MFCS_WALLET%';
 
     if l_other > 0 then
         dbms_output.put_line('Found ' || l_other || ' secret row(s) under an unexpected ref; removing.');
-        delete from office_mfcs_secret
+        delete from secret
          where secret_ref <> l_ref
            and secret_ref not like 'MFCS_WALLET%';
     end if;
 
-    merge into office_mfcs_secret s
+    merge into secret s
     using (select l_ref secret_ref, l_token secret_value from dual) x
     on (s.secret_ref = x.secret_ref)
     when matched then update set
@@ -56,7 +56,7 @@ begin
     commit;
 
     select dbms_lob.getlength(secret_value) into l_len
-      from office_mfcs_secret where secret_ref = l_ref;
+      from secret where secret_ref = l_ref;
 
     dbms_output.put_line('Stored under ref : ' || l_ref);
     dbms_output.put_line('Token length     : ' || l_len);
@@ -69,7 +69,7 @@ prompt Verifying against MFCS...
 declare
     l_status clob;
 begin
-    l_status := office_mfcs_master_pkg.token_status;
+    l_status := master_pkg.token_status;
     dbms_output.put_line(l_status);
 end;
 /

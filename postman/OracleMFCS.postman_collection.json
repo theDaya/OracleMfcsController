@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Oracle MFCS - Office Integration Bridge",
-    "description": "Live Oracle MFCS calls used by the Office integration bridge (OracleMfcsController).\n\nWrite payloads here are taken from requests that actually succeeded against the dev tenant (smoke runs DAYALAN-TEST-20260817164337108 and DAYALAN-ALL-20260821120647643), not from generic documentation. Read paths are split into confirmed and candidate - see folder 01.\n\n## Two hosts, two variables\n\n- `tokenUrl` - IDCS identity domain, issues the bearer token\n- `baseUrl` - MFCS service host, serves every MerchIntegrations path\n\nThey are different hosts. Only the token request uses `tokenUrl`.\n\n## Order of operations\n\nThe folders chain. Reserved item and order numbers are captured into collection variables automatically, so `Create Parent Style Item` already knows the number that `Reserve Item Number - Parent Style` just got.\n\nFull CREATE_ALL sequence: 00 auth -> 02 reserve x3 -> 03 create parent -> 04 parent sourcing -> 03 create children -> 04 child sourcing -> 04 countries of manufacture -> 05 UDAs -> 03 approve -> 07 reserve order -> 07 create PO -> 07 verify PO.\n\n## Credentials\n\nNothing secret is stored in this file. Put clientId/clientSecret in the environment. The token request prints a MERGE statement for OFFICE_MFCS_SECRET, so the database only ever holds the short-lived bearer token - never the client secret.",
+    "description": "Live Oracle MFCS calls used by the Office integration bridge (OracleMfcsController).\n\nWrite payloads here are taken from requests that actually succeeded against the dev tenant (smoke runs DAYALAN-TEST-20260817164337108 and DAYALAN-ALL-20260821120647643), not from generic documentation. Read paths are split into confirmed and candidate - see folder 01.\n\n## Two hosts, two variables\n\n- `tokenUrl` - IDCS identity domain, issues the bearer token\n- `baseUrl` - MFCS service host, serves every MerchIntegrations path\n\nThey are different hosts. Only the token request uses `tokenUrl`.\n\n## Order of operations\n\nThe folders chain. Reserved item and order numbers are captured into collection variables automatically, so `Create Parent Style Item` already knows the number that `Reserve Item Number - Parent Style` just got.\n\nFull CREATE_ALL sequence: 00 auth -> 02 reserve x3 -> 03 create parent -> 04 parent sourcing -> 03 create children -> 04 child sourcing -> 04 countries of manufacture -> 05 UDAs -> 03 approve -> 07 reserve order -> 07 create PO -> 07 verify PO.\n\n## Credentials\n\nNothing secret is stored in this file. Put clientId/clientSecret in the environment. The token request prints a MERGE statement for SECRET, so the database only ever holds the short-lived bearer token - never the client secret.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -372,7 +372,7 @@
                 "{{tokenUrl}}"
               ]
             },
-            "description": "OAuth2 client-credentials grant against the tenant IDCS domain.\n\nNote this host is DIFFERENT from the MFCS API host - `tokenUrl` is IDCS, `baseUrl` is the MFCS service. Both are collection variables.\n\nSet clientId and clientSecret in the environment first. On success the token is saved to `accessToken` (inherited by every other request) and a MERGE statement for OFFICE_MFCS_SECRET is written to the Postman console.",
+            "description": "OAuth2 client-credentials grant against the tenant IDCS domain.\n\nNote this host is DIFFERENT from the MFCS API host - `tokenUrl` is IDCS, `baseUrl` is the MFCS service. Both are collection variables.\n\nSet clientId and clientSecret in the environment first. On success the token is saved to `accessToken` (inherited by every other request) and a MERGE statement for SECRET is written to the Postman console.",
             "auth": {
               "type": "noauth"
             },
@@ -405,7 +405,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// Store the token and print the SQL to load it into OFFICE_MFCS_SECRET.",
+                  "// Store the token and print the SQL to load it into SECRET.",
                   "pm.test('Token issued', function () { pm.response.to.have.status(200); });",
                   "var body = pm.response.json();",
                   "var token = body.access_token;",
@@ -420,7 +420,7 @@
                   "// The controller reads this row in STATIC_BEARER mode (MFCS_BEARER_TOKEN_REF).",
                   "var ref = pm.collectionVariables.get('bearerTokenRef') || 'MFCS_BEARER_TOKEN';",
                   "var sql = [",
-                  "  'merge into office_mfcs_secret s',",
+                  "  'merge into secret s',",
                   "  'using (',",
                   "  \"    select '\" + ref + \"' secret_ref,\",",
                   "  \"           '\" + token.replace(/'/g, \"''\") + \"' secret_value\",",
@@ -764,7 +764,7 @@
                     }
                   ]
                 },
-                "description": "VERIFIED 200 against the tenant on 2026-08-21. Works with no filters at all, and with supplier / dept / status.\n\nThis is what makes an order browser possible - the by-number read alone would limit you to orders whose numbers you already hold in OFFICE_MFCS_ENTITY_MAP.\n\nSame publish-feed caveat as Search Items: rows carry `\"action\": \"INSERT\"`."
+                "description": "VERIFIED 200 against the tenant on 2026-08-21. Works with no filters at all, and with supplier / dept / status.\n\nThis is what makes an order browser possible - the by-number read alone would limit you to orders whose numbers you already hold in ENTITY_MAP.\n\nSame publish-feed caveat as Search Items: rows carry `\"action\": \"INSERT\"`."
               },
               "response": [],
               "event": [
@@ -2248,7 +2248,7 @@
     },
     {
       "name": "08 - Diagnostics & Recovery",
-      "description": "When a call times out ambiguously you cannot safely repeat an identifier-generating request - look the outcome up by correlation ID instead. This is what OFFICE_MFCS_RECOVERY_PKG does in the bridge.",
+      "description": "When a call times out ambiguously you cannot safely repeat an identifier-generating request - look the outcome up by correlation ID instead. This is what RECOVERY_PKG does in the bridge.",
       "item": [
         {
           "name": "REST Service Status by Correlation ID",
@@ -2288,7 +2288,7 @@
                 }
               ]
             },
-            "description": "Pass the X-Correlation-ID from the ambiguous call. Correlation IDs from live runs are in OFFICE_MFCS_ATTEMPT.CORRELATION_ID."
+            "description": "Pass the X-Correlation-ID from the ambiguous call. Correlation IDs from live runs are in ATTEMPT.CORRELATION_ID."
           },
           "response": [],
           "event": [

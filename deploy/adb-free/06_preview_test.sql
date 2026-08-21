@@ -22,7 +22,7 @@ declare
         l_c json_array_t;
         l_o json_object_t;
     begin
-        office_mfcs_preview_pkg.preview_transaction(p_payload, l_st, l_resp);
+        preview_pkg.preview_transaction(p_payload, l_st, l_resp);
         l_r := json_object_t.parse(l_resp);
         dbms_output.put_line('=========================================================');
         dbms_output.put_line(p_label || '   HTTP ' || l_st || '   VALID=' || l_r.get_string('VALID'));
@@ -42,7 +42,7 @@ declare
         end if;
     end;
 begin
-    select count(*) into l_before from office_mfcs_request;
+    select count(*) into l_before from request;
 
     l_payload := q'[{
       "ACTION_REQUEST_ID": "PREVIEW-TEST-1",
@@ -114,9 +114,9 @@ begin
     l_payload := q'[{"ACTION_REQUEST_ID":"PREVIEW-TEST-3","OPERATION_NAME":"CREATE_ALL","SOURCE_SYSTEM":"OFFICE_DEV"}]';
     run('CREATE_ALL (deliberately incomplete)', l_payload);
 
-    select count(*) into l_after from office_mfcs_request;
+    select count(*) into l_after from request;
     dbms_output.put_line('=========================================================');
-    dbms_output.put_line('office_mfcs_request rows before=' || l_before || ' after=' || l_after
+    dbms_output.put_line('request rows before=' || l_before || ' after=' || l_after
         || '  (must be equal - preview must leave no trace)');
 end;
 /

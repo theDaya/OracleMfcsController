@@ -1,8 +1,10 @@
 set define off
 
-prompt Creating OFFICE MFCS ORDS output utility
+-- Chunked ORDS response output.
 
-create or replace package office_mfcs_ords_util_pkg authid definer as
+prompt Creating ords_util_pkg
+
+create or replace package ords_util_pkg authid definer as
     -- Writes a CLOB to the ORDS response in chunks.
     --
     -- htp.prn takes a VARCHAR2, so passing a CLOB larger than 32767 bytes raises
@@ -14,12 +16,12 @@ create or replace package office_mfcs_ords_util_pkg authid definer as
 
     -- Same, for handlers that set an explicit HTTP status.
     procedure emit_json(p_body in clob, p_status in number);
-end office_mfcs_ords_util_pkg;
+end ords_util_pkg;
 /
 
 show errors
 
-create or replace package body office_mfcs_ords_util_pkg as
+create or replace package body ords_util_pkg as
     c_chunk constant pls_integer := 8000;
 
     procedure write_body(p_body in clob) is
@@ -51,9 +53,7 @@ create or replace package body office_mfcs_ords_util_pkg as
         owa_util.http_header_close;
         write_body(p_body);
     end;
-end office_mfcs_ords_util_pkg;
+end ords_util_pkg;
 /
 
 show errors
-
-prompt OFFICE MFCS ORDS output utility created
