@@ -790,33 +790,69 @@ Re-running the same request created nothing: the step read the style, found all 
 combinations present, recorded the mapping and moved on. That is the whole re-entrancy
 argument — a resume re-derives the gap from the tenant rather than replaying a stored payload.
 
-## MODIFY_STYLE: what the update services demand — live, 2026-08-22
+## The update services: what they demand — live, 2026-08-22
 
-Two failures found by running `MODIFY_STYLE` live for the first time. Both are the same shape:
-the create service defaults a column, the update service requires it, and the error names it.
-
-`PUT /items/update` with only descriptions changed:
+Found by running `MODIFY_STYLE` and `CREATE_ORDER` live for the first time. All the same shape: the
+create service defaults a column, the update service requires it, and the error names it exactly.
 
 ```json
 {"status":"ERROR","message":"Field must be entered.Field: STORE_ORD_MULT, ITEM: 100050355 returned by program unit CORESVC_ITEM.PROCESS_IM."}
-```
-
-`POST /item/suppliers/update`:
-
-```json
 {"status":"ERROR","message":"This column should not be null.Field: DIRECT_SHIP_IND, ITEM: 100050363, SUPPLIER: 700087 returned by program unit CORESVC_ITEM.PROCESS_IS."}
-```
-
-and, once `directShipInd` was supplied, the next one along:
-
-```json
 {"status":"ERROR","message":"This column should not be null.Field: INNER_NAME, ITEM: 100050363, SUPPLIER: 700087 returned by program unit CORESVC_ITEM.PROCESS_IS."}
 ```
 
-`storeOrderMultiple` and `directShipInd` are now sent on both paths. `INNER_NAME` is not yet
-handled — `MODIFY_STYLE` still stops at `CREATE_ITEM_SOURCING`. Expect the update services to
-keep asking for one more field at a time; they appear to want the whole supplier record, not a
-patch.
+`storeOrderMultiple` and `directShipInd` are now sent on both paths, and all three packaging names go
+together rather than one per failed round trip. The valid values are the tenant's own, from the code
+detail load: `INRN` (EA, INR, SCS, SPACK), `CASN` (CS, CT, BX, …), `PALN` (PAL, FLA). `EA` is used
+for the inner because the pack sizes here are 1.
+
+Country of manufacture is different — it is not a missing field but a service that cannot be
+replayed:
+
+```json
+{"status":"ERROR","message":"This item/supplier/manufacturing country already exists.ITEM: 100050398, SUPPLIER: 700087, COUNTRY: VN returned by program unit CORESVC_ITEM.PROCESS_ISMC."}
+```
+
+`countriesOfManufacture/update` takes the same body and is used for any style that already exists.
+
+## A transport error is not a failure — live, 2026-08-22
+
+`CREATE_PURCHASE_ORDER` raised `ORA-29273: HTTP request failed` and was recorded as FAILED. MFCS had
+created the order. The resume replayed the create and was told:
+
+```json
+{"status":"ERROR","message":"Order number 25011 already exists.","businessError":["Order number 25011 already exists."]}
+```
+
+A reserved order number burned, and a request reporting `PARTIALLY_COMPLETED` for an order that
+existed. The old classification matched the *word* "timeout" in the message, which `ORA-29273` does
+not contain. `client_pkg` now classifies on SQLCODE — 29273, 29276, 29259, 12535, 12570 — raises
+`-20952`, and lets `recovery_pkg` resolve the outcome by correlation ID. A call that never landed
+resolves to `NO_RECORD` and the step simply runs again.
+
+## The nightly batch window — live, 2026-08-22
+
+Writes stop with a plain HTTP 400 whose body is a business message:
+
+```json
+{"status":"ERROR","message":"Batch Running Indicator is ON.  Cannot execute operation while nightly batch is in progress."}
+```
+
+Unclassified this reads as a rejected payload. `client_pkg` matches it and raises `-20951` with a
+message saying to retry afterwards. If the coverage suite fails on that, wait — do not debug.
+
+## Full CREATE_ORDER, live — 2026-08-22
+
+Every step, in order, against style `100050398`:
+
+```
+VALIDATE_REQUEST, ENSURE_STYLE_SKUS, CREATE_ITEM_HIERARCHY, CREATE_ITEM_SOURCING,
+CREATE_ITEM_COUNTRIES_OF_MANUFACTURE, CREATE_ITEM_UDAS, CREATE_ITEM_LOCATIONS, APPROVE_ITEMS,
+RESERVE_ORDER_NUMBER, CREATE_PURCHASE_ORDER, VERIFY_PURCHASE_ORDER
+```
+
+HTTP 200, `COMPLETED`, order `25012`. The style write set runs before the order because an order is a
+statement about the style — its cost, country and supplier — not only about the order.
 
 ## Current Assumptions
 
@@ -852,6 +888,9 @@ These values are configurable and should be replaced with authoritative Office/M
 | `MFCS_SKU_VERIFY_RETRY_COUNT` | `6` | Newly approved children take a moment to read back. |
 | `MFCS_SKU_VERIFY_RETRY_SLEEP_SECONDS` | `5` | Sleep between read-backs after creating children. |
 | `MFCS_DIRECT_SHIP_IND` | `N` | Required by `suppliers/update`; observed as `N` on every item in the tenant. |
+| `MFCS_INNER_NAME` | `EA` | Required by `suppliers/update`; value from tenant code type `INRN`. |
+| `MFCS_CASE_NAME` | `CS` | Value from tenant code type `CASN`. |
+| `MFCS_PALLET_NAME` | `PAL` | Value from tenant code type `PALN`. |
 
 ## Logging Tables
 

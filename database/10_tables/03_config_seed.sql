@@ -28,6 +28,9 @@ using (
     select 'DEFAULT', 'MFCS_PURCHASE_TYPE', '0', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_MANUFACTURER_COUNTRY', 'VN', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_DIRECT_SHIP_IND', 'N', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_INNER_NAME', 'EA', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_CASE_NAME', 'CS', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_PALLET_NAME', 'PAL', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_LOCATION_HIERARCHY_LEVEL', 'W', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_LOCATION_HIERARCHY_VALUE', '19271', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_STORE_ORDER_MULTIPLE', 'E', 'Y' from dual union all
@@ -69,6 +72,7 @@ using (
     select 'DEFAULT', 'ENDPOINT.ITEM_SOURCING_CREATE', '/MerchIntegrations/services/item/suppliers/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_SOURCING_UPDATE', '/MerchIntegrations/services/item/suppliers/update', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE', '/MerchIntegrations/services/item/supplier/countriesOfManufacture/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_UPDATE', '/MerchIntegrations/services/item/supplier/countriesOfManufacture/update', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_UDAS_CREATE', '/MerchIntegrations/services/item/uda/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_UDAS_UPDATE', '/MerchIntegrations/services/item/uda/update', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_LOCATIONS_UPDATE', '/MerchIntegrations/services/item/locations/update', 'Y' from dual union all

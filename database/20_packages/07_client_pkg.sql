@@ -377,6 +377,15 @@ create or replace package body client_pkg as
         elsif l_http_status = 503 then
             step_pkg.complete_attempt(l_attempt_id, 'FAILED', l_http_status, l_response);
             raise_application_error(-20951, 'MFCS service unavailable at ' || p_endpoint_key);
+        elsif instr(lower(dbms_lob.substr(l_response, 4000, 1)), 'batch running indicator is on') > 0 then
+            -- The tenant's nightly batch. It arrives as a plain HTTP 400 with a
+            -- business message, so without this it reads as a rejected payload and
+            -- sends you looking for a bug in the request. It is the same condition
+            -- BATCH_WINDOW_ACTIVE_YN describes, except the tenant is saying so
+            -- itself, which beats a flag somebody has to remember to set.
+            step_pkg.complete_attempt(l_attempt_id, 'FAILED', l_http_status, l_response);
+            raise_application_error(-20951,
+                'MFCS is in its nightly batch window and is refusing writes. Retry afterwards.');
         else
             step_pkg.complete_attempt(l_attempt_id, 'FAILED', l_http_status, l_response);
             raise_application_error(-20950, 'MFCS returned HTTP ' || l_http_status || ' at ' || p_endpoint_key);
@@ -398,9 +407,26 @@ create or replace package body client_pkg as
                 raise;
             end if;
 
-            if instr(lower(sqlerrm), 'timeout') > 0 then
+            -- A transport failure has an *unknown* outcome, not a failed one.
+            -- Learned the expensive way: ORA-29273 was classified FAILED, but MFCS
+            -- had in fact created the purchase order. The resume then replayed the
+            -- create and was told the order number already existed - a reserved
+            -- number burned for nothing, and a request stuck at PARTIALLY_COMPLETED
+            -- while the order it claimed to have failed to place sat in the tenant.
+            --
+            -- Classify on SQLCODE, not on the wording of the message. The old test
+            -- matched only messages containing "timeout", which ORA-29273 does not.
+            -- Codes that never landed resolve to NO_RECORD and the step simply runs
+            -- again, so treating a connection error as unknown costs nothing.
+            if sqlcode in (-29273,   -- UTL_HTTP: HTTP request failed
+                           -29276,   -- UTL_HTTP: transfer timeout
+                           -29259,   -- UTL_HTTP: end-of-input reached
+                           -12535,   -- TNS: operation timed out
+                           -12570)   -- TNS: packet reader failure
+               or instr(lower(sqlerrm), 'timeout') > 0 then
                 step_pkg.complete_attempt(l_attempt_id, 'OUTCOME_UNKNOWN', null, '{"ERROR":"' || replace(sqlerrm, '"', '\"') || '"}');
-                raise_application_error(-20952, 'MFCS timeout after request was sent.');
+                raise_application_error(-20952,
+                    'MFCS transport failed after the request was sent; outcome unknown. ' || sqlerrm);
             end if;
 
             if l_attempt_id is not null then

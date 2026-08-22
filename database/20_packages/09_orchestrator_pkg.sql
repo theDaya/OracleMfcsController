@@ -346,6 +346,16 @@ create or replace package body orchestrator_pkg as
         end case;
     end;
 
+    -- Whether the operation writes to a style that already exists in MFCS.
+    --
+    -- Order operations belong here as much as MODIFY_STYLE does: they carry the full
+    -- style write set, so their item steps have to resolve to the update services.
+    -- CREATE_ALL does not, because it creates the style in the same request.
+    function targets_existing_style(p_operation in varchar2) return boolean is
+    begin
+        return p_operation in ('MODIFY_STYLE', 'CREATE_ORDER', 'MODIFY_ORDER');
+    end;
+
     function endpoint_for_step(p_step_code in varchar2, p_operation in varchar2) return varchar2 is
     begin
         case p_step_code
@@ -354,20 +364,27 @@ create or replace package body orchestrator_pkg as
             when 'CREATE_PARENT_ITEM_HIERARCHY' then return 'ENDPOINT.ITEMS_CREATE';
             when 'CREATE_CHILD_ITEM_HIERARCHY' then return 'ENDPOINT.ITEMS_CREATE';
             when 'CREATE_ITEM_HIERARCHY' then
-                if p_operation = 'MODIFY_STYLE' then
+                if targets_existing_style(p_operation) then
                     return 'ENDPOINT.ITEMS_UPDATE';
                 end if;
                 return 'ENDPOINT.ITEMS_CREATE';
             when 'CREATE_PARENT_ITEM_SOURCING' then return 'ENDPOINT.ITEM_SOURCING_CREATE';
             when 'CREATE_ITEM_SOURCING' then
-                if p_operation = 'MODIFY_STYLE' then return 'ENDPOINT.ITEM_SOURCING_UPDATE'; end if;
+                if targets_existing_style(p_operation) then return 'ENDPOINT.ITEM_SOURCING_UPDATE'; end if;
                 return 'ENDPOINT.ITEM_SOURCING_CREATE';
-            when 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE' then return 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE';
+            when 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE' then
+                -- Re-creating one is not a no-op, it is an error: "This
+                -- item/supplier/manufacturing country already exists ...
+                -- CORESVC_ITEM.PROCESS_ISMC". The update service takes the same body.
+                if targets_existing_style(p_operation) then
+                    return 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_UPDATE';
+                end if;
+                return 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE';
             when 'CREATE_ITEM_UDAS' then
-                if p_operation = 'MODIFY_STYLE' then return 'ENDPOINT.ITEM_UDAS_UPDATE'; end if;
+                if targets_existing_style(p_operation) then return 'ENDPOINT.ITEM_UDAS_UPDATE'; end if;
                 return 'ENDPOINT.ITEM_UDAS_CREATE';
             when 'CREATE_ITEM_LOCATIONS' then
-                if p_operation = 'MODIFY_STYLE' then return 'ENDPOINT.ITEM_LOCATIONS_UPDATE'; end if;
+                if targets_existing_style(p_operation) then return 'ENDPOINT.ITEM_LOCATIONS_UPDATE'; end if;
                 return 'ENDPOINT.ITEM_LOCATIONS_CREATE';
             when 'APPROVE_ITEMS' then return 'ENDPOINT.ITEM_APPROVE';
             when 'APPLY_INITIAL_RETAIL' then return 'ENDPOINT.INITIAL_RETAIL';
@@ -386,8 +403,10 @@ create or replace package body orchestrator_pkg as
             return 'GET';
         elsif p_step_code = 'APPROVE_ITEMS' then
             return 'PUT';
-        elsif p_operation = 'MODIFY_STYLE'
-              and p_step_code in ('CREATE_ITEM_HIERARCHY', 'CREATE_ITEM_SOURCING', 'CREATE_ITEM_UDAS', 'CREATE_ITEM_LOCATIONS', 'APPROVE_ITEMS') then
+        elsif targets_existing_style(p_operation)
+              and p_step_code in ('CREATE_ITEM_HIERARCHY', 'CREATE_ITEM_SOURCING',
+                                  'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE', 'CREATE_ITEM_UDAS',
+                                  'CREATE_ITEM_LOCATIONS', 'APPROVE_ITEMS') then
             return 'PUT';
         elsif p_step_code = 'CREATE_PURCHASE_ORDER' and p_operation = 'MODIFY_ORDER' then
             return 'PUT';

@@ -10,8 +10,9 @@ the `MFCS_CLIENT_MODE` switch were removed — if you find a reference to them, 
 | Area | State |
 | --- | --- |
 | `CREATE_STYLE`, `CREATE_ALL` | Proven end to end against the tenant |
-| `CREATE_ORDER`, `MODIFY_ORDER` | Produce correct payloads; **never executed live** |
-| `MODIFY_STYLE` | Run live 2026-08-22; reaches `CREATE_ITEM_SOURCING`, then stops on `INNER_NAME` |
+| `MODIFY_STYLE` | **Completed live 2026-08-22**, all seven steps |
+| `CREATE_ORDER` | **Completed live 2026-08-22**, all eleven steps, order 25012 created and verified |
+| `MODIFY_ORDER` | Same graph as `CREATE_ORDER` minus the number reservation; not yet completed live |
 | Missing-SKU generation | **Proven live 2026-08-22**: created two children under an existing style, verified by read-back |
 | Failure / resume paths | 20 assertions passing, fault-injected against the real tenant |
 | Console (`ui/`) | Build, Activity, Styles & orders, Master data, MFCS spec |
@@ -30,21 +31,35 @@ header shows remaining validity, and `GET /token-status` decodes it.
 
 ## Outstanding work, in the order I would take it
 
-### 1. Finish `MODIFY_STYLE` against the update services
+### 1. Complete `MODIFY_ORDER` live
 
-SKU generation is done and proven, and running it live is what exposed this. `MODIFY_STYLE` now
-gets as far as `CREATE_ITEM_SOURCING` and stops there.
+`MODIFY_STYLE` and `CREATE_ORDER` both complete end to end. `MODIFY_ORDER` runs the same graph as
+`CREATE_ORDER` without the number reservation, and its one live attempt stopped on the tenant's
+nightly batch window rather than on anything in the payload — so it is untested, not known-broken.
 
-The pattern is consistent: **the update services want the whole record, not a patch.** The create
-service defaults a column, the update service refuses without it, and the error names it exactly.
-Two are fixed — `STORE_ORD_MULT` on `items/update`, `DIRECT_SHIP_IND` on `suppliers/update`. The
-next one is `INNER_NAME`, and there is no reason to think it is the last.
+Run it once the batch window is clear. The open question is still the one you raised: when a colour
+changes on an existing order, does the old colour's line need explicit cancellation, or is replacing
+the detail lines enough?
 
-Rather than adding fields one failure at a time, the cheaper route is probably to read the item's
-existing supplier record through `itemDetail` and send it back with the changes applied. The read
-already carries `innerName`-adjacent fields the write is asking for.
+### 1a. Every operation now sends its whole write set
 
-Payloads and the exact error strings are in `docs/mfcs-actual-call-flow.md`.
+Worth stating because it is a design rule, not an implementation detail. `MODIFY_STYLE`,
+`CREATE_ORDER` and `MODIFY_ORDER` share one seven-step style sequence — SKU check, hierarchy,
+sourcing, country of manufacture, UDAs, ranging, approval — and the order operations place the order
+on top of it. Nothing is skipped for looking unchanged: the inbound document states what the style
+should be, not what changed, and MFCS answers a no-op write with SUCCESS, so an omission would be
+silent. Do not reintroduce conditional sending.
+
+Getting there fixed four things, each found by running it:
+
+- `items/update` refuses without `STORE_ORD_MULT`, even for a description-only change.
+- `suppliers/update` refuses without `DIRECT_SHIP_IND`, then `INNER_NAME`. All three packaging names
+  are now sent; the valid values are the tenant's own code types `INRN`, `CASN`, `PALN`.
+- `countriesOfManufacture/create` cannot be replayed — it answers an existing row with "already
+  exists". Existing styles use the `update` service.
+- `ORA-29273` was classified as a failure while MFCS had actually created the purchase order. A
+  transport error is an *unknown* outcome; `client_pkg` now classifies on SQLCODE and lets
+  `recovery_pkg` resolve it by correlation ID.
 
 ### 2. Point the console's dropdowns at the code details (loading done)
 

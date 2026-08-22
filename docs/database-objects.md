@@ -100,6 +100,15 @@ what a style has and what a request needs, and `orchestrator_pkg` decides what t
 `style_attributes` reads through `itemDetail` rather than `foundation/item`, because the latter is
 fed by the publish queue and answers 404 for a style created minutes ago.
 
+**The step graph is not a diff engine.** `MODIFY_STYLE`, `CREATE_ORDER` and `MODIFY_ORDER` share one
+style write set — `ENSURE_STYLE_SKUS`, `CREATE_ITEM_HIERARCHY`, `CREATE_ITEM_SOURCING`,
+`CREATE_ITEM_COUNTRIES_OF_MANUFACTURE`, `CREATE_ITEM_UDAS`, `CREATE_ITEM_LOCATIONS`, `APPROVE_ITEMS`
+— and the order operations add the order steps after it. Every step runs on every request. The
+inbound document says what the style should be, not what changed, and MFCS answers a no-op write with
+SUCCESS, so a skipped step would never announce itself. `orchestrator_pkg.targets_existing_style`
+decides create-versus-update endpoints for all three; `CREATE_ALL` is not in it, because it creates
+the style in the same request.
+
 **`ENSURE_STYLE_SKUS` is one step that makes up to *n*+4 MFCS calls**, which is unlike every other
 step in the graph. Two reasons. Which children are missing is only known after reading the tenant,
 so a graph fixed at request registration cannot express it; and doing the work inline makes the step

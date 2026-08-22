@@ -24,6 +24,20 @@ serves. But it is not exhaustive: the tenant also serves `RmsReSTServices/servic
 which is absent from the spec and is the only way to read a style with its children in one call.
 "Not in the spec" is not "not available" — probe.
 
+**Every operation sends its whole write set, every time.** `MODIFY_STYLE`, `CREATE_ORDER` and
+`MODIFY_ORDER` all run the same seven-step style sequence — SKU check, hierarchy, sourcing, country of
+manufacture, UDAs, ranging, approval — and the order operations then place the order on top of it.
+Nothing is skipped because it "looks unchanged". This layer receives a document saying what the style
+should now be, not a diff, so the only safe reading is that all of it may have changed; and MFCS
+answers a write that changes nothing with SUCCESS, so an omission would never announce itself. Do not
+add "only send X if X differs" logic. An order implies style-level writes: ordering is a statement
+about the style's cost, country and supplier, not only about the order.
+
+The one conditional step is `ENSURE_STYLE_SKUS`, and it conditions on the *tenant*, not on this
+database — a colour or size the style lacks has to become a new child before anything can reference
+it. Resume is also not an exception: skipping completed steps continues one interrupted request,
+which is not the same as a fresh request deciding to do less.
+
 **Verify writes by reading back.** MFCS returns HTTP 200 `SUCCESS` for an `items/update` that changes a
 differentiator and silently does nothing. A success response is not evidence that anything happened. This
 is why `ENSURE_STYLE_SKUS` re-reads the style after creating children rather than trusting four 200s.
@@ -113,7 +127,16 @@ All verified live. Most are silent failures, which is why they are worth memoris
   `classAttribute`, `itemDesc`/`shortDesc`, `primarySuppInd`, `originCountryId`, `suppPackSize`.
 - **The update services want the whole record, not a patch.** `items/update` refuses without
   `STORE_ORD_MULT` even for a description-only change; `suppliers/update` refuses without
-  `DIRECT_SHIP_IND`, then without `INNER_NAME`. The create services default all of them.
+  `DIRECT_SHIP_IND`, then `INNER_NAME`. All are now sent on both paths. Valid packaging names come
+  from the tenant's own code types `INRN`, `CASN`, `PALN`, in master data.
+- **Country of manufacture cannot be re-created.** `countriesOfManufacture/create` answers an existing
+  row with "already exists"; use the `update` service on any style that already exists.
+- **A transport error is not a failure, it is an unknown outcome.** `ORA-29273` was once classified
+  FAILED while MFCS had in fact created the purchase order. `client_pkg` now classifies on SQLCODE,
+  and recovery resolves by correlation ID.
+- **The tenant refuses writes during its nightly batch**, as a plain HTTP 400 whose body says
+  "Batch Running Indicator is ON". `client_pkg` raises `-20951` for it, so it does not read as a bad
+  payload. If the coverage suite fails on that message, wait, do not debug.
 
 ## Conventions
 

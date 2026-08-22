@@ -147,6 +147,14 @@ create or replace package body payload_pkg as
         return config_pkg.get_config(p_prefix || upper(p_value), p_value);
     end;
 
+    -- The operations that write to a style MFCS already holds. Their item payloads
+    -- are updates, which carry only what is being set; a create carries the whole
+    -- structural record. CREATE_ALL is a create, because it makes the style itself.
+    function targets_existing_style(p_operation in varchar2) return boolean is
+    begin
+        return p_operation in ('MODIFY_STYLE', 'CREATE_ORDER', 'MODIFY_ORDER');
+    end;
+
     function request_style(p_action_request_id in varchar2) return varchar2 is
         l_style varchar2(30);
     begin
@@ -236,7 +244,7 @@ create or replace package body payload_pkg as
         -- "Field must be entered.Field: STORE_ORD_MULT ... CORESVC_ITEM.PROCESS_IM".
         -- Proven live, which is why it sits outside the create-only block.
         l_item.put('storeOrderMultiple', l_store_order_multiple);
-        if p_operation <> 'MODIFY_STYLE' then
+        if not targets_existing_style(p_operation) then
             l_item.put('itemNumberType', 'ITEM');
             l_item.put('itemLevel', 1);
             l_item.put('tranLevel', 2);
@@ -297,7 +305,7 @@ create or replace package body payload_pkg as
             l_item.put('dataLoadingDestination', 'RMS');
             -- Required on update as well as create; see append_parent_item.
             l_item.put('storeOrderMultiple', l_store_order_multiple);
-            if p_operation <> 'MODIFY_STYLE' then
+            if not targets_existing_style(p_operation) then
                 l_item.put('itemParent', p_style);
                 l_item.put('itemNumberType', 'ITEM');
                 l_item.put('itemLevel', 2);
@@ -454,6 +462,14 @@ create or replace package body payload_pkg as
         -- CORESVC_ITEM.PROCESS_IS". Sent on both paths because the tenant stores N
         -- on every item anyway, so the create payload was only ever relying on luck.
         l_supplier_node.put('directShipInd', config_pkg.get_config('MFCS_DIRECT_SHIP_IND', 'N'));
+        -- The packaging names. suppliers/update refuses without innerName, and there
+        -- is no reason to think it stops there, so all three go every time rather
+        -- than one per failed round trip. The values are the tenant's own: code types
+        -- INRN, CASN and PALN, loaded into master data by master_pkg.refresh_all.
+        -- EA rather than the spec's INR example because the pack sizes here are 1.
+        l_supplier_node.put('innerName', config_pkg.get_config('MFCS_INNER_NAME', 'EA'));
+        l_supplier_node.put('caseName', config_pkg.get_config('MFCS_CASE_NAME', 'CS'));
+        l_supplier_node.put('palletName', config_pkg.get_config('MFCS_PALLET_NAME', 'PAL'));
         l_supplier_node.put('countryOfSourcing', l_countries);
         l_suppliers := json_array_t();
         l_suppliers.append(l_supplier_node);
@@ -1130,7 +1146,6 @@ create or replace package body payload_pkg as
         l_items json_array_t := json_array_t();
         l_item json_object_t;
         l_style varchar2(30);
-        l_style_status varchar2(10);
         l_description varchar2(250);
         l_short_description varchar2(120);
         l_store_order_multiple varchar2(1);
@@ -1149,22 +1164,21 @@ create or replace package body payload_pkg as
         end;
     begin
         select json_value(p_plan, '$.style' returning varchar2(30)),
-               json_value(p_plan, '$.attributes.status' returning varchar2(10)),
                json_value(p_plan, '$.attributes.itemDescription' returning varchar2(250)),
                json_value(p_plan, '$.attributes.shortDescription' returning varchar2(120)),
                json_value(p_plan, '$.attributes.storeOrderMultiple' returning varchar2(1))
-          into l_style, l_style_status, l_description, l_short_description, l_store_order_multiple
+          into l_style, l_description, l_short_description, l_store_order_multiple
           from dual;
 
         l_store_order_multiple := nvl(l_store_order_multiple,
             config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E'));
 
-        -- The parent is normally already approved - it has to be for a request to
-        -- have found it through the feeds. Include it only when the read says
-        -- otherwise, because a child cannot be approved under an unapproved parent.
-        if nvl(l_style_status, 'A') <> 'A' then
-            append_approval(l_style, l_description);
-        end if;
+        -- The parent goes in every time, not only when the read says it is
+        -- unapproved. Deciding from observed status is the kind of partial update
+        -- this layer does not do: a child cannot be approved under an unapproved
+        -- parent, and re-approving an approved one costs a field in a payload that
+        -- is being sent regardless.
+        append_approval(l_style, l_description);
 
         for c in (
             select item, sku_size, sku_width

@@ -114,14 +114,32 @@ create or replace package body step_pkg as
                 add_step(p_action_request_id, 'CREATE_ITEM_LOCATIONS', 70);
             end if;
             add_step(p_action_request_id, 'APPROVE_ITEMS', 80);
-        elsif p_operation_name = 'MODIFY_STYLE' then
-            -- The style must already carry the colour/size combinations named here.
-            -- MFCS will not repurpose an existing SKU: a diff combination defines the
-            -- item, and items/update answers a changed diff with SUCCESS while
-            -- ignoring it. Checking first turns a silent no-op into a stated problem.
+        elsif p_operation_name in ('MODIFY_STYLE', 'CREATE_ORDER', 'MODIFY_ORDER') then
+            -- The whole style write set, every time, for every operation that touches
+            -- an existing style. Not a diff.
+            --
+            -- This layer does not know what changed. It receives a document describing
+            -- what the style should now be, and the only safe reading of that is that
+            -- all of it may have changed. Sending a subset because nothing here looks
+            -- different would mean the one field that did change is the one left
+            -- behind, and MFCS answers a write that changes nothing with SUCCESS, so
+            -- nothing would ever reveal the omission.
+            --
+            -- An order carries the same set. A purchase order is placed against a
+            -- style's SKUs at a cost, in a country, from a supplier - ordering is a
+            -- statement about the style, not only about the order, so the style is
+            -- brought up to date first and the order is placed against what results.
+            --
+            -- ENSURE_STYLE_SKUS runs first because everything after it addresses SKUs
+            -- by number. It is the one genuinely conditional step, and it conditions
+            -- on the tenant rather than on this database: MFCS will not repurpose an
+            -- existing SKU, since a diff combination defines the item, so a colour or
+            -- size the style lacks has to become a new child before anything can
+            -- reference it.
             add_step(p_action_request_id, 'ENSURE_STYLE_SKUS', 25);
             add_step(p_action_request_id, 'CREATE_ITEM_HIERARCHY', 30);
             add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 40);
+            add_step(p_action_request_id, 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE', 45);
             add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 50);
             if config_pkg.get_config('FEATURE_ITEM_LOCATIONS_YN', 'N') = 'Y' then
                 add_step(p_action_request_id, 'CREATE_ITEM_LOCATIONS', 60);
@@ -132,13 +150,6 @@ create or replace package body step_pkg as
         if p_operation_name = 'CREATE_ALL'
            and config_pkg.get_config('FEATURE_INITIAL_RETAIL_YN', 'N') = 'Y' then
             add_step(p_action_request_id, 'APPLY_INITIAL_RETAIL', 80);
-        end if;
-
-        -- An order is placed against SKU quantities, so the SKUs must exist and match
-        -- the requested colour before the order is built. CREATE_ALL creates them
-        -- itself a few steps earlier, so it is excluded.
-        if p_operation_name in ('CREATE_ORDER', 'MODIFY_ORDER') then
-            add_step(p_action_request_id, 'ENSURE_STYLE_SKUS', 85);
         end if;
 
         if p_operation_name in ('CREATE_ORDER', 'CREATE_ALL') then
