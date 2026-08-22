@@ -18,7 +18,15 @@ create or replace package browse_pkg authid definer as
         p_supplier in varchar2 default null
     ) return clob;
 
-    function get_style(p_item in varchar2) return clob;
+    -- p_with_skus attaches the style's child SKUs under resolved.skus.
+    --
+    -- They have to be hunted for: foundation/item exposes no itemParent filter and
+    -- a parent read does not list its children, so this pages the item feed at
+    -- itemLevel 2 within the style's department and matches on itemParent.
+    function get_style(
+        p_item      in varchar2,
+        p_with_skus in varchar2 default 'N'
+    ) return clob;
 
     -- p_enrich resolves what an order read does not carry but a MODIFY_ORDER
     -- request needs: the parent style behind the SKUs on the detail lines, and
@@ -89,10 +97,91 @@ create or replace package body browse_pkg as
         return client_pkg.get_json(l_path, l_status);
     end;
 
-    function get_style(p_item in varchar2) return clob is
+    function get_style(
+        p_item      in varchar2,
+        p_with_skus in varchar2 default 'N'
+    ) return clob is
+        c_max_pages constant pls_integer := 10;
+        c_page_size constant pls_integer := 200;
         l_status number;
+        l_body clob;
+        l_root json_object_t;
+        l_items json_array_t;
+        l_style json_object_t;
+        l_dept number;
+        l_skus json_array_t := json_array_t();
+        l_meta json_object_t;
+        l_page pls_integer := 0;
+        l_more boolean := true;
+        l_offset varchar2(200);
+        l_path varchar2(600);
+        l_feed json_object_t;
+        l_feed_items json_array_t;
+        l_candidate json_object_t;
     begin
-        return client_pkg.get_json('/MerchIntegrations/services/foundation/item/' || p_item, l_status);
+        l_body := client_pkg.get_json(
+            '/MerchIntegrations/services/foundation/item/' || p_item, l_status);
+
+        if nvl(p_with_skus, 'N') <> 'Y' or l_status not between 200 and 299 then
+            return l_body;
+        end if;
+
+        l_root := json_object_t.parse(l_body);
+        l_items := l_root.get_array('items');
+        if l_items is null or l_items.get_size = 0 then
+            return l_body;
+        end if;
+        l_style := treat(l_items.get(0) as json_object_t);
+
+        -- Only a parent style has children worth hunting for.
+        if nvl(l_style.get_number('itemLevel'), 1) <> 1 then
+            l_meta := json_object_t();
+            l_meta.put('skus', json_array_t());
+            l_meta.put('skuLookup', 'not a parent item');
+            l_style.put('resolved', l_meta);
+            return l_root.to_clob;
+        end if;
+
+        l_dept := l_style.get_number('dept');
+
+        while l_more and l_page < c_max_pages loop
+            l_page := l_page + 1;
+            l_path := '/MerchIntegrations/services/foundation/item?itemLevel=2&limit=' || c_page_size;
+            if l_dept is not null then
+                l_path := l_path || '&deptId=' || l_dept;
+            end if;
+            if l_offset is not null then
+                l_path := l_path || '&offsetkey=' || l_offset;
+            end if;
+
+            l_body := client_pkg.get_json(l_path, l_status);
+            exit when l_status not between 200 and 299;
+
+            l_feed := json_object_t.parse(l_body);
+            l_feed_items := l_feed.get_array('items');
+            exit when l_feed_items is null or l_feed_items.get_size = 0;
+
+            for i in 0 .. l_feed_items.get_size - 1 loop
+                l_candidate := treat(l_feed_items.get(i) as json_object_t);
+                l_offset := l_candidate.get_string('item');
+                if l_candidate.get_string('itemParent') = p_item then
+                    l_skus.append(l_candidate);
+                end if;
+            end loop;
+
+            l_more := nvl(l_feed.get_string('hasMore'), 'false') = 'true';
+        end loop;
+
+        l_meta := json_object_t();
+        l_meta.put('skus', l_skus);
+        l_meta.put('skuCount', l_skus.get_size);
+        l_meta.put('pagesScanned', l_page);
+        l_meta.put('skuLookup',
+            'foundation/item has no itemParent filter; children found by scanning '
+            || 'itemLevel 2 within department ' || nvl(to_char(l_dept), 'any') || '.');
+        l_style.put('resolved', l_meta);
+
+        return l_root.to_clob;
     end;
 
     function get_order(

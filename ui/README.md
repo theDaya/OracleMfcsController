@@ -120,6 +120,46 @@ Mind the read/write asymmetry: an order read returns `physicalQuantityOrdered` a
 while a write expects `quantityOrdered` and `originCountry`. `orderToForm` in `src/formState.js`
 bridges both spellings.
 
+## How the entities hang together
+
+MFCS does not hand you the hierarchy in one call, and two facts drive the whole browse screen:
+
+- **A parent item read does not list its children.** `foundation/item/{id}` on a style returns the
+  style and its `itemSupplier` block, nothing else.
+- **There is no `itemParent` query filter.** The spec's parameters are `since`, `before`, `itemLevel`,
+  `tranLevel`, `deptId`, `classId`, `subclassId`, `status`, `itemType`, `inventoryInd`, `supplier`,
+  `referenceItem`, `offsetkey` and `limit`. Passing `itemParent` is silently ignored and you get an
+  unfiltered feed, which looks like a filter that worked.
+
+So `browse_pkg.get_style(item, withSkus => 'Y')` finds the SKUs by paging `itemLevel=2` within the
+style's department and matching `itemParent` itself, then attaches them under `resolved.skus`. It is
+a scan, capped at ten pages — the cost of a missing filter, not a design choice.
+
+Everything else is nested inside each item document rather than fetched separately:
+
+```
+item (style or SKU)
+  itemSupplier[]
+    itemSupplierCountry[]                 -- origin, unit cost, UOP, pack sizes
+    itemSupplierCountryOfManufacture[]    -- required before approval
+  itemUda { udaLov[], udaFreeform[], udaDate[] }
+order
+  details[]                               -- one line per SKU
+```
+
+## Browse detail view
+
+Selecting a row gives two tabs: **Detail** and **JSON**.
+
+Detail lays the one-to-one parts out flat — the order header, then the style — because an order maps
+to exactly one style. The one-to-many parts sit in tabbed regions underneath: SKUs, order lines, item
+supplier, supplier countries, countries of manufacture and UDAs. Supplier, country and UDA rows are
+aggregated across the style *and* its SKUs, each tagged with the item it came from, so you can see at
+a glance which SKU is missing a country of manufacture.
+
+Selecting an **order** fills everything: order header, the style it resolved to, that style's SKUs and
+all the regions. Selecting a **style** fills the style half only — no order header, no order lines.
+
 ## Master data tab
 
 Caches foundation data into `MASTER_DATA` so the entry form can offer dropdowns. Two

@@ -619,7 +619,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/MerchIntegrations/services/foundation/item?dept={{dept}}&limit=25",
+                  "raw": "{{baseUrl}}/MerchIntegrations/services/foundation/item?deptId={{dept}}&limit=25",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -631,7 +631,7 @@
                   ],
                   "query": [
                     {
-                      "key": "dept",
+                      "key": "deptId",
                       "value": "{{dept}}"
                     },
                     {
@@ -644,13 +644,13 @@
                       "disabled": true
                     },
                     {
-                      "key": "itemParent",
-                      "value": "{{parentItem}}",
+                      "key": "referenceItem",
+                      "value": "",
                       "disabled": true
                     }
                   ]
                 },
-                "description": "VERIFIED 200 against the tenant on 2026-08-21.\n\nSame path as the single-item read, but with query parameters instead of a path segment. That is the naming pattern across this tenant: singular resource + /{id} = one record, singular resource + ?filters = a list.\n\nIMPORTANT CAVEAT: rows come back with `\"action\": \"INSERT\"`, while the by-number read returns `\"action\": null`. That strongly suggests this is a publish/download feed - records queued for integration - rather than a general query over the item master. Do not assume it returns every item in the tenant. Verify coverage before building a browser on it."
+                "description": "VERIFIED 200 against the tenant on 2026-08-21.\n\nSame path as the single-item read, but with query parameters instead of a path segment. That is the naming pattern across this tenant: singular resource + /{id} = one record, singular resource + ?filters = a list.\n\nIMPORTANT CAVEAT: rows come back with `\"action\": \"INSERT\"`, while the by-number read returns `\"action\": null`. That strongly suggests this is a publish/download feed - records queued for integration - rather than a general query over the item master. Do not assume it returns every item in the tenant. Verify coverage before building a browser on it.\n\nPARAMETER NAMES MATTER: the spec defines deptId, classId and subclassId - not dept/class/subclass - and there is NO itemParent filter. Unknown parameters are silently ignored and you get an unfiltered feed back, which looks like a working filter. To find a style's SKUs, page itemLevel=2 and match itemParent yourself."
               },
               "response": [],
               "event": [
@@ -753,7 +753,7 @@
                       "disabled": true
                     },
                     {
-                      "key": "dept",
+                      "key": "deptId",
                       "value": "{{dept}}",
                       "disabled": true
                     },

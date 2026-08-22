@@ -233,3 +233,35 @@ button.link.danger { color: var(--red); background: none; font-size: 16px; line-
 .attempt-bad { border-color: rgba(248, 81, 73, 0.45); }
 .evt-error td { color: #ff9a92; }
 .rows tbody tr.evt-error:hover { background: rgba(248, 81, 73, 0.08); }
+
+/* ---------- record detail ---------- */
+.rd-tabs { margin: 0 0 14px !important; padding: 0 !important; }
+.rd-section { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.rd-head {
+  width: 100%; display: flex; align-items: center; gap: 12px; text-align: left;
+  background: var(--panel-2); border: none; border-radius: 0; padding: 9px 12px;
+}
+.rd-title { font-size: 13px; font-weight: 600; }
+.rd-head .chev { margin-left: auto; }
+.rd-body { padding: 12px; }
+
+.fieldgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 16px; }
+@media (max-width: 1500px) { .fieldgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .fieldgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fg-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fg-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+}
+.fg-value {
+  font: 12px var(--mono); color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fg-value.empty { color: #4d5866; }
+
+.rd-regions { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: 14px; }
+.rd-regions .tabs { border-bottom: 1px solid var(--line); background: var(--panel-2); padding: 6px 10px 0 !important; }
+.rd-region-body { padding: 12px; max-height: 340px; overflow-y: auto; }
+.grid-scroll { overflow-x: auto; }
+.rows tbody tr.norow { cursor: default; }
+.rows tbody tr.norow:hover { background: none; }
+.rows td.mono { font-family: var(--mono); }

@@ -29,7 +29,7 @@ end;
         p_source_type => ords.source_type_plsql,
         p_source => q'[
 begin
-    ords_util_pkg.emit_json(browse_pkg.get_style(:item));
+    ords_util_pkg.emit_json(browse_pkg.get_style(:item, nvl(:withSkus, 'N')));
 end;
 ]'
     );

@@ -112,7 +112,8 @@ export const listStyles = (params = {}) => {
   return call(`/styles${q ? `?${q}` : ''}`);
 };
 
-export const getStyle = (item) => call(`/styles/${encodeURIComponent(item)}`);
+export const getStyle = (item, withSkus = false) =>
+  call(`/styles/${encodeURIComponent(item)}${withSkus ? '?withSkus=Y' : ''}`);
 
 export const listOrders = (params = {}) => {
   const q = new URLSearchParams(

@@ -1,27 +1,15 @@
 import { useEffect, useState } from 'react';
 import { getOrder, getStyle, listOrders, listStyles } from './api';
 import { orderToForm, styleToForm } from './formState';
-import JsonBlock from './JsonBlock';
-
-function Detail({ record, onLoad, loadLabel, note }) {
-  if (!record) return null;
-  return (
-    <div className="detail">
-      <div className="detail-actions">
-        <button type="button" className="primary" onClick={onLoad}>
-          {loadLabel}
-        </button>
-        {note && <span className="muted small">{note}</span>}
-      </div>
-      <JsonBlock value={record} />
-    </div>
-  );
-}
+import RecordDetail from './RecordDetail';
 
 export default function BrowseTab({ form, setForm, goToTransactions }) {
   const [mode, setMode] = useState('styles');
   const [rows, setRows] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [order, setOrder] = useState(null);
+  const [style, setStyle] = useState(null);
+  const [skus, setSkus] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [limit, setLimit] = useState('25');
@@ -31,6 +19,9 @@ export default function BrowseTab({ form, setForm, goToTransactions }) {
     setBusy(true);
     setError(null);
     setSelected(null);
+    setOrder(null);
+    setStyle(null);
+    setSkus([]);
     try {
       const { body } =
         mode === 'styles'
@@ -49,15 +40,38 @@ export default function BrowseTab({ form, setForm, goToTransactions }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
+  /**
+   * Assembles the full picture for one row.
+   *
+   * An order is one order to one style, so selecting an order pulls the style it
+   * resolved to and that style's SKUs. Selecting a style skips the order half.
+   */
   const open = async (row) => {
     setBusy(true);
     setError(null);
+    setOrder(null);
+    setStyle(null);
+    setSkus([]);
     try {
-      const { body } =
-        mode === 'styles'
-          ? await getStyle(row.item)
-          : await getOrder(row.orderNo);
-      setSelected(body?.items?.[0] || body);
+      if (mode === 'orders') {
+        const { body } = await getOrder(row.orderNo);
+        const ord = body?.items?.[0] || null;
+        setOrder(ord);
+        setSelected(ord);
+        const styleNo = ord?.resolved?.style;
+        if (styleNo) {
+          const st = await getStyle(styleNo, true);
+          const doc = st.body?.items?.[0] || null;
+          setStyle(doc);
+          setSkus(doc?.resolved?.skus || []);
+        }
+      } else {
+        const { body } = await getStyle(row.item, true);
+        const doc = body?.items?.[0] || null;
+        setStyle(doc);
+        setSelected(doc);
+        setSkus(doc?.resolved?.skus || []);
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -66,10 +80,13 @@ export default function BrowseTab({ form, setForm, goToTransactions }) {
   };
 
   const loadIntoModify = () => {
-    if (!selected) return;
-    setForm(
-      mode === 'styles' ? styleToForm(selected, form) : orderToForm(selected, form),
-    );
+    if (mode === 'orders' && order) {
+      setForm(orderToForm(order, form));
+    } else if (style) {
+      setForm(styleToForm(style, form));
+    } else {
+      return;
+    }
     goToTransactions();
   };
 
@@ -187,17 +204,24 @@ export default function BrowseTab({ form, setForm, goToTransactions }) {
         </div>
 
         <div className="browse-detail">
-          {!selected && <p className="explain">Select a row to see the full MFCS document.</p>}
-          <Detail
-            record={selected}
-            onLoad={loadIntoModify}
-            loadLabel={mode === 'styles' ? 'Load into Modify Style' : 'Load into Modify Order'}
-            note={
-              mode === 'styles'
-                ? 'Child SKUs are not in the parent read — add size rows with SKU IDs before previewing.'
-                : 'Order lines carry real item numbers, so the size curve fills in automatically.'
-            }
-          />
+          {!selected && !busy && (
+            <p className="explain">Select a row to see how it hangs together in MFCS.</p>
+          )}
+          {selected && (
+            <div className="detail-actions">
+              <button type="button" className="primary" onClick={loadIntoModify}>
+                {mode === 'styles' ? 'Load into Modify Style' : 'Load into Modify Order'}
+              </button>
+              <span className="muted small">
+                {mode === 'styles'
+                  ? 'Add size rows with SKU IDs before previewing a modify.'
+                  : 'Order lines carry real item numbers, so the size curve fills in automatically.'}
+              </span>
+            </div>
+          )}
+          {(order || style) && (
+            <RecordDetail order={order} style={style} skus={skus} loading={busy && !style && !order} />
+          )}
         </div>
       </div>
     </div>

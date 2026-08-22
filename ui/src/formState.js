@@ -65,12 +65,24 @@ export const initialForm = () => ({
 
 /**
  * Maps a live MFCS item document onto the form as a MODIFY_STYLE request.
- * Child SKUs are not returned by the parent item read, so the size curve is left
- * for the user to complete — MODIFY_STYLE needs a SKU_ID per row.
+ *
+ * A parent item read does not list its children and foundation/item has no
+ * itemParent filter, so browse_pkg finds them by scanning the item feed and
+ * attaches them under resolved.skus. When they are present the size curve fills
+ * in with real SKU IDs, which is what MODIFY_STYLE validation requires.
  */
 export function styleToForm(item, existing) {
-  const sup = Array.isArray(item.supplier) ? item.supplier[0] : null;
-  const cos = sup && Array.isArray(sup.countryOfSourcing) ? sup.countryOfSourcing[0] : null;
+  const sup = Array.isArray(item.itemSupplier)
+    ? item.itemSupplier[0]
+    : Array.isArray(item.supplier)
+      ? item.supplier[0]
+      : null;
+  const cos = sup && Array.isArray(sup.itemSupplierCountry)
+    ? sup.itemSupplierCountry[0]
+    : sup && Array.isArray(sup.countryOfSourcing)
+      ? sup.countryOfSourcing[0]
+      : null;
+  const skus = item.resolved?.skus || [];
   return {
     ...existing,
     operationName: 'MODIFY_STYLE',
@@ -82,11 +94,19 @@ export function styleToForm(item, existing) {
     klass: item.class != null ? String(item.class) : existing.klass,
     subclass: item.subclass != null ? String(item.subclass) : existing.subclass,
     supplier: sup?.supplier != null ? String(sup.supplier) : existing.supplier,
-    originCountry: cos?.originCountry || existing.originCountry,
+    originCountry: cos?.originCountryId || cos?.originCountry || existing.originCountry,
     unitCost: cos?.unitCost != null ? String(cos.unitCost) : existing.unitCost,
     retailPrice: item.unitRetail != null ? String(item.unitRetail) : existing.retailPrice,
     colour: item.diff1 || existing.colour,
-    sizeCurve: [],
+    sizeCurve: skus.map((s, i) => ({
+      sourceVariantRef: `sku-${s.item}-${i + 1}`,
+      // diff2 is the MFCS size diff; the form wants the display size the
+      // MAP.SIZE.* config maps from, so leave it for the user where unknown.
+      size: '',
+      width: 'ALL',
+      qty: '1',
+      skuId: String(s.item),
+    })),
   };
 }
 
