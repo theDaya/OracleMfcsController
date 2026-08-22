@@ -150,6 +150,12 @@ All verified live. Most are silent failures, which is why they are worth memoris
   crosses 32KB after about seven rows.
 - Do not pass an upstream failure through as HTTP 200. An expired token served as a 200 with an HTML
   body reads as "endpoint fine, no data", which is the wrong diagnosis.
+- Three things are deliberately defined once - do not add a second copy: the size-curve projection
+  (`payload_pkg.c_size_curve`), step-to-endpoint/method/mapper resolution
+  (`orchestrator_pkg.resolve_step`), and the generated-children plan (`payload_pkg.t_child_plan`).
+- The step graph is code, not data, on purpose. Hardcode structure (which steps, their order, which
+  endpoint key); configure values (paths, defaults, tenant constants). Do not build a table-driven
+  step engine.
 - Comments should explain why, especially where the code looks odd because MFCS is odd.
 
 ## Not our bugs

@@ -14,7 +14,7 @@ the `MFCS_CLIENT_MODE` switch were removed — if you find a reference to them, 
 | `CREATE_ORDER` | **Completed live 2026-08-22**, all eleven steps, order 25012 created and verified |
 | `MODIFY_ORDER` | Same graph as `CREATE_ORDER` minus the number reservation; not yet completed live |
 | Missing-SKU generation | **Proven live 2026-08-22**: created two children under an existing style, verified by read-back |
-| Failure / resume paths | 20 assertions passing, fault-injected against the real tenant |
+| Failure / resume paths | 20 of 20 passing, fault-injected against the real tenant (re-verified 2026-08-22 after the batch window closed) |
 | Console (`ui/`) | Build, Activity, Styles & orders, Master data, MFCS spec |
 | Item ranging | On, using virtual warehouse 19271 |
 | Non-merchandise costs | `NON_MERCH_COSTS` → order `expenses`, validated and previewing; not yet sent live |
@@ -37,7 +37,7 @@ header shows remaining validity, and `GET /token-status` decodes it.
 `CREATE_ORDER` without the number reservation, and its one live attempt stopped on the tenant's
 nightly batch window rather than on anything in the payload — so it is untested, not known-broken.
 
-Run it once the batch window is clear. The open question is still the one you raised: when a colour
+The batch window has since closed and the coverage suite runs 20/20 again, so this is ready to run. The open question is still the one you raised: when a colour
 changes on an existing order, does the old colour's line need explicit cancellation, or is replacing
 the detail lines enough?
 

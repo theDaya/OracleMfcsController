@@ -28,17 +28,23 @@ create or replace package orchestrator_pkg authid definer as
         p_action_request_id in varchar2
     );
 
-    -- Pure resolvers, exposed so the preview layer can describe the planned MFCS
-    -- calls without duplicating the step-to-endpoint mapping. No side effects.
-    function endpoint_for_step(
-        p_step_code in varchar2,
-        p_operation in varchar2
-    ) return varchar2;
+    -- How one step reaches MFCS: the CONFIG endpoint key, the HTTP method, and
+    -- the payload_pkg mapper that builds the body. One record resolved by one
+    -- case statement, so the three can never disagree - they used to be three
+    -- parallel case statements over the same step codes, which nothing forced
+    -- to stay in step. All fields null means the step is local (no MFCS call).
+    type t_step_resolution is record (
+        endpoint_key varchar2(200),
+        http_method  varchar2(10),
+        mapper_name  varchar2(80)
+    );
 
-    function method_for_step(
+    -- Pure resolver, exposed so the preview layer can describe the planned MFCS
+    -- calls without duplicating the mapping. No side effects.
+    function resolve_step(
         p_step_code in varchar2,
         p_operation in varchar2
-    ) return varchar2;
+    ) return t_step_resolution;
 
     function payload_for_step(
         p_action_request_id in varchar2,
@@ -111,17 +117,9 @@ create or replace package body orchestrator_pkg as
         l_response_obj := json_object_t.parse(p_response);
         if l_response_obj.has('items') then
             l_items := l_response_obj.get_array('items');
-            for v in (
-                select ordinality, source_variant_ref, sku_size, sku_width
-                  from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                      columns
-                          ordinality for ordinality,
-                          source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                          sku_size varchar2(60) path '$.SKU_SIZE',
-                          sku_width varchar2(60) path '$.SKU_WIDTH'
-                  )
-            ) loop
-                l_sku_no := treat(l_items.get(v.ordinality) as json_object_t).get_string('item');
+            for v in payload_pkg.c_size_curve(l_payload) loop
+                -- items[0] is the style; the children follow in curve order.
+                l_sku_no := treat(l_items.get(v.rn) as json_object_t).get_string('item');
                 request_pkg.save_generated_identifier(
                     p_action_request_id => p_action_request_id,
                     p_source_system => l_source_system,
@@ -134,16 +132,9 @@ create or replace package body orchestrator_pkg as
                 );
             end loop;
         else
-            for v in (
-                select source_variant_ref, sku_size, sku_width, sku_id
-                  from json_table(p_response, '$.PLMSizeCurveDtl[*]'
-                      columns
-                          source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                          sku_size varchar2(60) path '$.SKU_SIZE',
-                          sku_width varchar2(60) path '$.SKU_WIDTH',
-                          sku_id varchar2(30) path '$.SKU_ID'
-                  )
-            ) loop
+            -- The response echoes the document's own PLMSizeCurveDtl shape,
+            -- so the same cursor reads it.
+            for v in payload_pkg.c_size_curve(p_response) loop
                 request_pkg.save_generated_identifier(
                     p_action_request_id => p_action_request_id,
                     p_source_system => l_source_system,
@@ -234,15 +225,7 @@ create or replace package body orchestrator_pkg as
             p_mfcs_style_no => l_style_no
         );
 
-        for v in (
-            select source_variant_ref, sku_size, sku_width
-              from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                  columns
-                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                      sku_size varchar2(60) path '$.SKU_SIZE',
-                      sku_width varchar2(60) path '$.SKU_WIDTH'
-              )
-        ) loop
+        for v in payload_pkg.c_size_curve(l_payload) loop
             event_pkg.log_event(
                 p_action_request_id => p_action_request_id,
                 p_event_phase => 'RESERVE_SKU_START',
@@ -323,24 +306,13 @@ create or replace package body orchestrator_pkg as
         p_action_request_id in varchar2,
         p_step_code in varchar2
     ) return clob is
+        l_mapper varchar2(80) :=
+            resolve_step(p_step_code, operation_name(p_action_request_id)).mapper_name;
     begin
-        case p_step_code
-            when 'RESERVE_ITEM_NUMBERS' then return payload_pkg.build_request(p_action_request_id, 'build_item_number_request');
-            when 'CREATE_PARENT_ITEM_HIERARCHY' then return payload_pkg.build_request(p_action_request_id, 'build_parent_item_create_request');
-            when 'CREATE_CHILD_ITEM_HIERARCHY' then return payload_pkg.build_request(p_action_request_id, 'build_child_item_create_request');
-            when 'CREATE_ITEM_HIERARCHY' then return payload_pkg.build_request(p_action_request_id, 'build_item_create_request');
-            when 'CREATE_PARENT_ITEM_SOURCING' then return payload_pkg.build_request(p_action_request_id, 'build_parent_item_sourcing_request');
-            when 'CREATE_ITEM_SOURCING' then return payload_pkg.build_request(p_action_request_id, 'build_item_sourcing_request');
-            when 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE' then return payload_pkg.build_request(p_action_request_id, 'build_item_country_of_manufacture_request');
-            when 'CREATE_ITEM_UDAS' then return payload_pkg.build_request(p_action_request_id, 'build_item_uda_request');
-            when 'CREATE_ITEM_LOCATIONS' then return payload_pkg.build_request(p_action_request_id, 'build_item_location_request');
-            when 'APPROVE_ITEMS' then return payload_pkg.build_request(p_action_request_id, 'build_item_approval_request');
-            when 'APPLY_INITIAL_RETAIL' then return payload_pkg.build_request(p_action_request_id, 'build_initial_retail_request');
-            when 'RESERVE_ORDER_NUMBER' then return payload_pkg.build_request(p_action_request_id, 'build_po_number_request');
-            when 'CREATE_PURCHASE_ORDER' then return payload_pkg.build_request(p_action_request_id, 'build_purchase_order_request');
-            when 'VERIFY_PURCHASE_ORDER' then return payload_pkg.build_request(p_action_request_id, 'build_purchase_order_verify_request');
-            else return '{"step":"' || p_step_code || '"}';
-        end case;
+        if l_mapper is null then
+            return '{"step":"' || p_step_code || '"}';
+        end if;
+        return payload_pkg.build_request(p_action_request_id, l_mapper);
     end;
 
     -- Whether the operation writes to a style that already exists in MFCS.
@@ -353,62 +325,79 @@ create or replace package body orchestrator_pkg as
         return p_operation in ('MODIFY_STYLE', 'CREATE_ORDER', 'MODIFY_ORDER');
     end;
 
-    function endpoint_for_step(p_step_code in varchar2, p_operation in varchar2) return varchar2 is
+    function resolve_step(p_step_code in varchar2, p_operation in varchar2) return t_step_resolution is
+        l_r t_step_resolution;
+        l_existing boolean := targets_existing_style(p_operation);
+
+        procedure def(p_endpoint in varchar2, p_method in varchar2, p_mapper in varchar2) is
+        begin
+            l_r.endpoint_key := p_endpoint;
+            l_r.http_method := p_method;
+            l_r.mapper_name := p_mapper;
+        end;
     begin
         case p_step_code
-            when 'ENSURE_STYLE_SKUS' then return null;
-            when 'RESERVE_ITEM_NUMBERS' then return 'ENDPOINT.ITEM_NUMBERS_MANAGE';
-            when 'CREATE_PARENT_ITEM_HIERARCHY' then return 'ENDPOINT.ITEMS_CREATE';
-            when 'CREATE_CHILD_ITEM_HIERARCHY' then return 'ENDPOINT.ITEMS_CREATE';
+            when 'ENSURE_STYLE_SKUS' then
+                null;  -- Local: handled inline; which calls it makes depends on the tenant.
+            when 'RESERVE_ITEM_NUMBERS' then
+                def('ENDPOINT.ITEM_NUMBERS_MANAGE', 'POST', 'build_item_number_request');
+            when 'CREATE_PARENT_ITEM_HIERARCHY' then
+                def('ENDPOINT.ITEMS_CREATE', 'POST', 'build_parent_item_create_request');
+            when 'CREATE_CHILD_ITEM_HIERARCHY' then
+                def('ENDPOINT.ITEMS_CREATE', 'POST', 'build_child_item_create_request');
             when 'CREATE_ITEM_HIERARCHY' then
-                if targets_existing_style(p_operation) then
-                    return 'ENDPOINT.ITEMS_UPDATE';
+                if l_existing then
+                    def('ENDPOINT.ITEMS_UPDATE', 'PUT', 'build_item_create_request');
+                else
+                    def('ENDPOINT.ITEMS_CREATE', 'POST', 'build_item_create_request');
                 end if;
-                return 'ENDPOINT.ITEMS_CREATE';
-            when 'CREATE_PARENT_ITEM_SOURCING' then return 'ENDPOINT.ITEM_SOURCING_CREATE';
+            when 'CREATE_PARENT_ITEM_SOURCING' then
+                def('ENDPOINT.ITEM_SOURCING_CREATE', 'POST', 'build_parent_item_sourcing_request');
             when 'CREATE_ITEM_SOURCING' then
-                if targets_existing_style(p_operation) then return 'ENDPOINT.ITEM_SOURCING_UPDATE'; end if;
-                return 'ENDPOINT.ITEM_SOURCING_CREATE';
+                if l_existing then
+                    def('ENDPOINT.ITEM_SOURCING_UPDATE', 'PUT', 'build_item_sourcing_request');
+                else
+                    def('ENDPOINT.ITEM_SOURCING_CREATE', 'POST', 'build_item_sourcing_request');
+                end if;
             when 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE' then
                 -- Re-creating one is not a no-op, it is an error: "This
                 -- item/supplier/manufacturing country already exists ...
                 -- CORESVC_ITEM.PROCESS_ISMC". The update service takes the same body.
-                if targets_existing_style(p_operation) then
-                    return 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_UPDATE';
+                if l_existing then
+                    def('ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_UPDATE', 'PUT', 'build_item_country_of_manufacture_request');
+                else
+                    def('ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE', 'POST', 'build_item_country_of_manufacture_request');
                 end if;
-                return 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE';
             when 'CREATE_ITEM_UDAS' then
-                if targets_existing_style(p_operation) then return 'ENDPOINT.ITEM_UDAS_UPDATE'; end if;
-                return 'ENDPOINT.ITEM_UDAS_CREATE';
+                if l_existing then
+                    def('ENDPOINT.ITEM_UDAS_UPDATE', 'PUT', 'build_item_uda_request');
+                else
+                    def('ENDPOINT.ITEM_UDAS_CREATE', 'POST', 'build_item_uda_request');
+                end if;
             when 'CREATE_ITEM_LOCATIONS' then
-                if targets_existing_style(p_operation) then return 'ENDPOINT.ITEM_LOCATIONS_UPDATE'; end if;
-                return 'ENDPOINT.ITEM_LOCATIONS_CREATE';
-            when 'APPROVE_ITEMS' then return 'ENDPOINT.ITEM_APPROVE';
-            when 'APPLY_INITIAL_RETAIL' then return 'ENDPOINT.INITIAL_RETAIL';
-            when 'RESERVE_ORDER_NUMBER' then return 'ENDPOINT.PO_PREISSUED_CREATE';
+                if l_existing then
+                    def('ENDPOINT.ITEM_LOCATIONS_UPDATE', 'PUT', 'build_item_location_request');
+                else
+                    def('ENDPOINT.ITEM_LOCATIONS_CREATE', 'POST', 'build_item_location_request');
+                end if;
+            when 'APPROVE_ITEMS' then
+                def('ENDPOINT.ITEM_APPROVE', 'PUT', 'build_item_approval_request');
+            when 'APPLY_INITIAL_RETAIL' then
+                def('ENDPOINT.INITIAL_RETAIL', 'POST', 'build_initial_retail_request');
+            when 'RESERVE_ORDER_NUMBER' then
+                def('ENDPOINT.PO_PREISSUED_CREATE', 'POST', 'build_po_number_request');
             when 'CREATE_PURCHASE_ORDER' then
-                if p_operation = 'MODIFY_ORDER' then return 'ENDPOINT.PURCHASE_ORDERS_UPDATE'; end if;
-                return 'ENDPOINT.PURCHASE_ORDERS_CREATE';
-            when 'VERIFY_PURCHASE_ORDER' then return 'ENDPOINT.PURCHASE_ORDER_GET';
-            else return null;
+                if p_operation = 'MODIFY_ORDER' then
+                    def('ENDPOINT.PURCHASE_ORDERS_UPDATE', 'PUT', 'build_purchase_order_request');
+                else
+                    def('ENDPOINT.PURCHASE_ORDERS_CREATE', 'POST', 'build_purchase_order_request');
+                end if;
+            when 'VERIFY_PURCHASE_ORDER' then
+                def('ENDPOINT.PURCHASE_ORDER_GET', 'GET', 'build_purchase_order_verify_request');
+            else
+                null;  -- Unknown step: local by construction, nothing to send.
         end case;
-    end;
-
-    function method_for_step(p_step_code in varchar2, p_operation in varchar2) return varchar2 is
-    begin
-        if p_step_code = 'VERIFY_PURCHASE_ORDER' then
-            return 'GET';
-        elsif p_step_code = 'APPROVE_ITEMS' then
-            return 'PUT';
-        elsif targets_existing_style(p_operation)
-              and p_step_code in ('CREATE_ITEM_HIERARCHY', 'CREATE_ITEM_SOURCING',
-                                  'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE', 'CREATE_ITEM_UDAS',
-                                  'CREATE_ITEM_LOCATIONS', 'APPROVE_ITEMS') then
-            return 'PUT';
-        elsif p_step_code = 'CREATE_PURCHASE_ORDER' and p_operation = 'MODIFY_ORDER' then
-            return 'PUT';
-        end if;
-        return 'POST';
+        return l_r;
     end;
 
     -- json_object_t.get_boolean returns NULL for an absent key, and NULL in a PL/SQL
@@ -456,25 +445,15 @@ create or replace package body orchestrator_pkg as
                 -- source reference the rest of the request uses. Width is not part of
                 -- the diff pair, so a size that appears twice with different widths
                 -- resolves to the same SKU; take the first and let the mapping stand.
-                begin
-                    select source_variant_ref, sku_width
-                      into l_source_variant_ref, l_sku_width
-                      from (
-                          select source_variant_ref, sku_width
-                            from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                                columns
-                                    source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                                    sku_size varchar2(60) path '$.SKU_SIZE',
-                                    sku_width varchar2(60) path '$.SKU_WIDTH'
-                            )
-                           where sku_size = l_size
-                      )
-                     where rownum = 1;
-                exception
-                    when no_data_found then
-                        l_source_variant_ref := null;
-                        l_sku_width := null;
-                end;
+                l_source_variant_ref := null;
+                l_sku_width := null;
+                for v in payload_pkg.c_size_curve(l_payload) loop
+                    if v.sku_size = l_size then
+                        l_source_variant_ref := v.source_variant_ref;
+                        l_sku_width := v.sku_width;
+                        exit;
+                    end if;
+                end loop;
 
                 if l_source_variant_ref is not null then
                     request_pkg.save_generated_identifier(
@@ -523,10 +502,8 @@ create or replace package body orchestrator_pkg as
         l_attrs json_object_t := json_object_t.parse(sku_pkg.style_attributes(p_style));
         l_missing json_array_t := p_gap.get_array('missing');
         l_entry json_object_t;
-        l_child json_object_t;
-        l_children json_array_t := json_array_t();
-        l_plan json_object_t := json_object_t();
-        l_plan_clob clob;
+        l_plan payload_pkg.t_child_plan;
+        l_child_count pls_integer := 0;
         l_unmapped varchar2(1000);
         l_created varchar2(2000);
         l_response clob;
@@ -552,6 +529,22 @@ create or replace package body orchestrator_pkg as
                 || 'could not be read (' || l_attrs.get_string('message')
                 || '). A child inherits the parent hierarchy, so it cannot be guessed.');
         end if;
+
+        -- The itemDetail JSON becomes a typed plan here, in one place; from this
+        -- point on a misspelled attribute is a compile error, not a silent null.
+        l_plan.style := p_style;
+        l_plan.dept := l_attrs.get_number('dept');
+        l_plan.class := l_attrs.get_number('class');
+        l_plan.subclass := l_attrs.get_number('subclass');
+        l_plan.original_retail := l_attrs.get_number('originalRetail');
+        l_plan.cost_zone_group_id := l_attrs.get_number('costZoneGroupId');
+        l_plan.item_description := l_attrs.get_string('itemDescription');
+        l_plan.short_description := l_attrs.get_string('shortDescription');
+        l_plan.standard_uom := l_attrs.get_string('standardUom');
+        l_plan.store_order_multiple := l_attrs.get_string('storeOrderMultiple');
+        l_plan.supplier := l_attrs.get_number('supplier');
+        l_plan.unit_cost := l_attrs.get_number('unitCost');
+        l_plan.origin_country := l_attrs.get_string('originCountry');
 
         for i in 0 .. l_missing.get_size - 1 loop
             l_entry := treat(l_missing.get(i) as json_object_t);
@@ -586,25 +579,15 @@ create or replace package body orchestrator_pkg as
             l_entry := treat(l_missing.get(i) as json_object_t);
             l_size := l_entry.get_string('size');
 
-            begin
-                select source_variant_ref, sku_width
-                  into l_source_variant_ref, l_sku_width
-                  from (
-                      select source_variant_ref, sku_width
-                        from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                            columns
-                                source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                                sku_size varchar2(60) path '$.SKU_SIZE',
-                                sku_width varchar2(60) path '$.SKU_WIDTH'
-                        )
-                       where sku_size = l_size
-                  )
-                 where rownum = 1;
-            exception
-                when no_data_found then
-                    l_source_variant_ref := null;
-                    l_sku_width := null;
-            end;
+            l_source_variant_ref := null;
+            l_sku_width := null;
+            for v in payload_pkg.c_size_curve(l_payload) loop
+                if v.sku_size = l_size then
+                    l_source_variant_ref := v.source_variant_ref;
+                    l_sku_width := v.sku_width;
+                    exit;
+                end if;
+            end loop;
 
             l_response := client_pkg.call_service(
                 p_action_request_id => p_action_request_id,
@@ -617,18 +600,13 @@ create or replace package body orchestrator_pkg as
             );
             l_item := first_reserved_item(l_response);
 
-            l_child := json_object_t();
-            l_child.put('item', l_item);
-            l_child.put('size', l_size);
-            l_child.put('sizeDiff', l_entry.get_string('sizeDiff'));
-            l_child.put('colourDiff', l_entry.get_string('colourDiff'));
-            if l_source_variant_ref is not null then
-                l_child.put('sourceVariantRef', l_source_variant_ref);
-            end if;
-            if l_sku_width is not null then
-                l_child.put('skuWidth', l_sku_width);
-            end if;
-            l_children.append(l_child);
+            l_child_count := l_child_count + 1;
+            l_plan.children(l_child_count).item := l_item;
+            l_plan.children(l_child_count).sku_size := l_size;
+            l_plan.children(l_child_count).size_diff := l_entry.get_string('sizeDiff');
+            l_plan.children(l_child_count).colour_diff := l_entry.get_string('colourDiff');
+            l_plan.children(l_child_count).source_variant_ref := l_source_variant_ref;
+            l_plan.children(l_child_count).sku_width := l_sku_width;
 
             l_created := l_created
                 || case when l_created is not null then ', ' end
@@ -647,17 +625,12 @@ create or replace package body orchestrator_pkg as
             );
         end loop;
 
-        l_plan.put('style', p_style);
-        l_plan.put('attributes', l_attrs);
-        l_plan.put('children', l_children);
-        l_plan_clob := l_plan.to_clob;
-
         l_response := client_pkg.call_service(
             p_action_request_id => p_action_request_id,
             p_step_code => p_step_code,
             p_http_method => 'POST',
             p_endpoint_key => 'ENDPOINT.ITEMS_CREATE',
-            p_request_payload => payload_pkg.generated_child_create_request(p_action_request_id, l_plan_clob),
+            p_request_payload => payload_pkg.generated_child_create_request(p_action_request_id, l_plan),
             p_user_id => p_user_id
         );
 
@@ -666,7 +639,7 @@ create or replace package body orchestrator_pkg as
             p_step_code => p_step_code,
             p_http_method => 'POST',
             p_endpoint_key => 'ENDPOINT.ITEM_SOURCING_CREATE',
-            p_request_payload => payload_pkg.generated_child_sourcing_request(p_action_request_id, l_plan_clob),
+            p_request_payload => payload_pkg.generated_child_sourcing_request(p_action_request_id, l_plan),
             p_user_id => p_user_id
         );
 
@@ -675,7 +648,7 @@ create or replace package body orchestrator_pkg as
             p_step_code => p_step_code,
             p_http_method => 'POST',
             p_endpoint_key => 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE',
-            p_request_payload => payload_pkg.generated_child_com_request(p_action_request_id, l_plan_clob),
+            p_request_payload => payload_pkg.generated_child_com_request(p_action_request_id, l_plan),
             p_user_id => p_user_id
         );
 
@@ -684,7 +657,7 @@ create or replace package body orchestrator_pkg as
             p_step_code => p_step_code,
             p_http_method => 'PUT',
             p_endpoint_key => 'ENDPOINT.ITEM_APPROVE',
-            p_request_payload => payload_pkg.generated_child_approval_request(p_action_request_id, l_plan_clob),
+            p_request_payload => payload_pkg.generated_child_approval_request(p_action_request_id, l_plan),
             p_user_id => p_user_id
         );
 
@@ -737,7 +710,7 @@ create or replace package body orchestrator_pkg as
             p_step_code => p_step_code,
             p_message => 'Style ' || p_style || ' now carries every requested combination.',
             p_detail_payload => '{"mfcsStyleNo":"' || event_pkg.escape_json(p_style)
-                || '","createdCount":' || l_children.get_size || '}'
+                || '","createdCount":' || l_child_count || '}'
         );
     end;
 
@@ -776,10 +749,9 @@ create or replace package body orchestrator_pkg as
 
         l_colour := payload_pkg.string_value(l_payload, 'COLOUR');
 
-        select listagg(sku_size, ':') within group (order by rn)
-          into l_sizes
-          from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-              columns rn for ordinality, sku_size varchar2(40) path '$.SKU_SIZE');
+        for v in payload_pkg.c_size_curve(l_payload) loop
+            l_sizes := l_sizes || case when l_sizes is not null then ':' end || v.sku_size;
+        end loop;
 
         if l_style is null then
             step_pkg.set_step_status(p_action_request_id, p_step_code, 'SUCCEEDED');
@@ -854,6 +826,7 @@ create or replace package body orchestrator_pkg as
         l_user_id varchar2(120) := payload_pkg.user_id(l_payload);
         l_request_payload clob;
         l_response clob;
+        l_resolution t_step_resolution;
         l_endpoint_key varchar2(200);
         l_method varchar2(10);
         l_recovery_status varchar2(30);
@@ -925,8 +898,9 @@ create or replace package body orchestrator_pkg as
                 end if;
             end if;
 
-            l_endpoint_key := endpoint_for_step(l_step, l_operation);
-            l_method := method_for_step(l_step, l_operation);
+            l_resolution := resolve_step(l_step, l_operation);
+            l_endpoint_key := l_resolution.endpoint_key;
+            l_method := l_resolution.http_method;
             l_request_payload := payload_for_step(p_action_request_id, l_step);
 
             step_pkg.set_step_status(p_action_request_id, l_step, 'IN_PROGRESS');

@@ -96,6 +96,20 @@ detail payloads.
 step code to a mapper name and calls `payload_pkg.build_request` — statically, so a missing mapper is
 a compile error rather than a runtime surprise.
 
+**One projection, one resolver, one typed plan.** Three single-source rules worth knowing before
+editing:
+
+- `payload_pkg.c_size_curve` is the only definition of the `PLMSizeCurveDtl` projection. Ten readers
+  across payload_pkg and orchestrator_pkg used to carry their own `json_table` of it; all of them now
+  loop this one public cursor (validation_pkg keeps its own raw projections on purpose - it inspects
+  the unparsed document for malformed values).
+- `orchestrator_pkg.resolve_step` is the only place a step code becomes an endpoint key, HTTP method
+  and mapper name. It returns a `t_step_resolution` record from one case statement; these used to be
+  three parallel case statements that nothing forced to agree.
+- `payload_pkg.t_child_plan` is the typed hand-off for generated children. The orchestrator fills it
+  from the itemDetail read in one place; the builders read fields, not JSON keys, so a misspelled
+  attribute is a compile error instead of a silent null.
+
 **`preview_pkg`** reuses the orchestrator's own step graph and endpoint resolution instead of
 reimplementing them, so a preview cannot drift from what execution would really do. It registers a
 throwaway `PREVIEW-` request so the real mappers can run, then deletes it.

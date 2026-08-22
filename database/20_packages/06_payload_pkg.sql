@@ -33,40 +33,100 @@ create or replace package payload_pkg authid definer as
     -- JSON-reading implementation.
     function string_value(p_payload in clob, p_name in varchar2) return varchar2;
 
-    -- Payloads for children this layer decides at run time to create, as opposed to
-    -- ones the inbound document names.
-    --
-    -- The other item builders walk PLMSizeCurveDtl, which is the right source when
-    -- the document describes a whole new style. It is the wrong source when only
-    -- some of its combinations are missing from a style that already exists: the
-    -- rest are already there, and re-sending them either does nothing or produces a
-    -- second child on the same diff pair. These take the subset instead, handed over
-    -- as a plan the orchestrator builds from what the tenant actually holds.
-    --
-    -- p_plan is
-    --   {"style":"<parent>",
-    --    "attributes":{...as returned by sku_pkg.style_attributes...},
-    --    "children":[{"item","size","sizeDiff","colourDiff","sourceVariantRef","skuWidth"}]}
-    -- with "item" already reserved. They are not reachable through build_request:
-    -- a mapper name alone cannot carry the plan.
+    -- One row of the inbound document's PLMSizeCurveDtl array. Every reader of
+    -- the size curve - here and in the orchestrator - sees this shape; the
+    -- json_table projection behind it is defined once (c_size_curve, in the
+    -- body), so a column added to the curve lands in exactly one place.
+    type t_size_curve_row is record (
+        rn                 pls_integer,
+        source_variant_ref varchar2(120),
+        sku_size           varchar2(60),
+        sku_width          varchar2(60),
+        sku_id             varchar2(30),
+        sku_qty            number
+    );
+    type t_size_curve is table of t_size_curve_row index by pls_integer;
+
+    -- The single definition of the size-curve projection, public so the
+    -- orchestrator loops the same cursor instead of keeping a copy. Ten
+    -- readers used to carry their own json_table of this array; a column
+    -- added to the curve is now added here and nowhere else.
+    cursor c_size_curve(cp_payload clob) is
+        select rn, source_variant_ref, sku_size, sku_width, sku_id, sku_qty
+          from json_table(cp_payload, '$.PLMSizeCurveDtl[*]'
+              columns
+                  rn                 for ordinality,
+                  source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
+                  sku_size           varchar2(60)  path '$.SKU_SIZE',
+                  sku_width          varchar2(60)  path '$.SKU_WIDTH',
+                  sku_id             varchar2(30)  path '$.SKU_ID',
+                  sku_qty            number        path '$.SKU_QTY'
+          );
+
+
+    -- The size curve of any document carrying PLMSizeCurveDtl - the stored
+    -- request, or an MFCS response echoing the same shape back.
+    function size_curve(p_payload in clob) return t_size_curve;
+
+    -- A child this layer has decided to create: the reserved item number plus
+    -- the resolved differentiators the gap analysis compared against.
+    type t_generated_child is record (
+        item               varchar2(30),
+        sku_size           varchar2(60),
+        size_diff          varchar2(120),
+        colour_diff        varchar2(120),
+        source_variant_ref varchar2(120),
+        sku_width          varchar2(60)
+    );
+    type t_generated_children is table of t_generated_child index by pls_integer;
+
+    -- Everything the generated-child builders need: the parent's identity and
+    -- attributes as the tenant reports them (via sku_pkg.style_attributes), and
+    -- the children to create. A typed record rather than a JSON document on
+    -- purpose - a misspelled field here is a compile error, where a misspelled
+    -- JSON key would be a silent null, which is the failure mode this whole
+    -- layer is built to avoid.
+    type t_child_plan is record (
+        style                varchar2(30),
+        dept                 number,
+        class                number,
+        subclass             number,
+        original_retail      number,
+        cost_zone_group_id   number,
+        item_description     varchar2(250),
+        short_description    varchar2(120),
+        standard_uom         varchar2(10),
+        store_order_multiple varchar2(1),
+        supplier             number,
+        unit_cost            number,
+        origin_country       varchar2(3),
+        children             t_generated_children
+    );
+
+    -- Payloads for children this layer decides at run time to create, as opposed
+    -- to ones the inbound document names. The other item builders walk the whole
+    -- size curve, which is right for a new style and wrong when only some of its
+    -- combinations are missing: re-sending the rest either does nothing or makes
+    -- a second child on the same diff pair. These take the missing subset only.
+    -- Not reachable through build_request - a mapper name cannot carry the plan.
     function generated_child_create_request(
         p_action_request_id in varchar2,
-        p_plan              in clob
+        p_plan              in t_child_plan
     ) return clob;
 
     function generated_child_sourcing_request(
         p_action_request_id in varchar2,
-        p_plan              in clob
+        p_plan              in t_child_plan
     ) return clob;
 
     function generated_child_com_request(
         p_action_request_id in varchar2,
-        p_plan              in clob
+        p_plan              in t_child_plan
     ) return clob;
 
     function generated_child_approval_request(
         p_action_request_id in varchar2,
-        p_plan              in clob
+        p_plan              in t_child_plan
     ) return clob;
 end payload_pkg;
 /
@@ -74,6 +134,22 @@ end payload_pkg;
 show errors
 
 create or replace package body payload_pkg as
+
+    function size_curve(p_payload in clob) return t_size_curve is
+        l_rows t_size_curve;
+        l_i    pls_integer := 0;
+    begin
+        for v in c_size_curve(p_payload) loop
+            l_i := l_i + 1;
+            l_rows(l_i).rn := v.rn;
+            l_rows(l_i).source_variant_ref := v.source_variant_ref;
+            l_rows(l_i).sku_size := v.sku_size;
+            l_rows(l_i).sku_width := v.sku_width;
+            l_rows(l_i).sku_id := v.sku_id;
+            l_rows(l_i).sku_qty := v.sku_qty;
+        end loop;
+        return l_rows;
+    end;
 
     function request_payload(p_action_request_id in varchar2) return clob is
         l_payload clob;
@@ -215,9 +291,8 @@ create or replace package body payload_pkg as
         l_root json_object_t := json_object_t();
         l_count number;
     begin
-        select count(*) + 1
-          into l_count
-          from json_table(l_payload, '$.PLMSizeCurveDtl[*]' columns x path '$');
+        -- One number per child plus one for the style itself.
+        l_count := size_curve(l_payload).count + 1;
         l_root.put('itemNumberType', 'ITEM');
         l_root.put('quantity', l_count);
         l_root.put('daysUntilExpiry', 14);
@@ -297,16 +372,7 @@ create or replace package body payload_pkg as
         l_item json_object_t;
         l_sku varchar2(30);
     begin
-        for v in (
-            select source_variant_ref, sku_size, sku_width, sku_id
-              from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
-                  columns
-                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                      sku_size varchar2(60) path '$.SKU_SIZE',
-                      sku_width varchar2(60) path '$.SKU_WIDTH',
-                      sku_id varchar2(30) path '$.SKU_ID'
-              )
-        ) loop
+        for v in c_size_curve(p_payload) loop
             l_sku := resolved_sku(p_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
@@ -525,14 +591,7 @@ create or replace package body payload_pkg as
           into l_supplier, l_cost, l_country
           from dual;
 
-        for v in (
-            select source_variant_ref, sku_id
-              from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                  columns
-                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                      sku_id varchar2(30) path '$.SKU_ID'
-              )
-        ) loop
+        for v in c_size_curve(l_payload) loop
             l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_items.append(supplier_payload(l_sku, l_supplier, l_cost, l_country));
         end loop;
@@ -587,14 +646,7 @@ create or replace package body payload_pkg as
 
         append_item(request_style(p_action_request_id));
 
-        for v in (
-            select source_variant_ref, sku_id
-              from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                  columns
-                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                      sku_id varchar2(30) path '$.SKU_ID'
-              )
-        ) loop
+        for v in c_size_curve(l_payload) loop
             append_item(resolved_sku(l_payload, v.source_variant_ref, v.sku_id));
         end loop;
 
@@ -610,14 +662,7 @@ create or replace package body payload_pkg as
         l_item json_object_t;
         l_sku varchar2(30);
     begin
-        for v in (
-            select source_variant_ref, sku_id
-              from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                  columns
-                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                      sku_id varchar2(30) path '$.SKU_ID'
-              )
-        ) loop
+        for v in c_size_curve(l_payload) loop
             l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
@@ -661,14 +706,7 @@ create or replace package body payload_pkg as
                 to_char(l_delivery),
                 config_pkg.get_config('MFCS_LOCATION_HIERARCHY_VALUE', '19271')
             ));
-        for v in (
-            select source_variant_ref, sku_id
-              from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                  columns
-                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                      sku_id varchar2(30) path '$.SKU_ID'
-              )
-        ) loop
+        for v in c_size_curve(l_payload) loop
             l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_location := json_object_t();
             l_location.put('hierarchyValue', l_hierarchy_value);
@@ -713,14 +751,7 @@ create or replace package body payload_pkg as
         l_item.put('storeOrderMultiple', l_store_order_multiple);
         l_item.put('dataLoadingDestination', 'RMS');
         l_items.append(l_item);
-        for v in (
-            select source_variant_ref, sku_id
-              from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                  columns
-                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                      sku_id varchar2(30) path '$.SKU_ID'
-            )
-        ) loop
+        for v in c_size_curve(l_payload) loop
             l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
@@ -746,11 +777,7 @@ create or replace package body payload_pkg as
         l_sku varchar2(30);
     begin
         select json_value(l_payload, '$.RETAIL_PRICE' returning number) into l_retail from dual;
-        for v in (
-            select source_variant_ref, sku_id
-              from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                  columns source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF', sku_id varchar2(30) path '$.SKU_ID')
-        ) loop
+        for v in c_size_curve(l_payload) loop
             l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
@@ -863,14 +890,7 @@ create or replace package body payload_pkg as
         l_order.put('qualityControlInd', config_pkg.get_config('MFCS_QUALITY_CONTROL_IND', 'N'));
         l_order.put('freightTerms', config_pkg.get_config('MFCS_FREIGHT_TERMS', 'PREPAID'));
 
-        for v in (
-            select source_variant_ref, sku_id, sku_qty
-              from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
-                  columns
-                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
-                      sku_id varchar2(30) path '$.SKU_ID',
-                      sku_qty number path '$.SKU_QTY')
-        ) loop
+        for v in c_size_curve(l_payload) loop
             l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_detail := json_object_t();
             l_detail.put('item', l_sku);
@@ -938,21 +958,18 @@ create or replace package body payload_pkg as
         return l_root.to_clob;
     end;
 
-    -- Sourcing terms for a generated child. The document wins where it names them,
-    -- because that is the commercial decision the request is carrying. The parent
-    -- style is the fallback, for the order-shaped documents that name a style and
-    -- say nothing about sourcing at all.
+    -- Sourcing terms for a generated child. The document wins where it names
+    -- them, because that is the commercial decision the request is carrying. The
+    -- parent style is the fallback, for the order-shaped documents that name a
+    -- style and say nothing about sourcing at all.
     procedure generated_sourcing_context(
         p_action_request_id in varchar2,
-        p_plan              in clob,
+        p_plan              in t_child_plan,
         o_supplier          out number,
         o_cost              out number,
         o_country           out varchar2
     ) is
         l_payload clob := payload(p_action_request_id);
-        l_style_supplier number;
-        l_style_cost number;
-        l_style_country varchar2(3);
     begin
         select json_value(l_payload, '$.SUPPLIER' returning number),
                json_value(l_payload, '$.UNIT_COST' returning number),
@@ -960,22 +977,16 @@ create or replace package body payload_pkg as
           into o_supplier, o_cost, o_country
           from dual;
 
-        select json_value(p_plan, '$.attributes.supplier' returning number),
-               json_value(p_plan, '$.attributes.unitCost' returning number),
-               json_value(p_plan, '$.attributes.originCountry' returning varchar2(3))
-          into l_style_supplier, l_style_cost, l_style_country
-          from dual;
+        o_supplier := coalesce(o_supplier, p_plan.supplier);
+        o_cost := coalesce(o_cost, p_plan.unit_cost);
+        o_country := coalesce(o_country, p_plan.origin_country);
 
-        o_supplier := coalesce(o_supplier, l_style_supplier);
-        o_cost := coalesce(o_cost, l_style_cost);
-        o_country := coalesce(o_country, l_style_country);
-
-        -- Approval requires sourcing, so a child created without it would be stranded
-        -- in worksheet status. Better to say so before anything has been created.
+        -- Approval requires sourcing, so a child created without it would be
+        -- stranded in worksheet status. Better to say so before anything has
+        -- been created.
         if o_supplier is null or o_country is null then
             raise_application_error(-20964,
-                'Cannot create children for style '
-                || json_value(p_plan, '$.style' returning varchar2(30))
+                'Cannot create children for style ' || p_plan.style
                 || ': neither the request nor the style itself gives a supplier and origin '
                 || 'country, and MFCS will not approve an item that has no sourcing.');
         end if;
@@ -983,71 +994,41 @@ create or replace package body payload_pkg as
 
     function generated_child_create_request(
         p_action_request_id in varchar2,
-        p_plan              in clob
+        p_plan              in t_child_plan
     ) return clob is
         l_root json_object_t := json_object_t();
         l_items json_array_t := json_array_t();
         l_item json_object_t;
-        l_style varchar2(30);
-        l_dept number;
-        l_class number;
-        l_subclass number;
-        l_retail number;
-        l_cost_zone_group_id number;
-        l_description varchar2(250);
-        l_short_description varchar2(120);
-        l_standard_uom varchar2(10);
-        l_store_order_multiple varchar2(1);
-    begin
-        select json_value(p_plan, '$.style' returning varchar2(30)),
-               json_value(p_plan, '$.attributes.dept' returning number),
-               json_value(p_plan, '$.attributes.class' returning number),
-               json_value(p_plan, '$.attributes.subclass' returning number),
-               json_value(p_plan, '$.attributes.originalRetail' returning number),
-               json_value(p_plan, '$.attributes.costZoneGroupId' returning number),
-               json_value(p_plan, '$.attributes.itemDescription' returning varchar2(250)),
-               json_value(p_plan, '$.attributes.shortDescription' returning varchar2(120)),
-               json_value(p_plan, '$.attributes.standardUom' returning varchar2(10)),
-               json_value(p_plan, '$.attributes.storeOrderMultiple' returning varchar2(1))
-          into l_style, l_dept, l_class, l_subclass, l_retail, l_cost_zone_group_id,
-               l_description, l_short_description, l_standard_uom, l_store_order_multiple
-          from dual;
-
-        -- Everything structural comes from the parent as the tenant holds it, not
-        -- from configuration. A child that disagreed with its parent about the
-        -- hierarchy would be rejected; a child that agreed with our defaults instead
-        -- of with its parent would be worse, because it would be accepted and wrong.
-        -- Configuration only fills in what the read did not carry.
-        l_cost_zone_group_id := nvl(l_cost_zone_group_id,
+        -- Everything structural comes from the parent as the tenant holds it,
+        -- not from configuration. A child that disagreed with its parent about
+        -- the hierarchy would be rejected; one that agreed with our defaults
+        -- instead of with its parent would be worse, because it would be
+        -- accepted and wrong. Configuration only fills what the read did not
+        -- carry.
+        l_cost_zone_group_id number := nvl(p_plan.cost_zone_group_id,
             to_number(config_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000')));
-        l_store_order_multiple := nvl(l_store_order_multiple,
+        l_store_order_multiple varchar2(1) := nvl(p_plan.store_order_multiple,
             config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E'));
-        l_standard_uom := nvl(l_standard_uom, 'EA');
-
-        for c in (
-            select item, sku_size, size_diff, colour_diff, sku_width
-              from json_table(p_plan, '$.children[*]'
-                  columns
-                      item varchar2(30) path '$.item',
-                      sku_size varchar2(60) path '$.size',
-                      size_diff varchar2(120) path '$.sizeDiff',
-                      colour_diff varchar2(120) path '$.colourDiff',
-                      sku_width varchar2(60) path '$.skuWidth'
-              )
-        ) loop
+        l_standard_uom varchar2(10) := nvl(p_plan.standard_uom, 'EA');
+        l_child t_generated_child;
+    begin
+        for i in 1 .. p_plan.children.count loop
+            l_child := p_plan.children(i);
             l_item := json_object_t();
-            l_item.put('item', c.item);
-            l_item.put('itemParent', l_style);
+            l_item.put('item', l_child.item);
+            l_item.put('itemParent', p_plan.style);
             l_item.put('itemDescription',
-                substr(trim(l_description || ' ' || c.sku_size || ' ' || c.sku_width), 1, 250));
-            l_item.put('shortDescription', substr(nvl(l_short_description, l_description), 1, 120));
+                substr(trim(p_plan.item_description || ' ' || l_child.sku_size
+                    || ' ' || l_child.sku_width), 1, 250));
+            l_item.put('shortDescription',
+                substr(nvl(p_plan.short_description, p_plan.item_description), 1, 120));
             l_item.put('dataLoadingDestination', 'RMS');
             l_item.put('itemNumberType', 'ITEM');
             l_item.put('itemLevel', 2);
             l_item.put('tranLevel', 2);
-            l_item.put('dept', l_dept);
-            l_item.put('class', l_class);
-            l_item.put('subclass', l_subclass);
+            l_item.put('dept', p_plan.dept);
+            l_item.put('class', p_plan.class);
+            l_item.put('subclass', p_plan.subclass);
             l_item.put('status', 'W');
             l_item.put('approveInd', 'N');
             l_item.put('standardUom', l_standard_uom);
@@ -1056,16 +1037,16 @@ create or replace package body payload_pkg as
             l_item.put('sellableInd', 'Y');
             l_item.put('orderableInd', 'Y');
             l_item.put('storeOrderMultiple', l_store_order_multiple);
-            if l_retail is not null then
-                l_item.put('originalRetail', l_retail);
+            if p_plan.original_retail is not null then
+                l_item.put('originalRetail', p_plan.original_retail);
             end if;
             l_item.put('costZoneGroupId', l_cost_zone_group_id);
-            -- The diffs are already resolved. The plan carries the values the gap
-            -- analysis compared against, so a child cannot be created on a different
-            -- combination from the one that was found missing.
-            l_item.put('diff1', c.colour_diff);
+            -- The diffs are already resolved. The plan carries the values the
+            -- gap analysis compared against, so a child cannot be created on a
+            -- different combination from the one found missing.
+            l_item.put('diff1', l_child.colour_diff);
             l_item.put('diff1Type', 'C');
-            l_item.put('diff2', c.size_diff);
+            l_item.put('diff2', l_child.size_diff);
             l_item.put('diff2Type', 'S');
             l_items.append(l_item);
         end loop;
@@ -1077,7 +1058,7 @@ create or replace package body payload_pkg as
 
     function generated_child_sourcing_request(
         p_action_request_id in varchar2,
-        p_plan              in clob
+        p_plan              in t_child_plan
     ) return clob is
         l_root json_object_t := json_object_t();
         l_items json_array_t := json_array_t();
@@ -1087,11 +1068,8 @@ create or replace package body payload_pkg as
     begin
         generated_sourcing_context(p_action_request_id, p_plan, l_supplier, l_cost, l_country);
 
-        for c in (
-            select item
-              from json_table(p_plan, '$.children[*]' columns item varchar2(30) path '$.item')
-        ) loop
-            l_items.append(supplier_payload(c.item, l_supplier, l_cost, l_country));
+        for i in 1 .. p_plan.children.count loop
+            l_items.append(supplier_payload(p_plan.children(i).item, l_supplier, l_cost, l_country));
         end loop;
 
         l_root.put('collectionSize', l_items.get_size);
@@ -1101,7 +1079,7 @@ create or replace package body payload_pkg as
 
     function generated_child_com_request(
         p_action_request_id in varchar2,
-        p_plan              in clob
+        p_plan              in t_child_plan
     ) return clob is
         l_root json_object_t := json_object_t();
         l_items json_array_t := json_array_t();
@@ -1118,12 +1096,9 @@ create or replace package body payload_pkg as
     begin
         generated_sourcing_context(p_action_request_id, p_plan, l_supplier, l_cost, l_country);
 
-        -- Only the new children. The parent already carries a country of manufacture,
-        -- or it could not have been approved in the first place.
-        for c in (
-            select item
-              from json_table(p_plan, '$.children[*]' columns item varchar2(30) path '$.item')
-        ) loop
+        -- Only the new children. The parent already carries a country of
+        -- manufacture, or it could not have been approved in the first place.
+        for i in 1 .. p_plan.children.count loop
             l_manufacture_node := json_object_t();
             l_manufacture_node.put('manufacturerCountry', l_manufacturer_country);
             l_manufacture_node.put('primaryManufacturerCountryInd', 'Y');
@@ -1137,7 +1112,7 @@ create or replace package body payload_pkg as
             l_suppliers.append(l_supplier_node);
 
             l_item := json_object_t();
-            l_item.put('item', c.item);
+            l_item.put('item', p_plan.children(i).item);
             l_item.put('dataLoadingDestination', 'RMS');
             l_item.put('supplier', l_suppliers);
             l_items.append(l_item);
@@ -1150,22 +1125,21 @@ create or replace package body payload_pkg as
 
     function generated_child_approval_request(
         p_action_request_id in varchar2,
-        p_plan              in clob
+        p_plan              in t_child_plan
     ) return clob is
         l_root json_object_t := json_object_t();
         l_items json_array_t := json_array_t();
         l_item json_object_t;
-        l_style varchar2(30);
-        l_description varchar2(250);
-        l_short_description varchar2(120);
-        l_store_order_multiple varchar2(1);
+        l_store_order_multiple varchar2(1) := nvl(p_plan.store_order_multiple,
+            config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E'));
 
         procedure append_approval(p_item in varchar2, p_description in varchar2) is
         begin
             l_item := json_object_t();
             l_item.put('item', p_item);
             l_item.put('itemDescription', substr(p_description, 1, 250));
-            l_item.put('shortDescription', substr(nvl(l_short_description, p_description), 1, 120));
+            l_item.put('shortDescription',
+                substr(nvl(p_plan.short_description, p_description), 1, 120));
             l_item.put('status', 'A');
             l_item.put('approveInd', 'Y');
             l_item.put('storeOrderMultiple', l_store_order_multiple);
@@ -1173,33 +1147,16 @@ create or replace package body payload_pkg as
             l_items.append(l_item);
         end;
     begin
-        select json_value(p_plan, '$.style' returning varchar2(30)),
-               json_value(p_plan, '$.attributes.itemDescription' returning varchar2(250)),
-               json_value(p_plan, '$.attributes.shortDescription' returning varchar2(120)),
-               json_value(p_plan, '$.attributes.storeOrderMultiple' returning varchar2(1))
-          into l_style, l_description, l_short_description, l_store_order_multiple
-          from dual;
+        -- The parent goes in every time, not only when a read says it is
+        -- unapproved. Deciding from observed status would be a partial update,
+        -- which this layer does not do; re-approving an approved item costs a
+        -- field in a payload that is being sent regardless.
+        append_approval(p_plan.style, p_plan.item_description);
 
-        l_store_order_multiple := nvl(l_store_order_multiple,
-            config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E'));
-
-        -- The parent goes in every time, not only when the read says it is
-        -- unapproved. Deciding from observed status is the kind of partial update
-        -- this layer does not do: a child cannot be approved under an unapproved
-        -- parent, and re-approving an approved one costs a field in a payload that
-        -- is being sent regardless.
-        append_approval(l_style, l_description);
-
-        for c in (
-            select item, sku_size, sku_width
-              from json_table(p_plan, '$.children[*]'
-                  columns
-                      item varchar2(30) path '$.item',
-                      sku_size varchar2(60) path '$.size',
-                      sku_width varchar2(60) path '$.skuWidth'
-              )
-        ) loop
-            append_approval(c.item, trim(l_description || ' ' || c.sku_size || ' ' || c.sku_width));
+        for i in 1 .. p_plan.children.count loop
+            append_approval(p_plan.children(i).item,
+                trim(p_plan.item_description || ' ' || p_plan.children(i).sku_size
+                    || ' ' || p_plan.children(i).sku_width));
         end loop;
 
         l_root.put('collectionSize', l_items.get_size);

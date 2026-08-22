@@ -73,7 +73,8 @@ create or replace package body preview_pkg as
         l_calls json_array_t := json_array_t();
         l_call json_object_t;
         l_base varchar2(400);
-        l_endpoint_key varchar2(100);
+        l_resolution orchestrator_pkg.t_step_resolution;
+        l_endpoint_key varchar2(200);
         l_endpoint_path varchar2(1000);
         l_method varchar2(10);
         l_step_payload clob;
@@ -134,7 +135,8 @@ create or replace package body preview_pkg as
              where action_request_id = l_preview_id
              order by step_sequence
         ) loop
-            l_endpoint_key := orchestrator_pkg.endpoint_for_step(s.step_code, l_operation);
+            l_resolution := orchestrator_pkg.resolve_step(s.step_code, l_operation);
+            l_endpoint_key := l_resolution.endpoint_key;
 
             l_call := json_object_t();
             l_call.put('sequence', s.step_sequence);
@@ -157,7 +159,7 @@ create or replace package body preview_pkg as
                     l_call.put('description', 'Performed inside the integration layer; no MFCS call.');
                 end if;
             else
-                l_method := orchestrator_pkg.method_for_step(s.step_code, l_operation);
+                l_method := l_resolution.http_method;
                 l_endpoint_path := config_pkg.get_config(l_endpoint_key);
 
                 begin
