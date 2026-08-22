@@ -33,6 +33,7 @@ using (
     select 'DEFAULT', 'FEATURE_INITIAL_RETAIL_YN', 'N', 'Y' from dual union all
     select 'DEFAULT', 'FEATURE_ITEM_LOCATIONS_YN', 'N', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_RESERVATION_DAYS_UNTIL_EXPIRY', '1', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_OTB_EOW_DAY', 'SUNDAY', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_TYPE', 'N/B', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_STATUS', 'A', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_ORIGIN', '2', 'Y' from dual union all

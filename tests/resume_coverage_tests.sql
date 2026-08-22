@@ -76,7 +76,9 @@ declare
             || '"PLMSizeCurveDtl":[{"SOURCE_VARIANT_REF":"' || l_ref || '-7","SKU_SIZE":"7","SKU_WIDTH":"ALL","SKU_QTY":1,"SKU_ID":null}],'
             || '"NOT_BEFORE_DATE":"' || to_char(sysdate, 'YYYY-MM-DD') || '",'
             || '"NOT_AFTER_DATE":"' || to_char(sysdate, 'YYYY-MM-DD') || '",'
-            || '"OTB_EOW_DATE":"' || to_char(sysdate + 2, 'YYYY-MM-DD') || '",'
+            -- OTB end-of-week must land on the retail week-ending day (Sunday on this
+            -- tenant), or validation rejects the request before any MFCS call.
+            || '"OTB_EOW_DATE":"' || to_char(next_day(sysdate, 'SUNDAY'), 'YYYY-MM-DD') || '",'
             || '"EARLIEST_SHIP_DATE":"' || to_char(sysdate, 'YYYY-MM-DD') || '",'
             || '"LATEST_SHIP_DATE":"' || to_char(sysdate + 19, 'YYYY-MM-DD') || '",'
             || '"DELIVERY_LOC":1927,"ORDER_EXCHANGE_RATE":1}';

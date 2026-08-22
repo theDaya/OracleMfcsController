@@ -124,3 +124,8 @@ export const listOrders = (params = {}) => {
 export const getOrder = (orderNo) => call(`/orders/${encodeURIComponent(orderNo)}`);
 
 export const getTokenStatus = () => call('/token-status');
+
+export const getRequest = (id) => call(`/requests/${encodeURIComponent(id)}`);
+
+export const resumeTransaction = (id) =>
+  call(`/transactions/${encodeURIComponent(id)}/resume`, { method: 'POST' });

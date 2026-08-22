@@ -64,6 +64,9 @@ create or replace package body validation_pkg as
         l_not_after_text varchar2(30);
         l_earliest_text varchar2(30);
         l_latest_text varchar2(30);
+        l_otb_eow_text varchar2(30);
+        l_otb_eow date;
+        l_week_end_day varchar2(20);
         l_count number;
         l_distinct_count number;
         l_parsed json_element_t;
@@ -275,8 +278,9 @@ create or replace package body validation_pkg as
         select json_value(p_payload, '$.NOT_BEFORE_DATE' returning varchar2(30) null on error),
                json_value(p_payload, '$.NOT_AFTER_DATE' returning varchar2(30) null on error),
                json_value(p_payload, '$.EARLIEST_SHIP_DATE' returning varchar2(30) null on error),
-               json_value(p_payload, '$.LATEST_SHIP_DATE' returning varchar2(30) null on error)
-          into l_not_before_text, l_not_after_text, l_earliest_text, l_latest_text
+               json_value(p_payload, '$.LATEST_SHIP_DATE' returning varchar2(30) null on error),
+               json_value(p_payload, '$.OTB_EOW_DATE' returning varchar2(30) null on error)
+          into l_not_before_text, l_not_after_text, l_earliest_text, l_latest_text, l_otb_eow_text
           from dual;
 
         select to_date(l_not_before_text default null on conversion error, 'FXYYYY-MM-DD'),
@@ -305,6 +309,28 @@ create or replace package body validation_pkg as
 
         if l_earliest is not null and l_latest is not null and l_earliest > l_latest then
             add_error(l_errors, 'EARLIEST_SHIP_DATE', 'DATE_RELATIONSHIP', 'EARLIEST_SHIP_DATE must be on or before LATEST_SHIP_DATE.');
+        end if;
+
+        -- OTB end-of-week must land on the retail calendar's week-ending day.
+        -- MFCS enforces this at purchase-order create, which is step 100: by then a
+        -- style has been created and an order number burned, leaving a partially
+        -- completed request over a date the caller could have corrected up front.
+        -- The tenant calendar (administration/operations/calendar) starts every
+        -- retail month on a Monday, so the week ends Sunday. Configurable because
+        -- another tenant may run a different calendar.
+        l_otb_eow := to_date(l_otb_eow_text default null on conversion error, 'FXYYYY-MM-DD');
+        if l_otb_eow_text is not null and l_otb_eow is null then
+            add_error(l_errors, 'OTB_EOW_DATE', 'INVALID_DATE', 'OTB_EOW_DATE must use YYYY-MM-DD and be a valid date.');
+        elsif l_otb_eow is not null then
+            l_week_end_day := upper(config_pkg.get_config('MFCS_OTB_EOW_DAY', 'SUNDAY'));
+            if l_week_end_day is not null
+               and trim(to_char(l_otb_eow, 'DAY', 'NLS_DATE_LANGUAGE=ENGLISH')) <> l_week_end_day then
+                add_error(l_errors, 'OTB_EOW_DATE', 'NOT_WEEK_END_DATE',
+                    'OTB_EOW_DATE must fall on a ' || initcap(l_week_end_day)
+                    || ' to match the retail calendar; '
+                    || to_char(l_otb_eow, 'YYYY-MM-DD') || ' is a '
+                    || trim(initcap(to_char(l_otb_eow, 'DAY', 'NLS_DATE_LANGUAGE=ENGLISH'))) || '.');
+            end if;
         end if;
 
         if trim(l_department) is not null and not has_config('MAP.DEPARTMENT.' || l_department) then

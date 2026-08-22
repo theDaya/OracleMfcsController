@@ -5,11 +5,15 @@ import TransactionsTab from './TransactionsTab';
 import BrowseTab from './BrowseTab';
 import MasterDataTab from './MasterDataTab';
 import SpecViewer from './SpecViewer';
+import ActivityTab from './ActivityTab';
 
+// The console is a small MFCS hub: make things, watch what you made, look at what
+// is already there, and check the contract you are working against.
 const TABS = [
-  { id: 'transactions', label: 'Transactions', hint: 'Build, preview and submit a request' },
-  { id: 'browse', label: 'Browse', hint: 'Existing styles and orders in MFCS' },
-  { id: 'master', label: 'Master data', hint: 'Cached foundation data' },
+  { id: 'transactions', label: 'Build', hint: 'Create or modify a style or order, preview the calls, then submit' },
+  { id: 'activity', label: 'Activity', hint: 'Transactions submitted from here, with their steps, attempts and errors' },
+  { id: 'browse', label: 'Styles & orders', hint: 'What currently exists in MFCS' },
+  { id: 'master', label: 'Master data', hint: 'Cached foundation data behind the dropdowns' },
   { id: 'spec', label: 'MFCS spec', hint: 'The tenant OpenAPI contract' },
 ];
 
@@ -94,6 +98,8 @@ export default function App() {
       {tab === 'transactions' && (
         <TransactionsTab form={form} setForm={setForm} masterData={masterData} />
       )}
+
+      {tab === 'activity' && <ActivityTab />}
 
       {tab === 'browse' && (
         <BrowseTab form={form} setForm={setForm} goToTransactions={() => setTab('transactions')} />

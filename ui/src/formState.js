@@ -12,6 +12,21 @@ export const today = (offset = 0) => {
   return d.toISOString().slice(0, 10);
 };
 
+/**
+ * Next retail week-ending date.
+ *
+ * MFCS rejects a purchase order whose OTB EOW date is not a week-ending date, and
+ * it does so at order create - after the style exists and an order number has been
+ * reserved. The tenant calendar starts every retail month on a Monday, so the week
+ * ends on Sunday.
+ */
+export const nextWeekEnd = (weekEndDow = 0) => {
+  const d = new Date();
+  const delta = (weekEndDow - d.getDay() + 7) % 7 || 7;
+  d.setDate(d.getDate() + delta);
+  return d.toISOString().slice(0, 10);
+};
+
 export const stamp = () => new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 17);
 
 export const initialForm = () => ({
@@ -39,7 +54,7 @@ export const initialForm = () => ({
   exchangeRate: '1',
   notBeforeDate: today(0),
   notAfterDate: today(0),
-  otbEowDate: today(2),
+  otbEowDate: nextWeekEnd(),
   earliestShipDate: today(0),
   latestShipDate: today(19),
   sizeCurve: [

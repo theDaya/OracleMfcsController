@@ -2,12 +2,31 @@
 
 Four top-level tabs over the live MFCS tenant.
 
+A small MFCS hub: make things, watch what you made, look at what is already there, and check the
+contract you are working against.
+
 | Tab | What it does |
 | --- | --- |
-| **Transactions** | Build, preview and submit a request; shows both payload sets side by side |
-| **Browse** | Existing styles and orders in MFCS; click one to load it into the modify form |
-| **Master data** | Locally cached foundation data, with the origin of every value |
+| **Build** | Create or modify a style or order; preview the calls, then submit |
+| **Activity** | Transactions submitted from here — step graph, HTTP attempts with payloads, event log, resume |
+| **Styles & orders** | What currently exists in MFCS; click one to load it into the modify form |
+| **Master data** | Cached foundation data behind the dropdowns, with the origin of every value |
 | **MFCS spec** | The tenant OpenAPI contract, flagging which paths this bridge uses |
+
+## Activity tab
+
+The point of this tab is turning a bare `PARTIALLY_COMPLETED` into an explanation. Selecting a
+request shows:
+
+- **Steps** — the graph with per-step status and any generated identifier
+- **Attempts** — every HTTP call, with the exact request and response bodies; failing attempts open
+  by default, so the MFCS error text is the first thing you see
+- **Events** — the autonomous log, which records progress even when a step later fails
+- **Payload** — the inbound document as submitted, and the response returned to the caller
+
+Resumable requests (`PARTIALLY_COMPLETED`, `OUTCOME_UNKNOWN`, `MANUAL_REVIEW`) get a resume button.
+Resume replays the **stored** payload, so a request that failed because of a bad value in that
+payload cannot be rescued by resuming — it needs a fresh request with the value corrected.
 
 The Transactions tab shows both halves of the picture:
 

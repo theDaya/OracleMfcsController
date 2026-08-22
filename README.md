@@ -62,7 +62,8 @@ Do not grant or use `UTL_HTTP`; this implementation uses `APEX_WEB_SERVICE`.
 | `GET` | `/mfcs/v1/transactions/{actionRequestId}` | Request status |
 | `POST` | `/mfcs/v1/transactions/{actionRequestId}/resume` | Resume a partial request |
 | `GET` | `/mfcs/v1/reference-data` | Config-driven reference data for the UI |
-| `GET` | `/mfcs/v1/requests` | Recent requests |
+| `GET` | `/mfcs/v1/requests` | Recent requests, with step progress |
+| `GET` | `/mfcs/v1/requests/{id}` | One request: steps, attempts with payloads, event log |
 | `GET` | `/mfcs/v1/styles` | List styles live from MFCS |
 | `GET` | `/mfcs/v1/styles/{item}` | One item |
 | `GET` | `/mfcs/v1/orders` | List orders live from MFCS |
@@ -113,11 +114,16 @@ All five are implemented, with their own step graphs, endpoint resolution and HT
 `CREATE_STYLE` and `CREATE_ALL` have been proven against the live tenant. `MODIFY_*` produce correct
 payloads but have not yet been executed live.
 
-Two rules that cost the most time when got wrong:
+Three rules that cost the most time when got wrong:
 
 - The parent style carries differentiator **groups** (`RMS_ALL_C` / `ALL`); children carry **concrete**
   diff IDs (colour `08610`, sizes `070` / `080`).
 - Item approval fails unless sourcing **and** country of manufacture already exist.
+- `OTB_EOW_DATE` must fall on the retail week-ending day. The tenant calendar
+  (`administration/operations/calendar`) starts every retail month on a Monday, so weeks end on
+  **Sunday**. MFCS only enforces this at purchase-order create — step 100 — by which point a style
+  exists and an order number has been burned, so `validation_pkg` now checks it up front. The day is
+  configurable via `MFCS_OTB_EOW_DAY`.
 
 ## Configuration
 
