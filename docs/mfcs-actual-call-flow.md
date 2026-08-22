@@ -854,6 +854,39 @@ RESERVE_ORDER_NUMBER, CREATE_PURCHASE_ORDER, VERIFY_PURCHASE_ORDER
 HTTP 200, `COMPLETED`, order `25012`. The style write set runs before the order because an order is a
 statement about the style — its cost, country and supplier — not only about the order.
 
+## MODIFY_ORDER and the truth about order lines — live, 2026-08-22
+
+`MODIFY_ORDER` ran end to end for the first time: HTTP 200, `COMPLETED`, all ten steps, including
+`ENSURE_STYLE_SKUS` creating two missing children inline on the way. But reading order 25012 back
+told a different story, in three acts:
+
+1. **`purchaseOrders/update` is header-only in practice.** The run replaced the order's detail
+   lines with different items and quantities; SUCCESS came back and the order was untouched. A
+   second probe changed only the *quantity* of the order's own existing lines — same items, same
+   everything, qty 1 → 4 — same result: `COMPLETED`, order unchanged, still unchanged many minutes
+   later. The `details` array on that service is decoration on this tenant.
+
+2. **`purchaseOrder/details/update` works.** The spec carries dedicated line services this
+   integration never used: `purchaseOrder/details/create|update|delete`. A direct probe:
+
+   ```json
+   PUT /MerchIntegrations/services/purchaseOrder/details/update
+   {"items":[{"orderNo":25012,"dataLoadingDestination":"RMS","details":[
+     {"item":"100050401","location":19271,"locationType":"W","quantityOrdered":4}]}]}
+   → {"status":"SUCCESS","message":"modifyDetail service call was successful."}
+   ```
+
+   and the read-back showed qty 4 — **after roughly 30 seconds**, not the few seconds of lag seen
+   elsewhere. A verify that reads too soon concludes the write silently failed.
+
+3. **Explicit cancellation exists.** The `details` row shape carries `cancelInd`,
+   `quantityCancelled`, `cancelCode` and `reinstateInd`. So the answer to the standing question —
+   does a colour change on an existing order need the old line cancelled, or is replacing the
+   lines enough? — is now known: replacing is *not* enough (it is ignored); the old colour's line
+   is cancelled explicitly and the new colour's line is added with `details/create`.
+
+What follows from this is the top outstanding item: wire the order steps to the line services.
+
 ## Current Assumptions
 
 These values are configurable and should be replaced with authoritative Office/MFCS foundation mappings when available:

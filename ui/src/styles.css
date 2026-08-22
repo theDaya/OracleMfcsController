@@ -265,3 +265,62 @@ button.link.danger { color: var(--red); background: none; font-size: 16px; line-
 .rows tbody tr.norow { cursor: default; }
 .rows tbody tr.norow:hover { background: none; }
 .rows td.mono { font-family: var(--mono); }
+
+/* ---------- how it works (FlowTab) ---------- */
+.flow-layout { display: grid; grid-template-columns: minmax(420px, 1.1fr) 1fr; gap: 18px; align-items: start; }
+@media (max-width: 1100px) { .flow-layout { grid-template-columns: 1fr; } }
+
+.flow-chain { display: flex; flex-direction: column; }
+.flow-chain-item { display: flex; flex-direction: column; }
+.flow-arrow { color: var(--muted); text-align: center; font-size: 12px; line-height: 1.2; padding: 2px 0; }
+
+.flow-node {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; text-align: left;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2);
+  padding: 9px 12px; width: 100%;
+}
+.flow-node:hover { border-color: var(--accent); }
+.flow-node.sel { border-color: var(--accent); background: rgba(76, 154, 255, 0.1); }
+.flow-node-local { opacity: 0.75; }
+.flow-node-sub { border-style: dashed; border-color: rgba(210, 153, 34, 0.55); }
+.flow-node-ext { border-style: dashed; }
+.flow-node-decision { border-color: rgba(210, 153, 34, 0.55); background: rgba(210, 153, 34, 0.07); flex-direction: column; align-items: flex-start; gap: 4px; }
+.flow-node-title { font-size: 13px; font-weight: 600; }
+.flow-node-pkg { font: 11px var(--mono); color: var(--accent); }
+.flow-node-blurb { font: 11px var(--mono); color: var(--muted); width: 100%; }
+
+.flow-detail { position: sticky; top: 16px; }
+.flow-endpoint { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.flow-endpoint code { font: 12px var(--mono); color: var(--text); word-break: break-all; }
+.flow-kv { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.flow-kv code { font: 12px var(--mono); color: var(--text); }
+.flow-prose { color: var(--text); font-size: 13px; line-height: 1.65; margin: 10px 0; }
+.flow-h4, .flow-gotchas h4 {
+  margin: 16px 0 8px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--muted);
+}
+.flow-pre {
+  margin: 0; padding: 12px; background: #0b0e12; border: 1px solid var(--line);
+  border-radius: 8px; overflow-x: auto; font: 11px/1.6 var(--mono); color: #cbd5e1;
+}
+.flow-gotchas ul { margin: 0; padding-left: 18px; }
+.flow-gotchas li { font-size: 12px; color: var(--muted); margin-bottom: 6px; line-height: 1.55; }
+.flow-gotchas code { font-family: var(--mono); color: var(--text); font-size: 11px; }
+
+.flow-ops { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.flow-op {
+  border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2);
+  color: var(--muted); padding: 7px 16px; font-size: 13px;
+}
+.flow-op.on { background: var(--accent); border-color: var(--accent); color: #06121f; font-weight: 600; }
+
+.flow-proven { font-size: 12px; color: var(--green); margin: -6px 0 14px; }
+.flow-proven.warn { color: var(--amber); }
+
+.flow-fail { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+.flow-fail-red { border-color: rgba(248, 81, 73, 0.45); }
+.flow-fail-amber { border-color: rgba(210, 153, 34, 0.45); }
+.flow-fail-accent { border-color: rgba(76, 154, 255, 0.45); }
+.flow-fail-head { display: flex; align-items: center; gap: 10px; }
+.flow-fail-head code { font: 12px var(--mono); color: var(--muted); }
+.flow-fail .flow-prose { margin-bottom: 0; font-size: 12px; color: var(--muted); }

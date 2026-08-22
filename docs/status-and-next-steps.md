@@ -12,10 +12,10 @@ the `MFCS_CLIENT_MODE` switch were removed — if you find a reference to them, 
 | `CREATE_STYLE`, `CREATE_ALL` | Proven end to end against the tenant |
 | `MODIFY_STYLE` | **Completed live 2026-08-22**, all seven steps |
 | `CREATE_ORDER` | **Completed live 2026-08-22**, all eleven steps, order 25012 created and verified |
-| `MODIFY_ORDER` | Same graph as `CREATE_ORDER` minus the number reservation; not yet completed live |
+| `MODIFY_ORDER` | **Ran end to end live 2026-08-22** — but `purchaseOrders/update` ignores detail lines; the line services are not wired yet |
 | Missing-SKU generation | **Proven live 2026-08-22**: created two children under an existing style, verified by read-back |
 | Failure / resume paths | 20 of 20 passing, fault-injected against the real tenant (re-verified 2026-08-22 after the batch window closed) |
-| Console (`ui/`) | Build, Activity, Styles & orders, Master data, MFCS spec |
+| Console (`ui/`) | Build, Activity, Styles & orders, Master data, MFCS spec, **How it works** (clickable end-to-end flows) |
 | Item ranging | On, using virtual warehouse 19271 |
 | Non-merchandise costs | `NON_MERCH_COSTS` → order `expenses`, validated and previewing; not yet sent live |
 
@@ -31,15 +31,28 @@ header shows remaining validity, and `GET /token-status` decodes it.
 
 ## Outstanding work, in the order I would take it
 
-### 1. Complete `MODIFY_ORDER` live
+### 1. Wire the order steps to the purchase-order line services
 
-`MODIFY_STYLE` and `CREATE_ORDER` both complete end to end. `MODIFY_ORDER` runs the same graph as
-`CREATE_ORDER` without the number reservation, and its one live attempt stopped on the tenant's
-nightly batch window rather than on anything in the payload — so it is untested, not known-broken.
+`MODIFY_ORDER` ran end to end live (HTTP 200, all ten steps, inline SKU generation included) and
+exposed the real problem: **`purchaseOrders/update` is header-only in practice.** It answered
+SUCCESS while ignoring replaced items *and* a plain quantity change on the order's own lines.
 
-The batch window has since closed and the coverage suite runs 20/20 again, so this is ready to run. The open question is still the one you raised: when a colour
-changes on an existing order, does the old colour's line need explicit cancellation, or is replacing
-the detail lines enough?
+The line services exist and work — proven live:
+
+- `purchaseOrder/details/update` changed a line quantity on the approved order 25012
+  (visible after ~30 seconds of read lag, so verify must wait longer than it does elsewhere).
+- `purchaseOrder/details/create` / `details/delete` exist, and the line shape carries `cancelInd`,
+  `quantityCancelled`, `cancelCode` — explicit cancellation.
+
+That also answers the standing colour question: replacing lines in the bulk update is **not**
+enough (silently ignored). A colour change on an order is: cancel the old colour's line
+explicitly, `details/create` the new colour's line against the child ENSURE_STYLE_SKUS created.
+
+What to build: MODIFY_ORDER's `CREATE_PURCHASE_ORDER` step keeps the header update, then a line
+step reads the order, and per the whole-write-set rule sends `details/update` for every line the
+document names, `details/create` for lines the order lacks. Open decision for the user: whether a
+line on the order but absent from the document is cancelled or left alone. Payloads and evidence
+in `docs/mfcs-actual-call-flow.md`.
 
 ### 1a. Every operation now sends its whole write set
 

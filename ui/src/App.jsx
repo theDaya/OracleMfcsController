@@ -6,6 +6,7 @@ import BrowseTab from './BrowseTab';
 import MasterDataTab from './MasterDataTab';
 import SpecViewer from './SpecViewer';
 import ActivityTab from './ActivityTab';
+import FlowTab from './FlowTab';
 
 // The console is a small MFCS hub: make things, watch what you made, look at what
 // is already there, and check the contract you are working against.
@@ -15,6 +16,7 @@ const TABS = [
   { id: 'browse', label: 'Styles & orders', hint: 'What currently exists in MFCS' },
   { id: 'master', label: 'Master data', hint: 'Cached foundation data behind the dropdowns' },
   { id: 'spec', label: 'MFCS spec', hint: 'The tenant OpenAPI contract' },
+  { id: 'flow', label: 'How it works', hint: 'The middleware end to end: operations, call paths, SKU logic, failure handling' },
 ];
 
 export default function App() {
@@ -114,6 +116,8 @@ export default function App() {
           <SpecViewer usedEndpoints={reference?.endpoints} />
         </div>
       )}
+
+      {tab === 'flow' && <FlowTab />}
     </div>
   );
 }

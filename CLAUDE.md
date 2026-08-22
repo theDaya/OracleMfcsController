@@ -119,6 +119,12 @@ All verified live. Most are silent failures, which is why they are worth memoris
 - **Parent styles carry differentiator *groups*** (`RMS_ALL_C`/`ALL`); children carry *concrete* diff IDs.
 - **Order read and write disagree on names**: read gives `physicalQuantityOrdered` / `originCountryId`,
   write wants `quantityOrdered` / `originCountry`.
+- **`purchaseOrders/update` is header-only in practice.** It answers SUCCESS while ignoring the
+  `details` array entirely — even a quantity change on the order's own lines. Lines have their own
+  services: `purchaseOrder/details/create|update|delete`, and `details/update` is proven live.
+- **Order line changes take ~30 seconds to appear** in the procurement read — far longer than the
+  few seconds of feed lag elsewhere. A read-back that concludes too early reports a silent failure
+  that did not happen.
 - **Resume replays the *stored* payload.** A request that failed on a bad value in that payload cannot be
   rescued by resuming; it needs a fresh request.
 - **`foundation/item/{item}` is a feed read** and 404s on a style created minutes ago. `itemDetail`
