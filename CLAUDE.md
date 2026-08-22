@@ -122,6 +122,11 @@ All verified live. Most are silent failures, which is why they are worth memoris
 - **`purchaseOrders/update` is header-only in practice.** It answers SUCCESS while ignoring the
   `details` array entirely — even a quantity change on the order's own lines. Lines have their own
   services: `purchaseOrder/details/create|update|delete`, and `details/update` is proven live.
+- **`quantityCancelled` is cumulative-absolute; never send it.** A repeat of a line's existing
+  cancelled quantity is a silent no-op. `quantityOrdered` is authoritative: full cancellation is
+  `quantityOrdered:0` + `cancelInd` + `cancelCode` (ORCA codes: `S` switch, `B` reduction).
+- **A child's colour diff must belong to the parent's diff group** (`RMS_ALL_C` here). A colour
+  outside it is rejected loudly at items/create - one of the few loud failures.
 - **Order line changes take ~30 seconds to appear** in the procurement read — far longer than the
   few seconds of feed lag elsewhere. A read-back that concludes too early reports a silent failure
   that did not happen.

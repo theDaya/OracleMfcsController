@@ -12,7 +12,7 @@ the `MFCS_CLIENT_MODE` switch were removed — if you find a reference to them, 
 | `CREATE_STYLE`, `CREATE_ALL` | Proven end to end against the tenant |
 | `MODIFY_STYLE` | **Completed live 2026-08-22**, all seven steps |
 | `CREATE_ORDER` | **Completed live 2026-08-22**, all eleven steps, order 25012 created and verified |
-| `MODIFY_ORDER` | **Ran end to end live 2026-08-22** — but `purchaseOrders/update` ignores detail lines; the line services are not wired yet |
+| `MODIFY_ORDER` | **Proven live 2026-08-22 both directions**: quantities, colour switch with line creation + cancellation, and switch-back, all verified by read-back |
 | Missing-SKU generation | **Proven live 2026-08-22**: created two children under an existing style, verified by read-back |
 | Failure / resume paths | 20 of 20 passing, fault-injected against the real tenant (re-verified 2026-08-22 after the batch window closed) |
 | Console (`ui/`) | Build, Activity, Styles & orders, Master data, MFCS spec, **How it works** (clickable end-to-end flows) |
@@ -31,28 +31,20 @@ header shows remaining validity, and `GET /token-status` decodes it.
 
 ## Outstanding work, in the order I would take it
 
-### 1. Wire the order steps to the purchase-order line services
+### 1. Exercise the remaining edges of order-line sync
 
-`MODIFY_ORDER` ran end to end live (HTTP 200, all ten steps, inline SKU generation included) and
-exposed the real problem: **`purchaseOrders/update` is header-only in practice.** It answered
-SUCCESS while ignoring replaced items *and* a plain quantity change on the order's own lines.
+The line services are wired and proven. `SYNC_ORDER_LINES` (MODIFY_ORDER, seq 105) reads the
+order, updates/creates/cancels this style's lines, and verifies by read-back — quantities,
+a full colour switch with cancellation (`S`), a reduction (`B`), and resurrection of a cancelled
+line have all run live on order 25012. Semantics worth re-reading before touching it:
+`quantityCancelled` is cumulative-absolute and is deliberately never sent; `quantityOrdered` is
+authoritative and `quantityOrdered:0` + `cancelInd` + `cancelCode` is a cancellation.
 
-The line services exist and work — proven live:
-
-- `purchaseOrder/details/update` changed a line quantity on the approved order 25012
-  (visible after ~30 seconds of read lag, so verify must wait longer than it does elsewhere).
-- `purchaseOrder/details/create` / `details/delete` exist, and the line shape carries `cancelInd`,
-  `quantityCancelled`, `cancelCode` — explicit cancellation.
-
-That also answers the standing colour question: replacing lines in the bulk update is **not**
-enough (silently ignored). A colour change on an order is: cancel the old colour's line
-explicitly, `details/create` the new colour's line against the child ENSURE_STYLE_SKUS created.
-
-What to build: MODIFY_ORDER's `CREATE_PURCHASE_ORDER` step keeps the header update, then a line
-step reads the order, and per the whole-write-set rule sends `details/update` for every line the
-document names, `details/create` for lines the order lacks. Open decision for the user: whether a
-line on the order but absent from the document is cancelled or left alone. Payloads and evidence
-in `docs/mfcs-actual-call-flow.md`.
+What has not been exercised: an order carrying lines from more than one style (the scoping is
+coded — only the document's style's lines are candidates for cancellation — but never run),
+`MFCS_ORDER_LINE_ABSENT_ACTION='LEAVE'`, and a colour switch where the new colour is not in the
+parent's diff group (rejected loudly by MFCS: the diff must be a member of the parent's group —
+`BLACK` failed, `08621` worked; adding members to a diff group is untested territory).
 
 ### 1a. Every operation now sends its whole write set
 

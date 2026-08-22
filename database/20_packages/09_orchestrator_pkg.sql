@@ -339,6 +339,8 @@ create or replace package body orchestrator_pkg as
         case p_step_code
             when 'ENSURE_STYLE_SKUS' then
                 null;  -- Local: handled inline; which calls it makes depends on the tenant.
+            when 'SYNC_ORDER_LINES' then
+                null;  -- Local: handled inline; reads the order, then updates/creates/cancels lines.
             when 'RESERVE_ITEM_NUMBERS' then
                 def('ENDPOINT.ITEM_NUMBERS_MANAGE', 'POST', 'build_item_number_request');
             when 'CREATE_PARENT_ITEM_HIERARCHY' then
@@ -817,6 +819,258 @@ create or replace package body orchestrator_pkg as
             || ' SKU(s): ' || substr(l_detail, 1, 300));
     end;
 
+    -- Brings a purchase order's detail lines in line with the document.
+    --
+    -- purchaseOrders/update answers SUCCESS while ignoring its details array on
+    -- this tenant - proven live with replaced items and again with a plain
+    -- quantity change. Lines change through purchaseOrder/details/create|update,
+    -- and a line stops through details/update with cancelInd and a cancel code.
+    --
+    -- Like ENSURE_STYLE_SKUS this runs inline, because what it sends depends on
+    -- what the order currently holds: lines the document names are updated or
+    -- created, and lines of THIS style that the document no longer names are
+    -- cancelled (a colour switch leaves one behind). Lines of other styles are
+    -- never touched - the document speaks for its own style only.
+    procedure sync_order_lines(
+        p_action_request_id in varchar2,
+        p_step_code         in varchar2,
+        p_user_id           in varchar2
+    ) is
+        type t_qty_map is table of number index by varchar2(30);
+        l_payload clob := request_payload(p_action_request_id);
+        l_order_no varchar2(30);
+        l_style varchar2(30);
+        l_status number;
+        l_body clob;
+        l_orders json_array_t;
+        l_order json_object_t;
+        l_details json_array_t;
+        l_line json_object_t;
+        l_existing t_qty_map;
+        l_desired t_qty_map;
+        l_children t_qty_map;
+        l_skus json_object_t;
+        l_sku_arr json_array_t;
+        l_item varchar2(30);
+        l_plan payload_pkg.t_order_line_plan;
+        l_n pls_integer;
+        l_response clob;
+        l_absent_action varchar2(10) :=
+            config_pkg.get_config('MFCS_ORDER_LINE_ABSENT_ACTION', 'CANCEL');
+        l_retries number := to_number(config_pkg.get_config('MFCS_ORDER_VERIFY_RETRY_COUNT', '12'));
+        l_sleep number := to_number(config_pkg.get_config('MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS', '10'));
+        l_verified boolean;
+        l_mismatch varchar2(1000);
+
+        procedure read_order_lines is
+        begin
+            l_existing.delete;
+            l_body := client_pkg.get_json(
+                '/MerchIntegrations/services/procurement/order/' || l_order_no, l_status);
+            if l_status not between 200 and 299 then
+                raise_application_error(-20966,
+                    'Could not read order ' || l_order_no || ' before syncing its lines (HTTP '
+                    || l_status || ').');
+            end if;
+            l_orders := json_object_t.parse(l_body).get_array('items');
+            if l_orders is null or l_orders.get_size = 0 then
+                raise_application_error(-20966,
+                    'Order ' || l_order_no || ' returned no rows; cannot sync lines against it.');
+            end if;
+            l_order := treat(l_orders.get(0) as json_object_t);
+            l_details := l_order.get_array('orderDetail');
+            if l_details is null then
+                l_details := l_order.get_array('details');
+            end if;
+            for i in 0 .. nvl(l_details.get_size, 0) - 1 loop
+                l_line := treat(l_details.get(i) as json_object_t);
+                -- Read vocabulary: physicalQuantityOrdered, not quantityOrdered.
+                l_existing(l_line.get_string('item')) :=
+                    nvl(l_line.get_number('physicalQuantityOrdered'),
+                        l_line.get_number('quantityOrdered'));
+            end loop;
+        end;
+    begin
+        select order_no, style_no into l_order_no, l_style
+          from request where action_request_id = p_action_request_id;
+
+        if l_order_no is null then
+            step_pkg.set_step_status(p_action_request_id, p_step_code, 'SUCCEEDED');
+            return;
+        end if;
+
+        -- What the document says the lines should be. SKUs resolve exactly the
+        -- way the order mapper resolves them, through the same public function.
+        for v in payload_pkg.c_size_curve(l_payload) loop
+            l_item := payload_pkg.resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
+            if l_item is not null then
+                l_desired(l_item) := v.sku_qty;
+            end if;
+        end loop;
+
+        read_order_lines;
+
+        -- This style's children, from the tenant, so cancellation can be scoped
+        -- to lines the document actually speaks for.
+        l_skus := json_object_t.parse(sku_pkg.existing_skus(l_style));
+        if l_skus.get_boolean('available') then
+            l_sku_arr := l_skus.get_array('skus');
+            for i in 0 .. l_sku_arr.get_size - 1 loop
+                l_children(treat(l_sku_arr.get(i) as json_object_t).get_string('item')) := 1;
+            end loop;
+        end if;
+
+        -- Order-level values for the line nodes, same sources as the order mapper.
+        l_plan.order_no := l_order_no;
+        l_plan.location := to_number(config_pkg.get_config(
+            'MAP.ORDER_LOCATION.' || payload_pkg.string_value(l_payload, 'DELIVERY_LOC'),
+            config_pkg.get_config('MFCS_ORDER_DEFAULT_LOCATION', '19271')));
+        l_plan.location_type := config_pkg.get_config('MFCS_ORDER_LOCATION_TYPE', 'W');
+        l_plan.origin_country := payload_pkg.string_value(l_payload, 'ORIGIN_COUNTRY');
+        l_plan.unit_cost := to_number(payload_pkg.string_value(l_payload, 'UNIT_COST'));
+        l_plan.supplier_pack_size := to_number(config_pkg.get_config('MFCS_SUPPLIER_PACK_SIZE', '1'));
+        l_plan.earliest_ship_date := payload_pkg.string_value(l_payload, 'EARLIEST_SHIP_DATE');
+        l_plan.latest_ship_date := payload_pkg.string_value(l_payload, 'LATEST_SHIP_DATE');
+
+        l_item := l_desired.first;
+        while l_item is not null loop
+            if l_existing.exists(l_item) then
+                l_n := l_plan.updates.count + 1;
+                l_plan.updates(l_n).item := l_item;
+                l_plan.updates(l_n).quantity := l_desired(l_item);
+                l_plan.updates(l_n).prev_quantity := l_existing(l_item);
+            else
+                l_n := l_plan.creates.count + 1;
+                l_plan.creates(l_n).item := l_item;
+                l_plan.creates(l_n).quantity := l_desired(l_item);
+            end if;
+            l_item := l_desired.next(l_item);
+        end loop;
+
+        if l_absent_action = 'CANCEL' then
+            l_item := l_existing.first;
+            while l_item is not null loop
+                if not l_desired.exists(l_item) and l_children.exists(l_item) then
+                    l_n := l_plan.cancels.count + 1;
+                    l_plan.cancels(l_n).item := l_item;
+                    l_plan.cancels(l_n).quantity := l_existing(l_item);
+                end if;
+                l_item := l_existing.next(l_item);
+            end loop;
+        end if;
+
+        event_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'ORDER_LINES_PLAN',
+            p_step_code => p_step_code,
+            p_message => 'Order read; line changes decided.',
+            p_detail_payload => '{"orderNo":"' || event_pkg.escape_json(l_order_no)
+                || '","updates":' || l_plan.updates.count
+                || ',"creates":' || l_plan.creates.count
+                || ',"cancels":' || l_plan.cancels.count || '}'
+        );
+
+        if l_plan.updates.count > 0 then
+            l_response := client_pkg.call_service(
+                p_action_request_id => p_action_request_id,
+                p_step_code => p_step_code,
+                p_http_method => 'PUT',
+                p_endpoint_key => 'ENDPOINT.PO_DETAILS_UPDATE',
+                p_request_payload => payload_pkg.order_details_update_request(l_plan),
+                p_user_id => p_user_id
+            );
+        end if;
+
+        if l_plan.creates.count > 0 then
+            l_response := client_pkg.call_service(
+                p_action_request_id => p_action_request_id,
+                p_step_code => p_step_code,
+                p_http_method => 'POST',
+                p_endpoint_key => 'ENDPOINT.PO_DETAILS_CREATE',
+                p_request_payload => payload_pkg.order_details_create_request(l_plan),
+                p_user_id => p_user_id
+            );
+        end if;
+
+        if l_plan.cancels.count > 0 then
+            l_response := client_pkg.call_service(
+                p_action_request_id => p_action_request_id,
+                p_step_code => p_step_code,
+                p_http_method => 'PUT',
+                p_endpoint_key => 'ENDPOINT.PO_DETAILS_UPDATE',
+                p_request_payload => payload_pkg.order_details_cancel_request(l_plan),
+                p_user_id => p_user_id
+            );
+        end if;
+
+        -- Read back until every line the document names shows its quantity.
+        -- Line changes take ~30 seconds to appear in the procurement read -
+        -- far longer than the feed lag elsewhere - hence the long patience.
+        for attempt in 1 .. greatest(1, l_retries) loop
+            l_verified := true;
+            l_mismatch := null;
+            read_order_lines;
+            -- Cancelled lines must read zero (or be gone). They are part of what
+            -- the document asked for, so they are part of what read-back proves.
+            for c in 1 .. l_plan.cancels.count loop
+                if l_existing.exists(l_plan.cancels(c).item)
+                   and l_existing(l_plan.cancels(c).item) <> 0 then
+                    l_verified := false;
+                    l_mismatch := l_mismatch
+                        || case when l_mismatch is not null then ', ' end
+                        || l_plan.cancels(c).item || ' expected cancelled, got '
+                        || l_existing(l_plan.cancels(c).item);
+                end if;
+            end loop;
+            l_item := l_desired.first;
+            while l_item is not null loop
+                if not l_existing.exists(l_item)
+                   or l_existing(l_item) <> l_desired(l_item) then
+                    l_verified := false;
+                    l_mismatch := l_mismatch
+                        || case when l_mismatch is not null then ', ' end
+                        || l_item || ' expected ' || l_desired(l_item)
+                        -- exists() guards the read: indexing an absent key raises
+                        -- NO_DATA_FOUND, which cost this step its first live run.
+                        || ' got ' || case when l_existing.exists(l_item)
+                                          then to_char(l_existing(l_item))
+                                          else 'absent' end;
+                end if;
+                l_item := l_desired.next(l_item);
+            end loop;
+            exit when l_verified;
+
+            if attempt < greatest(1, l_retries) then
+                event_pkg.log_event(
+                    p_action_request_id => p_action_request_id,
+                    p_event_phase => 'ORDER_LINES_VERIFY_WAIT',
+                    p_step_code => p_step_code,
+                    p_event_level => 'WARN',
+                    p_message => 'Order lines not yet as requested; waiting before re-reading.',
+                    p_detail_payload => '{"attempt":' || attempt
+                        || ',"sleepSeconds":' || l_sleep
+                        || ',"mismatch":"' || event_pkg.escape_json(substr(l_mismatch, 1, 400)) || '"}'
+                );
+                dbms_session.sleep(l_sleep);
+            end if;
+        end loop;
+
+        if not l_verified then
+            raise_application_error(-20967,
+                'Order ' || l_order_no || ' lines still differ from the document after '
+                || greatest(1, l_retries) || ' reads: ' || substr(l_mismatch, 1, 500)
+                || '. MFCS accepted the line calls without applying them.');
+        end if;
+
+        step_pkg.set_step_status(p_action_request_id, p_step_code, 'SUCCEEDED');
+        event_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'ORDER_LINES_VERIFIED',
+            p_step_code => p_step_code,
+            p_message => 'Order ' || l_order_no || ' now carries the document''s lines, read back and confirmed.'
+        );
+    end;
+
     procedure execute_request(
         p_action_request_id in varchar2
     ) is
@@ -868,6 +1122,11 @@ create or replace package body orchestrator_pkg as
 
             if l_step = 'ENSURE_STYLE_SKUS' then
                 ensure_style_skus(p_action_request_id, l_step, l_user_id);
+                continue;
+            end if;
+
+            if l_step = 'SYNC_ORDER_LINES' then
+                sync_order_lines(p_action_request_id, l_step, l_user_id);
                 continue;
             end if;
 

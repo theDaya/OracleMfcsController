@@ -148,7 +148,14 @@ create or replace package body preview_pkg as
                 -- already holds, which a preview deliberately does not go and look at.
                 l_call.put('local', true);
                 l_call.put('method', 'LOCAL');
-                if s.step_code = 'ENSURE_STYLE_SKUS' then
+                if s.step_code = 'SYNC_ORDER_LINES' then
+                    l_call.put('description',
+                        'Reads the order back and brings its lines to what the document says: '
+                        || 'updates through purchaseOrder/details/update, additions through '
+                        || 'details/create, and this style''s no-longer-named lines cancelled with '
+                        || 'cancelInd. The bulk purchaseOrders/update ignores its details array on '
+                        || 'this tenant, so the header step cannot do this work.');
+                elsif s.step_code = 'ENSURE_STYLE_SKUS' then
                     l_call.put('description',
                         'Reads the style back and compares it against the requested colour and '
                         || 'size curve. Any combination the style lacks is created here - reserve '

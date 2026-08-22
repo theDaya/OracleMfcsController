@@ -887,6 +887,33 @@ told a different story, in three acts:
 
 What follows from this is the top outstanding item: wire the order steps to the line services.
 
+## SYNC_ORDER_LINES: order lines proven both directions — live, 2026-08-22
+
+`MODIFY_ORDER` gained a `SYNC_ORDER_LINES` step (seq 105): read the order, then bring its lines to
+what the document says — `details/update` for lines it has, `details/create` for lines it lacks,
+and this style's no-longer-named lines cancelled. Scoped to the document's own style: lines of
+other styles on the same order are never touched.
+
+Proven live on order 25012, both directions:
+
+- **Quantity change**: 4/1/1 → 2/2/2, the reduction carrying cancel code `B` (Buyer Cancelled).
+- **Colour switch 08610 → 08621**: ENSURE_STYLE_SKUS created the 08621 children (after learning
+  that the new colour must belong to the parent's diff group — `BLACK` was rejected loudly:
+  "This differentiator ID is not part of the parent's differentiator group"), then the sync
+  created three 08621 lines and cancelled the three 08610 lines with code `S`
+  (Colour/Location Switched — the tenant's own ORCA code list has one for exactly this).
+- **Switch back 08621 → 08610**: cancelled lines resurrect via a plain `details/update` with the
+  new quantity — a zeroed line is updatable, not dead.
+
+**`quantityCancelled` is cumulative-absolute — do not send it.** A line that had 2 cancelled
+earlier ignores a fresh "quantityCancelled: 2" entirely; one of three identical cancels silently
+did nothing until this was understood. `quantityOrdered` is authoritative: a full cancellation is
+`quantityOrdered: 0` + `cancelInd: "Y"` + `cancelCode`, which zeroes the line regardless of its
+history. Cancel reasons come from code type `ORCA`: `B` for reductions, `S` for switches.
+
+The step verifies by read-back — every named line at its quantity AND every cancelled line at
+zero — waiting out the ~30-second lag with the order-verify retry settings.
+
 ## Current Assumptions
 
 These values are configurable and should be replaced with authoritative Office/MFCS foundation mappings when available:
@@ -924,6 +951,9 @@ These values are configurable and should be replaced with authoritative Office/M
 | `MFCS_INNER_NAME` | `EA` | Required by `suppliers/update`; value from tenant code type `INRN`. |
 | `MFCS_CASE_NAME` | `CS` | Value from tenant code type `CASN`. |
 | `MFCS_PALLET_NAME` | `PAL` | Value from tenant code type `PALN`. |
+| `MFCS_ORDER_CANCEL_CODE` | `S` | ORCA "Colour/Location Switched" — full-line cancellation on a colour switch. |
+| `MFCS_ORDER_REDUCE_CANCEL_CODE` | `B` | ORCA "Buyer Cancelled" — reason attached to a quantity reduction. |
+| `MFCS_ORDER_LINE_ABSENT_ACTION` | `CANCEL` | A line of this style absent from the document is cancelled; set `LEAVE` to keep it. |
 
 ## Logging Tables
 

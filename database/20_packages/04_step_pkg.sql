@@ -159,6 +159,12 @@ create or replace package body step_pkg as
             add_step(p_action_request_id, 'VERIFY_PURCHASE_ORDER', 110);
         elsif p_operation_name = 'MODIFY_ORDER' then
             add_step(p_action_request_id, 'CREATE_PURCHASE_ORDER', 100);
+            -- The header update above ignores its details array on this tenant
+            -- (SUCCESS, nothing changes - proven live). The lines are synced
+            -- through the purchaseOrder/details services in their own step,
+            -- which reads the order first because what it sends depends on what
+            -- the order currently holds.
+            add_step(p_action_request_id, 'SYNC_ORDER_LINES', 105);
             add_step(p_action_request_id, 'VERIFY_PURCHASE_ORDER', 110);
         end if;
 

@@ -401,8 +401,26 @@ export const STEPS = {
       'this request’s earlier steps or recorded by ENSURE_STYLE_SKUS from the tenant. Location is ' +
       'the virtual warehouse via MAP.ORDER_LOCATION.*.',
     gotchas: [
-      'PROVEN LIVE 2026-08-22: purchaseOrders/update is header-only in practice - it returns SUCCESS and silently ignores the details array, even a quantity change on the order’s own lines. Lines have their own services: purchaseOrder/details/update works on an approved order (proven, ~30s read lag), with details/create and cancelInd/details/delete alongside. Wiring MODIFY_ORDER to them is the top outstanding item.',
+      'purchaseOrders/update is header-only in practice: SUCCESS while the details array is ignored, even for a quantity change on the order’s own lines (proven live). Lines change through the purchaseOrder/details services - which is what the SYNC_ORDER_LINES step exists for.',
       'OTB_EOW_DATE must be a Sunday; MFCS only enforces it here, which is why validation catches it up front.',
+    ],
+  },
+  SYNC_ORDER_LINES: {
+    title: 'Sync order lines',
+    kind: 'subflow',
+    handler: 'orchestrator_pkg.sync_order_lines → payload_pkg.order_details_*',
+    detail:
+      'Reads the order, then brings its lines to what the document says: details/update for lines ' +
+      'it has, details/create for lines it lacks, and this style’s no-longer-named lines cancelled ' +
+      'with quantityOrdered:0 + cancelInd + cancelCode. Exists because purchaseOrders/update ' +
+      'ignores its details array on this tenant. Verifies by read-back — every named line at its ' +
+      'quantity and every cancelled line at zero — waiting out the ~30s lag. Proven live both ' +
+      'directions: quantity change, colour switch with cancellation, and switch-back.',
+    gotchas: [
+      'quantityCancelled is cumulative-absolute and is never sent — a repeat of the existing cancelled quantity is a silent no-op (cost one half-applied cancel live). quantityOrdered is authoritative.',
+      'Cancel reasons are the tenant’s own ORCA codes: S (Colour/Location Switched) for a removed line, B (Buyer Cancelled) on a reduction.',
+      'Only the document’s own style’s lines can be cancelled; other styles’ lines on the same order are never touched.',
+      'A cancelled line is not dead — a later details/update with a quantity resurrects it.',
     ],
   },
   VERIFY_PURCHASE_ORDER: {
@@ -516,9 +534,9 @@ export const OPERATIONS = [
     blurb:
       'Same as Create order minus the number reservation - the order number comes in on the document.',
     proven:
-      'Ran end to end live 2026-08-22 (HTTP 200) - but purchaseOrders/update ignores detail lines. ' +
-      'The line services (purchaseOrder/details/update, proven live) are not wired in yet, so order ' +
-      'modification currently changes the style and the order header, not the lines.',
+      'Proven live 2026-08-22, both directions: quantity change, a full colour switch (new lines ' +
+      'created, old ones cancelled with code S), and the switch back - every change verified by ' +
+      'reading the order until it matched the document.',
     steps: [
       { seq: 10, code: 'VALIDATE_REQUEST' },
       { seq: 25, code: 'ENSURE_STYLE_SKUS' },
@@ -529,6 +547,7 @@ export const OPERATIONS = [
       { seq: 60, code: 'CREATE_ITEM_LOCATIONS', flag: 'FEATURE_ITEM_LOCATIONS_YN' },
       { seq: 70, code: 'APPROVE_ITEMS' },
       { seq: 100, code: 'CREATE_PURCHASE_ORDER' },
+      { seq: 105, code: 'SYNC_ORDER_LINES' },
       { seq: 110, code: 'VERIFY_PURCHASE_ORDER' },
     ],
   },

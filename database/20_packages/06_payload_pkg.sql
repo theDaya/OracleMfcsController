@@ -68,6 +68,17 @@ create or replace package payload_pkg authid definer as
     -- request, or an MFCS response echoing the same shape back.
     function size_curve(p_payload in clob) return t_size_curve;
 
+    -- The MFCS SKU behind one size-curve row: the row's own SKU_ID when the
+    -- document carries it, otherwise the ENTITY_MAP row filed under the same
+    -- source references - by an earlier request, or by ENSURE_STYLE_SKUS when
+    -- it read or created the child. Public because the order-line sync needs
+    -- the same resolution the mappers use; two resolutions could disagree.
+    function resolve_sku(
+        p_payload            in clob,
+        p_source_variant_ref in varchar2,
+        p_payload_sku        in varchar2
+    ) return varchar2;
+
     -- A child this layer has decided to create: the reserved item number plus
     -- the resolved differentiators the gap analysis compared against.
     type t_generated_child is record (
@@ -102,6 +113,45 @@ create or replace package payload_pkg authid definer as
         origin_country       varchar2(3),
         children             t_generated_children
     );
+
+    -- One purchase-order line as the sync step wants it to be (or, for a
+    -- cancellation, as the order currently has it).
+    type t_order_line is record (
+        item          varchar2(30),
+        quantity      number,
+        -- The order's current quantity for the line, when it already has one.
+        -- A reduction needs a reason: MFCS wants a cancel code on the quantity
+        -- that goes away, distinct from a full-line cancellation.
+        prev_quantity number
+    );
+    type t_order_lines is table of t_order_line index by pls_integer;
+
+    -- What SYNC_ORDER_LINES decided after reading the order back:
+    -- lines to update in place, lines to add, and this style's lines to cancel.
+    -- Built by the orchestrator from tenant state; typed for the same reason as
+    -- t_child_plan - a misspelled field should not compile.
+    type t_order_line_plan is record (
+        order_no           varchar2(30),
+        location           number,
+        location_type      varchar2(1),
+        origin_country     varchar2(3),
+        unit_cost          number,
+        supplier_pack_size number,
+        earliest_ship_date varchar2(20),
+        latest_ship_date   varchar2(20),
+        updates            t_order_lines,
+        creates            t_order_lines,
+        cancels            t_order_lines
+    );
+
+    -- purchaseOrder/details payloads. Update and create share a line shape;
+    -- cancel goes through details/update with cancelInd and the tenant's own
+    -- cancel code (code type ORCA - 'S' is literally "Colour/Location
+    -- Switched"). purchaseOrders/update ignores its details array on this
+    -- tenant, which is why these exist at all.
+    function order_details_update_request(p_plan in t_order_line_plan) return clob;
+    function order_details_create_request(p_plan in t_order_line_plan) return clob;
+    function order_details_cancel_request(p_plan in t_order_line_plan) return clob;
 
     -- Payloads for children this layer decides at run time to create, as opposed
     -- to ones the inbound document names. The other item builders walk the whole
@@ -259,7 +309,7 @@ create or replace package body payload_pkg as
         return l_order;
     end;
 
-    function resolved_sku(
+    function resolve_sku(
         p_payload            in clob,
         p_source_variant_ref in varchar2,
         p_payload_sku        in varchar2
@@ -373,7 +423,7 @@ create or replace package body payload_pkg as
         l_sku varchar2(30);
     begin
         for v in c_size_curve(p_payload) loop
-            l_sku := resolved_sku(p_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolve_sku(p_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
             l_item.put('itemDescription', substr(p_source_ref || ' ' || v.sku_size || ' ' || v.sku_width, 1, 250));
@@ -592,7 +642,7 @@ create or replace package body payload_pkg as
           from dual;
 
         for v in c_size_curve(l_payload) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_items.append(supplier_payload(l_sku, l_supplier, l_cost, l_country));
         end loop;
 
@@ -647,7 +697,7 @@ create or replace package body payload_pkg as
         append_item(request_style(p_action_request_id));
 
         for v in c_size_curve(l_payload) loop
-            append_item(resolved_sku(l_payload, v.source_variant_ref, v.sku_id));
+            append_item(resolve_sku(l_payload, v.source_variant_ref, v.sku_id));
         end loop;
 
         l_root.put('collectionSize', l_items.get_size);
@@ -663,7 +713,7 @@ create or replace package body payload_pkg as
         l_sku varchar2(30);
     begin
         for v in c_size_curve(l_payload) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
             l_item.put('dataLoadingDestination', 'RMS');
@@ -707,7 +757,7 @@ create or replace package body payload_pkg as
                 config_pkg.get_config('MFCS_LOCATION_HIERARCHY_VALUE', '19271')
             ));
         for v in c_size_curve(l_payload) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_location := json_object_t();
             l_location.put('hierarchyValue', l_hierarchy_value);
             l_location.put('status', 'A');
@@ -752,7 +802,7 @@ create or replace package body payload_pkg as
         l_item.put('dataLoadingDestination', 'RMS');
         l_items.append(l_item);
         for v in c_size_curve(l_payload) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
             l_item.put('itemDescription', substr(l_source_ref, 1, 250));
@@ -778,7 +828,7 @@ create or replace package body payload_pkg as
     begin
         select json_value(l_payload, '$.RETAIL_PRICE' returning number) into l_retail from dual;
         for v in c_size_curve(l_payload) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
             l_item.put('originalRetail', l_retail);
@@ -891,7 +941,7 @@ create or replace package body payload_pkg as
         l_order.put('freightTerms', config_pkg.get_config('MFCS_FREIGHT_TERMS', 'PREPAID'));
 
         for v in c_size_curve(l_payload) loop
-            l_sku := resolved_sku(l_payload, v.source_variant_ref, v.sku_id);
+            l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_detail := json_object_t();
             l_detail.put('item', l_sku);
             l_detail.put('location', l_order_location);
@@ -1162,6 +1212,95 @@ create or replace package body payload_pkg as
         l_root.put('collectionSize', l_items.get_size);
         l_root.put('items', l_items);
         return l_root.to_clob;
+    end;
+
+    -- Shared line shape for details create/update. Everything except item and
+    -- quantity is order-level on this integration: one style, one supplier,
+    -- one delivery location per document.
+    function order_line_node(
+        p_plan in t_order_line_plan,
+        p_line in t_order_line
+    ) return json_object_t is
+        l_line json_object_t := json_object_t();
+    begin
+        l_line.put('item', p_line.item);
+        l_line.put('location', p_plan.location);
+        l_line.put('locationType', p_plan.location_type);
+        l_line.put('unitCost', p_plan.unit_cost);
+        l_line.put('originCountry', p_plan.origin_country);
+        l_line.put('supplierPackSize', p_plan.supplier_pack_size);
+        l_line.put('quantityOrdered', p_line.quantity);
+        -- Reducing a line needs a reason - B, "Buyer Cancelled" - distinct from a
+        -- full-line cancellation's S, "Colour/Location Switched" (both from the
+        -- tenant's own code type ORCA). quantityOrdered is authoritative;
+        -- quantityCancelled is deliberately NOT sent. It proved to be
+        -- cumulative-absolute on this tenant: re-sending a line's existing
+        -- cancelled quantity is a silent no-op, which left a cancel half-applied
+        -- the first time this ran live.
+        if p_line.prev_quantity is not null and p_line.quantity < p_line.prev_quantity then
+            l_line.put('cancelCode', config_pkg.get_config('MFCS_ORDER_REDUCE_CANCEL_CODE', 'B'));
+        end if;
+        l_line.put('earliestShipDate', p_plan.earliest_ship_date);
+        l_line.put('latestShipDate', p_plan.latest_ship_date);
+        return l_line;
+    end;
+
+    function order_details_envelope(
+        p_plan    in t_order_line_plan,
+        p_details in json_array_t
+    ) return clob is
+        l_root json_object_t := json_object_t();
+        l_items json_array_t := json_array_t();
+        l_order json_object_t := json_object_t();
+    begin
+        l_order.put('orderNo', to_number(p_plan.order_no));
+        l_order.put('dataLoadingDestination', 'RMS');
+        l_order.put('details', p_details);
+        l_items.append(l_order);
+        l_root.put('items', l_items);
+        return l_root.to_clob;
+    end;
+
+    function order_details_update_request(p_plan in t_order_line_plan) return clob is
+        l_details json_array_t := json_array_t();
+    begin
+        for i in 1 .. p_plan.updates.count loop
+            l_details.append(order_line_node(p_plan, p_plan.updates(i)));
+        end loop;
+        return order_details_envelope(p_plan, l_details);
+    end;
+
+    function order_details_create_request(p_plan in t_order_line_plan) return clob is
+        l_details json_array_t := json_array_t();
+    begin
+        for i in 1 .. p_plan.creates.count loop
+            l_details.append(order_line_node(p_plan, p_plan.creates(i)));
+        end loop;
+        return order_details_envelope(p_plan, l_details);
+    end;
+
+    function order_details_cancel_request(p_plan in t_order_line_plan) return clob is
+        l_details json_array_t := json_array_t();
+        l_line json_object_t;
+        l_cancel_code varchar2(6) := config_pkg.get_config('MFCS_ORDER_CANCEL_CODE', 'S');
+    begin
+        -- A full cancellation drives quantityOrdered to zero and says why. Not
+        -- quantityCancelled: that field is cumulative-absolute on this tenant,
+        -- so a line with a prior partial cancellation ignores a repeat of its
+        -- existing cancelled quantity - proven live when one of three identical
+        -- cancels silently did nothing. quantityOrdered:0 zeroes the line
+        -- regardless of its history.
+        for i in 1 .. p_plan.cancels.count loop
+            l_line := json_object_t();
+            l_line.put('item', p_plan.cancels(i).item);
+            l_line.put('location', p_plan.location);
+            l_line.put('locationType', p_plan.location_type);
+            l_line.put('quantityOrdered', 0);
+            l_line.put('cancelInd', 'Y');
+            l_line.put('cancelCode', l_cancel_code);
+            l_details.append(l_line);
+        end loop;
+        return order_details_envelope(p_plan, l_details);
     end;
 
     function build_request(

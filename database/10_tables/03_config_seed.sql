@@ -62,6 +62,9 @@ using (
     select 'DEFAULT', 'MFCS_ORDER_DEFAULT_LOCATION', '19271', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_DEFAULT_TERMS', '34', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_DEFAULT_IMPORT_COUNTRY', 'GB', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_CANCEL_CODE', 'S', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_REDUCE_CANCEL_CODE', 'B', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_LINE_ABSENT_ACTION', 'CANCEL', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_VERIFY_RETRY_COUNT', '12', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS', '10', 'Y' from dual union all
     select 'DEFAULT', 'BATCH_WINDOW_ACTIVE_YN', 'N', 'Y' from dual union all
@@ -81,6 +84,8 @@ using (
     select 'DEFAULT', 'ENDPOINT.PO_PREISSUED_CREATE', '/MerchIntegrations/services/purchaseOrder/preIssuedOrderNumber/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.PURCHASE_ORDERS_CREATE', '/MerchIntegrations/services/purchaseOrders/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.PURCHASE_ORDERS_UPDATE', '/MerchIntegrations/services/purchaseOrders/update', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.PO_DETAILS_CREATE', '/MerchIntegrations/services/purchaseOrder/details/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.PO_DETAILS_UPDATE', '/MerchIntegrations/services/purchaseOrder/details/update', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.PURCHASE_ORDER_GET', '/MerchIntegrations/services/procurement/order/{orderNo}', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.REST_SERVICE_STATUS', '/MerchIntegrations/services/administration/operations/restService/status', 'Y' from dual union all
     select 'DEFAULT', 'MAP.DEPARTMENT.100', '100', 'Y' from dual union all
