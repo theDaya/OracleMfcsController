@@ -131,9 +131,22 @@ MFCS does not hand you the hierarchy in one call, and two facts drive the whole 
   `referenceItem`, `offsetkey` and `limit`. Passing `itemParent` is silently ignored and you get an
   unfiltered feed, which looks like a filter that worked.
 
-So `browse_pkg.get_style(item, withSkus => 'Y')` finds the SKUs by paging `itemLevel=2` within the
-style's department and matching `itemParent` itself, then attaches them under `resolved.skus`. It is
-a scan, capped at ten pages — the cost of a missing filter, not a design choice.
+A third check settles it: the item response **schema** carries no child collection either.
+`itemParent` and `itemGrandparent` point upward, and `referenceItem` holds level-3 reference items
+such as UPCs, not child SKUs. Nor is there a child-item service among the 90 GET paths.
+
+So `browse_pkg.get_style(item, withSkus => 'Y')` scans. It does it in two passes to keep the cost
+sane:
+
+1. Page `itemLevel=2` within the style's department asking only for `item` and `itemParent` via the
+   `include` parameter. That is **30KB per 200 rows instead of 1.1MB** — the feed returns all 118
+   item fields otherwise.
+2. Read each match in full by id, so the detail regions still get the supplier, country and UDA
+   collections that only a full read carries.
+
+`resolved` reports `itemsScanned`, `pagesScanned` and `truncated`, and the SKUs region shows a
+warning if the scan hit its cap before reaching the end of the feed — an incomplete list should
+never look like a complete one.
 
 Everything else is nested inside each item document rather than fetched separately:
 

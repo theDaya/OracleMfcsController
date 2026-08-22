@@ -292,6 +292,17 @@ export default function RecordDetail({ order, style, skus, loading }) {
             </div>
 
             <div className="rd-region-body">
+              {region === 'skus' && style?.resolved?.truncated && (
+                <div className="banner warn">
+                  <strong>SKU list may be incomplete.</strong> The scan hit its page cap after
+                  {' '}{style.resolved.itemsScanned} items without reaching the end of the feed.
+                </div>
+              )}
+              {region === 'skus' && style?.resolved?.note && (
+                <p className="muted small" style={{ marginBottom: 8 }}>
+                  {style.resolved.note} Scanned {style.resolved.itemsScanned} item(s).
+                </p>
+              )}
               {region === 'skus' && (
                 <Grid
                   columns={[
@@ -303,7 +314,7 @@ export default function RecordDetail({ order, style, skus, loading }) {
                     { key: 'unitRetail', label: 'Retail' },
                   ]}
                   rows={skus || []}
-                  empty="No child SKUs found. MFCS has no itemParent filter, so children are located by scanning the item feed — an unapproved or unpublished SKU will not appear."
+                  empty="No child SKUs found."
                 />
               )}
 
