@@ -300,7 +300,9 @@ export default function RecordDetail({ order, style, skus, loading }) {
               )}
               {region === 'skus' && style?.resolved?.note && (
                 <p className="muted small" style={{ marginBottom: 8 }}>
-                  {style.resolved.note} Scanned {style.resolved.itemsScanned} item(s).
+                  {style.resolved.note}
+                  {style.resolved.itemsScanned != null &&
+                    ` Scanned ${style.resolved.itemsScanned} item(s).`}
                 </p>
               )}
               {region === 'skus' && (

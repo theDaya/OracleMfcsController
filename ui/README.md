@@ -131,34 +131,30 @@ MFCS does not hand you the hierarchy in one call, and two facts drive the whole 
   `referenceItem`, `offsetkey` and `limit`. Passing `itemParent` is silently ignored and you get an
   unfiltered feed, which looks like a filter that worked.
 
-A third check settles it: the item response **schema** carries no child collection either.
-`itemParent` and `itemGrandparent` point upward, and `referenceItem` holds level-3 reference items
-such as UPCs, not child SKUs. Nor is there a child-item service among the 90 GET paths.
+A third check settles it for that API: the item response **schema** carries no child collection
+either. `itemParent` and `itemGrandparent` point upward, and `referenceItem` holds level-3 reference
+items such as UPCs, not child SKUs. Oracle's published documentation agrees — same parameter list, no
+child service.
 
-So `browse_pkg.get_style(item, withSkus => 'Y')` scans. It does it in two passes to keep the cost
-sane:
-
-1. Page `itemLevel=2` within the style's department asking only for `item` and `itemParent` via the
-   `include` parameter. That is **30KB per 200 rows instead of 1.1MB** — the feed returns all 118
-   item fields otherwise.
-2. Read each match in full by id, so the detail regions still get the supplier, country and UDA
-   collections that only a full read carries.
-
-`resolved` reports `itemsScanned`, `pagesScanned` and `truncated`, and the SKUs region shows a
-warning if the scan hit its cap before reaching the end of the feed — an incomplete list should
-never look like a complete one.
-
-Everything else is nested inside each item document rather than fetched separately:
+**But the tenant serves a second, older API family that is absent from the MerchIntegrations OpenAPI
+document**, and it does the job in one call:
 
 ```
-item (style or SKU)
-  itemSupplier[]
-    itemSupplierCountry[]                 -- origin, unit cost, UOP, pack sizes
-    itemSupplierCountryOfManufacture[]    -- required before approval
-  itemUda { udaLov[], udaFreeform[], udaDate[] }
-order
-  details[]                               -- one line per SKU
+GET /RmsReSTServices/services/private/Item/itemDetail?item=<style>
 ```
+
+It returns the style *together with its children*. Asking for a style returns three rows (parent plus
+two SKUs); asking for a SKU returns just that SKU; an unknown item returns 400. The array is not
+ordered parent-first, so children are matched on `itemParent` rather than position.
+
+`browse_pkg.get_style(item, withSkus => 'Y')` uses it to discover the child numbers, then reads each
+child in full through the MerchIntegrations item service — `itemDetail` carries 24 fields where the
+MerchIntegrations read carries 118, and the detail regions need the richer document.
+
+Because `itemDetail` is undocumented for this tenant, the previous approach survives as a fallback:
+page the item feed asking only for `item` and `itemParent` via the `include` parameter, which takes a
+200-row page from roughly 1.1MB to 30KB. `resolved.source` records which path was taken, and
+`resolved.truncated` warns when a fallback scan hit its cap.
 
 ## Browse detail view
 

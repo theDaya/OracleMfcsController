@@ -20,20 +20,22 @@ create or replace package browse_pkg authid definer as
 
     -- p_with_skus attaches the style's child SKUs under resolved.skus.
     --
-    -- MFCS offers no way to ask a style for its children, confirmed three ways
-    -- against the tenant contract (26.1.201.0):
-    --   * foundation/item has no itemParent parameter - its filters are since,
-    --     before, itemLevel, tranLevel, deptId, classId, subclassId, status,
-    --     itemType, inventoryInd, supplier, referenceItem, offsetkey and limit
-    --   * the item response schema carries no child collection; itemParent and
-    --     itemGrandparent point upward, and referenceItem holds level-3 reference
-    --     items such as UPCs, not child SKUs
-    --   * there is no child-item service anywhere in the 90 GET paths
+    -- The MerchIntegrations item service cannot do this: it has no itemParent
+    -- filter, its response schema carries no child collection (itemParent and
+    -- itemGrandparent point upward, referenceItem holds level-3 UPCs), and no
+    -- child-item service exists among its 90 GET paths.
     --
-    -- So the children have to be found by scanning. Two steps keep that cheap:
-    -- page the feed asking only for item and itemParent via the include
-    -- parameter (30KB per 200 rows instead of 1.1MB), then read each match in
-    -- full by id so the caller still gets complete documents.
+    -- The tenant also serves an older API family that is absent from the
+    -- MerchIntegrations OpenAPI document:
+    --
+    --   GET /RmsReSTServices/services/private/Item/itemDetail?item=<style>
+    --
+    -- which returns the style together with its children in a single call. That
+    -- is used first. It carries fewer fields than the MerchIntegrations read, so
+    -- each child is then fetched in full for the detail regions.
+    --
+    -- Because that service is undocumented for this tenant, a scan of the item
+    -- feed remains as a fallback. resolved.source records which path was taken.
     function get_style(
         p_item      in varchar2,
         p_with_skus in varchar2 default 'N'
@@ -108,17 +110,103 @@ create or replace package body browse_pkg as
         return client_pkg.get_json(l_path, l_status);
     end;
 
+    -- Child item numbers for a style, via the RmsReSTServices item hierarchy read.
+    -- Returns an empty collection if the service is unavailable, so the caller can
+    -- fall back.
+    function child_numbers_via_item_detail(
+        p_item   in varchar2,
+        o_ok     out boolean
+    ) return apex_t_varchar2 is
+        l_status number;
+        l_body clob;
+        l_arr json_array_t;
+        l_row json_object_t;
+        l_out apex_t_varchar2 := apex_t_varchar2();
+    begin
+        o_ok := false;
+        l_body := client_pkg.get_json(
+            '/RmsReSTServices/services/private/Item/itemDetail?item=' || p_item, l_status);
+        if l_status not between 200 and 299 then
+            return l_out;
+        end if;
+
+        l_arr := json_array_t.parse(l_body);
+        o_ok := true;
+        for i in 0 .. l_arr.get_size - 1 loop
+            l_row := treat(l_arr.get(i) as json_object_t);
+            -- The array is not ordered parent-first, so match on the relationship
+            -- rather than on position.
+            if l_row.get_string('itemParent') = p_item then
+                apex_string.push(l_out, l_row.get_string('item'));
+            end if;
+        end loop;
+        return l_out;
+    exception
+        when others then
+            o_ok := false;
+            return apex_t_varchar2();
+    end;
+
+    -- Fallback: page the item feed and match itemParent. Projects only the two
+    -- fields the match needs via the include parameter, which takes a 200-row page
+    -- from roughly 1.1MB to 30KB.
+    function child_numbers_via_scan(
+        p_item      in varchar2,
+        p_dept      in number,
+        o_scanned   out pls_integer,
+        o_truncated out boolean
+    ) return apex_t_varchar2 is
+        c_max_pages constant pls_integer := 25;
+        c_page_size constant pls_integer := 500;
+        l_status number;
+        l_body clob;
+        l_feed json_object_t;
+        l_items json_array_t;
+        l_row json_object_t;
+        l_out apex_t_varchar2 := apex_t_varchar2();
+        l_page pls_integer := 0;
+        l_more boolean := true;
+        l_offset varchar2(200);
+        l_path varchar2(1000);
+    begin
+        o_scanned := 0;
+        while l_more and l_page < c_max_pages loop
+            l_page := l_page + 1;
+            l_path := '/MerchIntegrations/services/foundation/item?itemLevel=2&limit='
+                   || c_page_size || '&include=items.item,items.itemParent';
+            if p_dept is not null then
+                l_path := l_path || '&deptId=' || p_dept;
+            end if;
+            if l_offset is not null then
+                l_path := l_path || '&offsetkey=' || l_offset;
+            end if;
+
+            l_body := client_pkg.get_json(l_path, l_status);
+            exit when l_status not between 200 and 299;
+
+            l_feed := json_object_t.parse(l_body);
+            l_items := l_feed.get_array('items');
+            exit when l_items is null or l_items.get_size = 0;
+
+            for i in 0 .. l_items.get_size - 1 loop
+                l_row := treat(l_items.get(i) as json_object_t);
+                l_offset := l_row.get_string('item');
+                o_scanned := o_scanned + 1;
+                if l_row.get_string('itemParent') = p_item then
+                    apex_string.push(l_out, l_row.get_string('item'));
+                end if;
+            end loop;
+
+            l_more := nvl(l_feed.get_string('hasMore'), 'false') = 'true';
+        end loop;
+        o_truncated := l_page >= c_max_pages and l_more;
+        return l_out;
+    end;
+
     function get_style(
         p_item      in varchar2,
         p_with_skus in varchar2 default 'N'
     ) return clob is
-        c_max_pages constant pls_integer := 25;
-        c_page_size constant pls_integer := 500;
-        -- Ask for only what the match needs. Without this the feed returns all
-        -- 118 item fields per candidate and the scan moves megabytes to find two
-        -- numbers.
-        c_slim constant varchar2(200) := '&include=items.item,items.itemParent';
-
         l_status number;
         l_body clob;
         l_root json_object_t;
@@ -126,16 +214,12 @@ create or replace package body browse_pkg as
         l_style json_object_t;
         l_dept number;
         l_meta json_object_t;
-        l_numbers apex_t_varchar2 := apex_t_varchar2();
+        l_numbers apex_t_varchar2;
         l_skus json_array_t := json_array_t();
-        l_page pls_integer := 0;
+        l_ok boolean;
         l_scanned pls_integer := 0;
-        l_more boolean := true;
-        l_offset varchar2(200);
-        l_path varchar2(1000);
-        l_feed json_object_t;
-        l_feed_items json_array_t;
-        l_candidate json_object_t;
+        l_truncated boolean := false;
+        l_source varchar2(60);
         l_child_body clob;
         l_child_items json_array_t;
     begin
@@ -153,11 +237,11 @@ create or replace package body browse_pkg as
         end if;
         l_style := treat(l_items.get(0) as json_object_t);
 
-        -- Only a parent style has children to look for.
         if nvl(l_style.get_number('itemLevel'), 1) <> 1 then
             l_meta := json_object_t();
             l_meta.put('skus', json_array_t());
             l_meta.put('skuCount', 0);
+            l_meta.put('source', 'none');
             l_meta.put('note', 'Not a parent item.');
             l_style.put('resolved', l_meta);
             return l_root.to_clob;
@@ -165,39 +249,16 @@ create or replace package body browse_pkg as
 
         l_dept := l_style.get_number('dept');
 
-        -- Pass 1: cheap scan for the child item numbers.
-        while l_more and l_page < c_max_pages loop
-            l_page := l_page + 1;
-            l_path := '/MerchIntegrations/services/foundation/item?itemLevel=2&limit='
-                   || c_page_size || c_slim;
-            if l_dept is not null then
-                l_path := l_path || '&deptId=' || l_dept;
-            end if;
-            if l_offset is not null then
-                l_path := l_path || '&offsetkey=' || l_offset;
-            end if;
+        l_numbers := child_numbers_via_item_detail(p_item, l_ok);
+        if l_ok then
+            l_source := 'itemDetail';
+        else
+            l_numbers := child_numbers_via_scan(p_item, l_dept, l_scanned, l_truncated);
+            l_source := 'feed scan';
+        end if;
 
-            l_body := client_pkg.get_json(l_path, l_status);
-            exit when l_status not between 200 and 299;
-
-            l_feed := json_object_t.parse(l_body);
-            l_feed_items := l_feed.get_array('items');
-            exit when l_feed_items is null or l_feed_items.get_size = 0;
-
-            for i in 0 .. l_feed_items.get_size - 1 loop
-                l_candidate := treat(l_feed_items.get(i) as json_object_t);
-                l_offset := l_candidate.get_string('item');
-                l_scanned := l_scanned + 1;
-                if l_candidate.get_string('itemParent') = p_item then
-                    apex_string.push(l_numbers, l_candidate.get_string('item'));
-                end if;
-            end loop;
-
-            l_more := nvl(l_feed.get_string('hasMore'), 'false') = 'true';
-        end loop;
-
-        -- Pass 2: read each match in full, so the detail regions have the
-        -- supplier, country and UDA collections that only a full read carries.
+        -- itemDetail carries a thinner document than the MerchIntegrations read,
+        -- so fetch each child in full for the supplier, country and UDA regions.
         for i in 1 .. l_numbers.count loop
             l_child_body := client_pkg.get_json(
                 '/MerchIntegrations/services/foundation/item/' || l_numbers(i), l_status);
@@ -212,14 +273,18 @@ create or replace package body browse_pkg as
         l_meta := json_object_t();
         l_meta.put('skus', l_skus);
         l_meta.put('skuCount', l_skus.get_size);
-        l_meta.put('itemsScanned', l_scanned);
-        l_meta.put('pagesScanned', l_page);
-        l_meta.put('truncated', l_page >= c_max_pages and l_more);
-        l_meta.put('note',
-            'MFCS exposes no itemParent filter and no child collection, so children '
-            || 'are found by scanning itemLevel 2'
-            || case when l_dept is not null then ' in department ' || l_dept end
-            || '. A SKU that is not approved and published will not appear.');
+        l_meta.put('source', l_source);
+        l_meta.put('truncated', l_truncated);
+        if l_source = 'itemDetail' then
+            l_meta.put('note',
+                'Children read from RmsReSTServices Item/itemDetail, which returns a '
+                || 'style together with its children in one call.');
+        else
+            l_meta.put('itemsScanned', l_scanned);
+            l_meta.put('note',
+                'itemDetail was unavailable, so children were found by scanning the '
+                || 'item feed. A SKU that is not approved and published will not appear.');
+        end if;
         l_style.put('resolved', l_meta);
 
         return l_root.to_clob;
