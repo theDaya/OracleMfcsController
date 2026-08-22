@@ -115,6 +115,11 @@ create or replace package body step_pkg as
             end if;
             add_step(p_action_request_id, 'APPROVE_ITEMS', 80);
         elsif p_operation_name = 'MODIFY_STYLE' then
+            -- The style must already carry the colour/size combinations named here.
+            -- MFCS will not repurpose an existing SKU: a diff combination defines the
+            -- item, and items/update answers a changed diff with SUCCESS while
+            -- ignoring it. Checking first turns a silent no-op into a stated problem.
+            add_step(p_action_request_id, 'ENSURE_STYLE_SKUS', 25);
             add_step(p_action_request_id, 'CREATE_ITEM_HIERARCHY', 30);
             add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 40);
             add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 50);
@@ -127,6 +132,13 @@ create or replace package body step_pkg as
         if p_operation_name = 'CREATE_ALL'
            and config_pkg.get_config('FEATURE_INITIAL_RETAIL_YN', 'N') = 'Y' then
             add_step(p_action_request_id, 'APPLY_INITIAL_RETAIL', 80);
+        end if;
+
+        -- An order is placed against SKU quantities, so the SKUs must exist and match
+        -- the requested colour before the order is built. CREATE_ALL creates them
+        -- itself a few steps earlier, so it is excluded.
+        if p_operation_name in ('CREATE_ORDER', 'MODIFY_ORDER') then
+            add_step(p_action_request_id, 'ENSURE_STYLE_SKUS', 85);
         end if;
 
         if p_operation_name in ('CREATE_ORDER', 'CREATE_ALL') then

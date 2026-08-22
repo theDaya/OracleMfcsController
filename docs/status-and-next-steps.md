@@ -28,30 +28,35 @@ header shows remaining validity, and `GET /token-status` decodes it.
 
 ## Outstanding work, in the order I would take it
 
-### 1. Generate missing SKUs (started, not finished)
+### 1. Generate missing SKUs (detection done, generation not)
 
-`sku_pkg.resolve_gap(style, colour, sizes)` already reports which colour/size combinations a style has
-and which it lacks. Verified: same colour and existing sizes resolves complete; an extra size reports
-one missing; a **different colour reports every SKU missing**.
+`sku_pkg.resolve_gap(style, colour, sizes)` reports which colour/size combinations a style has and
+which it lacks. An `ENSURE_STYLE_SKUS` step now runs it on `MODIFY_STYLE` (seq 25) and on
+`CREATE_ORDER` / `MODIFY_ORDER` (seq 85, before the order is built). `CREATE_ALL` is excluded — it
+creates its own children a few steps earlier.
 
-What is missing is the generation half — an `ENSURE_STYLE_SKUS` step that takes the gap and creates
-those children (reserve numbers → create children → sourcing → country of manufacture → approve),
-wired into `MODIFY_STYLE`, `CREATE_ORDER` and `MODIFY_ORDER` before the operation proceeds.
+Today that step **stops** the request when combinations are missing, naming them. It does not create
+them. Stopping is deliberate rather than lazy: MFCS answers a diff change on an existing SKU with
+SUCCESS and ignores it, so the alternative is a request that completes having achieved nothing.
 
-This matters because of the colour finding: MFCS returns SUCCESS and ignores a diff change, so
-without this a colour change silently does nothing.
+What remains is the generation half — reserve numbers → create children → sourcing → country of
+manufacture → approve for the missing subset, inside that step. Note it needs five MFCS calls, so it
+either journals as a sub-flow or the step graph gains conditional steps.
+
+**Not yet exercised live.** The step compiles and appears in the right graphs, but no request has run
+through it against the tenant.
 
 Open question the user raised and we have not tested: when a colour changes on an existing order,
 does the old colour's line need explicit cancellation, or is replacing the detail lines enough?
 
-### 2. Fold `administration/operations/codes` into master data
+### 2. Point the console's dropdowns at the code details (loading done)
 
-`GET /MerchIntegrations/services/administration/operations/codes` returns **797 code types with their
-values** — the RMS `code_detail` table. This is the authoritative source for dropdowns that are
-currently either hardcoded in `CONFIG` or derived from the item feed.
+`master_pkg.refresh_all` now loads `administration/operations/codes` — **797 code types, 7,049 rows** —
+plus banners and channels. Each value is stored as `CODE_<codeType>` with the code type as
+`parent_code`, and `CODE_TYPE` lists the types themselves.
 
-Add it to `master_pkg.refresh_all` as an `ENDPOINT:` source and point the console's fixed-value fields
-at it.
+What remains is using them: the console's fixed-value fields (order type, status, freight terms, cost
+basis, expense components) still read from `CONFIG` or free text. Point them at `CODE_*` instead.
 
 ### 3. Exercise the untested operations
 

@@ -18,6 +18,10 @@ create or replace package payload_pkg authid definer as
     function source_order_ref(p_payload in clob) return varchar2;
     function user_id(p_payload in clob) return varchar2;
     function request_payload(p_action_request_id in varchar2) return clob;
+
+    -- Exposed so the orchestrator can read one request field without a second
+    -- JSON-reading implementation.
+    function string_value(p_payload in clob, p_name in varchar2) return varchar2;
 end payload_pkg;
 /
 

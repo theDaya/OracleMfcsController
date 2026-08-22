@@ -235,6 +235,71 @@ create or replace package body master_pkg as
             log_refresh('DERIVED_FROM_ORDERS', l_source, l_status, l_seen, substr(sqlerrm, 1, 1000), l_started);
     end;
 
+    -- administration/operations/codes returns the RMS code_detail table: ~797 code
+    -- types, each with its own values. Unlike the other foundation services this one
+    -- actually has data, so it is the authoritative source for fixed-value dropdowns
+    -- that would otherwise be hardcoded in CONFIG or inferred from items.
+    --
+    -- Stored as data_type CODE_<codeType>, with the code type as parent_code so the
+    -- console can group them.
+    procedure load_code_details(p_limit in number default 5000) is
+        l_status number;
+        l_body clob;
+        l_types json_array_t;
+        l_type json_object_t;
+        l_details json_array_t;
+        l_detail json_object_t;
+        l_started timestamp with time zone := systimestamp;
+        l_source varchar2(200) := 'ENDPOINT:/services/administration/operations/codes';
+        l_count number := 0;
+        l_code_type varchar2(40);
+    begin
+        l_body := client_pkg.get_json(
+            '/MerchIntegrations/services/administration/operations/codes?limit=' || p_limit, l_status);
+        if l_status not between 200 and 299 then
+            log_refresh('CODE_DETAIL', l_source, l_status, 0, 'HTTP ' || l_status, l_started);
+            return;
+        end if;
+
+        -- This service answers with a bare array, not the usual {items:[...]} envelope.
+        begin
+            l_types := json_array_t.parse(l_body);
+        exception
+            when others then
+                l_types := json_object_t.parse(l_body).get_array('items');
+        end;
+
+        for i in 0 .. l_types.get_size - 1 loop
+            l_type := treat(l_types.get(i) as json_object_t);
+            l_code_type := l_type.get_string('codeType');
+
+            -- The code type itself, so a caller can list what exists.
+            upsert('CODE_TYPE', l_code_type, null, l_type.get_string('description'), null, l_source);
+
+            l_details := l_type.get_array('details');
+            if l_details is not null then
+                for j in 0 .. l_details.get_size - 1 loop
+                    l_detail := treat(l_details.get(j) as json_object_t);
+                    upsert(
+                        p_type => 'CODE_' || l_code_type,
+                        p_code => l_detail.get_string('code'),
+                        p_parent => l_code_type,
+                        p_desc => l_detail.get_string('codeDescription'),
+                        p_attrs => l_detail.to_clob,
+                        p_source => l_source);
+                    l_count := l_count + 1;
+                end loop;
+            end if;
+        end loop;
+
+        log_refresh('CODE_DETAIL', l_source, l_status, l_count,
+            'Loaded ' || l_count || ' value(s) across ' || l_types.get_size || ' code type(s).',
+            l_started);
+    exception
+        when others then
+            log_refresh('CODE_DETAIL', l_source, l_status, l_count, substr(sqlerrm, 1, 1000), l_started);
+    end;
+
     procedure refresh_all(o_summary out clob) is
         l_root json_object_t := json_object_t();
         l_arr json_array_t := json_array_t();
@@ -244,6 +309,9 @@ create or replace package body master_pkg as
         load_direct('BRAND', '/MerchIntegrations/services/item/brands', 'brandName', 'brandDescription');
         load_direct('SEASON', '/MerchIntegrations/services/item/foundation/seasons', 'season', 'description');
         load_direct('ORG_HIER', '/MerchIntegrations/services/foundation/orghier', 'hierarchyId', 'hierarchyName');
+        load_direct('BANNER', '/MerchIntegrations/services/foundation/banners', 'bannerId', 'bannerName');
+        load_direct('CHANNEL', '/MerchIntegrations/services/foundation/channels', 'channelId', 'channelName');
+        load_code_details;
 
         -- Attempted anyway, so the refresh log records that they are still empty
         -- rather than leaving it a mystery.

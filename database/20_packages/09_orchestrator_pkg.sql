@@ -349,6 +349,7 @@ create or replace package body orchestrator_pkg as
     function endpoint_for_step(p_step_code in varchar2, p_operation in varchar2) return varchar2 is
     begin
         case p_step_code
+            when 'ENSURE_STYLE_SKUS' then return null;
             when 'RESERVE_ITEM_NUMBERS' then return 'ENDPOINT.ITEM_NUMBERS_MANAGE';
             when 'CREATE_PARENT_ITEM_HIERARCHY' then return 'ENDPOINT.ITEMS_CREATE';
             when 'CREATE_CHILD_ITEM_HIERARCHY' then return 'ENDPOINT.ITEMS_CREATE';
@@ -392,6 +393,85 @@ create or replace package body orchestrator_pkg as
             return 'PUT';
         end if;
         return 'POST';
+    end;
+
+    -- Confirms the style carries every colour/size combination the request names.
+    --
+    -- This creates nothing. It exists because the alternative is worse than a
+    -- failure: MFCS accepts a diff change on an existing SKU, reports SUCCESS and
+    -- leaves the item alone, so an unchecked colour change completes while achieving
+    -- nothing at all. Generating the missing children is the next piece of work;
+    -- until then the request stops here with the missing combinations named.
+    procedure ensure_style_skus(
+        p_action_request_id in varchar2,
+        p_step_code         in varchar2
+    ) is
+        l_payload clob := request_payload(p_action_request_id);
+        l_style varchar2(30);
+        l_colour varchar2(120);
+        l_sizes varchar2(4000);
+        l_gap json_object_t;
+        l_missing json_array_t;
+        l_entry json_object_t;
+        l_detail varchar2(2000);
+    begin
+        select style_no into l_style
+          from request where action_request_id = p_action_request_id;
+
+        l_colour := payload_pkg.string_value(l_payload, 'COLOUR');
+
+        select listagg(sku_size, ':') within group (order by rn)
+          into l_sizes
+          from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
+              columns rn for ordinality, sku_size varchar2(40) path '$.SKU_SIZE');
+
+        if l_style is null then
+            step_pkg.set_step_status(p_action_request_id, p_step_code, 'SUCCEEDED');
+            event_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'ENSURE_SKUS_SKIPPED',
+                p_step_code => p_step_code,
+                p_message => 'No style on the request to check against.');
+            return;
+        end if;
+
+        l_gap := json_object_t.parse(sku_pkg.resolve_gap(l_style, l_colour, l_sizes));
+
+        if not l_gap.get_boolean('resolved') then
+            step_pkg.set_step_status(p_action_request_id, p_step_code, 'FAILED',
+                'SKU_LOOKUP_FAILED', substr(l_gap.get_string('message'), 1, 400));
+            raise_application_error(-20960,
+                'Could not read the SKUs of style ' || l_style || ': ' || l_gap.get_string('message'));
+        end if;
+
+        if l_gap.get_boolean('complete') then
+            step_pkg.set_step_status(p_action_request_id, p_step_code, 'SUCCEEDED');
+            event_pkg.log_event(
+                p_action_request_id => p_action_request_id,
+                p_event_phase => 'ENSURE_SKUS_COMPLETE',
+                p_step_code => p_step_code,
+                p_message => 'Style ' || l_style || ' already carries every requested combination.');
+            return;
+        end if;
+
+        l_missing := l_gap.get_array('missing');
+        for i in 0 .. l_missing.get_size - 1 loop
+            l_entry := treat(l_missing.get(i) as json_object_t);
+            l_detail := l_detail
+                || case when l_detail is not null then ', ' end
+                || l_gap.get_string('colourDiff') || '/'
+                || nvl(l_entry.get_string('sizeDiff'),
+                       '(unmapped size ' || l_entry.get_string('size') || ')');
+        end loop;
+
+        step_pkg.set_step_status(p_action_request_id, p_step_code, 'FAILED', 'SKUS_MISSING',
+            substr('Style ' || l_style || ' has no SKU for: ' || l_detail
+                || '. A colour or size the style does not already carry needs new child items; '
+                || 'MFCS answers a diff change on an existing SKU with SUCCESS and ignores it.',
+                1, 1000));
+        raise_application_error(-20961,
+            'Style ' || l_style || ' is missing ' || l_gap.get_number('missingCount')
+            || ' SKU(s): ' || substr(l_detail, 1, 300));
     end;
 
     procedure execute_request(
@@ -439,6 +519,11 @@ create or replace package body orchestrator_pkg as
 
             if l_step = 'VALIDATE_REQUEST' then
                 step_pkg.set_step_status(p_action_request_id, l_step, 'SUCCEEDED');
+                continue;
+            end if;
+
+            if l_step = 'ENSURE_STYLE_SKUS' then
+                ensure_style_skus(p_action_request_id, l_step);
                 continue;
             end if;
 
