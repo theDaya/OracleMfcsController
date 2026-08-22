@@ -74,7 +74,7 @@ Numbered by dependency order. A package's body may only call packages above it.
 | 10 | `preview_pkg` | Builds the call plan without sending anything |
 | 11 | `master_pkg` | Foundation-data cache and refresh |
 | 12 | `browse_pkg` | Live style and order reads; order enrichment |
-| 14 | `sku_pkg` | Reconciles required SKUs against a style's actual children |
+| 14 | `sku_pkg` | Reconciles required SKUs against a style's actual children; reads the parent's attributes |
 | 15 | `api_pkg` | Public entry points behind the ORDS handlers |
 | 16 | `ords_util_pkg` | Chunked ORDS response output |
 
@@ -95,7 +95,24 @@ reimplementing them, so a preview cannot drift from what execution would really 
 throwaway `PREVIEW-` request so the real mappers can run, then deletes it.
 
 **`sku_pkg`** exists because PLM does not know about SKUs, and because a colour change cannot be
-applied to an existing SKU — see *Behaviour worth knowing* below.
+applied to an existing SKU — see *Behaviour worth knowing* below. It stays read-only: it reports
+what a style has and what a request needs, and `orchestrator_pkg` decides what to do about it.
+`style_attributes` reads through `itemDetail` rather than `foundation/item`, because the latter is
+fed by the publish queue and answers 404 for a style created minutes ago.
+
+**`ENSURE_STYLE_SKUS` is one step that makes up to *n*+4 MFCS calls**, which is unlike every other
+step in the graph. Two reasons. Which children are missing is only known after reading the tenant,
+so a graph fixed at request registration cannot express it; and doing the work inline makes the step
+re-entrant for nothing, because a resume re-derives the gap and creates only what is still absent.
+Steps that replay a stored payload could not — they would re-send item numbers already used.
+`FEATURE_GENERATE_MISSING_SKUS_YN=N` restores the earlier behaviour, where the step stops the
+request and names what is missing.
+
+The step also records the SKU behind every requested combination in `ENTITY_MAP`, whether it created
+it or merely found it. `entity_map` is this database's memory, not the tenant's, so a style created
+by an earlier install had no rows and could not be ordered against. That is also why
+`validation_pkg` no longer rejects an unresolvable `SKU_ID` while generation is on: the check could
+only ever consult local memory, and the step consults the tenant.
 
 **`ords_util_pkg`** looks trivial and is not. `htp.prn` takes a `VARCHAR2`, so emitting a CLOB over
 32,767 bytes raises ORA-06502 which ORDS reports as an opaque HTTP 555. The item feed returns roughly

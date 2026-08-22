@@ -10,7 +10,9 @@ the `MFCS_CLIENT_MODE` switch were removed — if you find a reference to them, 
 | Area | State |
 | --- | --- |
 | `CREATE_STYLE`, `CREATE_ALL` | Proven end to end against the tenant |
-| `CREATE_ORDER`, `MODIFY_STYLE`, `MODIFY_ORDER` | Produce correct payloads; **never executed live** |
+| `CREATE_ORDER`, `MODIFY_ORDER` | Produce correct payloads; **never executed live** |
+| `MODIFY_STYLE` | Run live 2026-08-22; reaches `CREATE_ITEM_SOURCING`, then stops on `INNER_NAME` |
+| Missing-SKU generation | **Proven live 2026-08-22**: created two children under an existing style, verified by read-back |
 | Failure / resume paths | 20 assertions passing, fault-injected against the real tenant |
 | Console (`ui/`) | Build, Activity, Styles & orders, Master data, MFCS spec |
 | Item ranging | On, using virtual warehouse 19271 |
@@ -28,26 +30,21 @@ header shows remaining validity, and `GET /token-status` decodes it.
 
 ## Outstanding work, in the order I would take it
 
-### 1. Generate missing SKUs (detection done, generation not)
+### 1. Finish `MODIFY_STYLE` against the update services
 
-`sku_pkg.resolve_gap(style, colour, sizes)` reports which colour/size combinations a style has and
-which it lacks. An `ENSURE_STYLE_SKUS` step now runs it on `MODIFY_STYLE` (seq 25) and on
-`CREATE_ORDER` / `MODIFY_ORDER` (seq 85, before the order is built). `CREATE_ALL` is excluded — it
-creates its own children a few steps earlier.
+SKU generation is done and proven, and running it live is what exposed this. `MODIFY_STYLE` now
+gets as far as `CREATE_ITEM_SOURCING` and stops there.
 
-Today that step **stops** the request when combinations are missing, naming them. It does not create
-them. Stopping is deliberate rather than lazy: MFCS answers a diff change on an existing SKU with
-SUCCESS and ignores it, so the alternative is a request that completes having achieved nothing.
+The pattern is consistent: **the update services want the whole record, not a patch.** The create
+service defaults a column, the update service refuses without it, and the error names it exactly.
+Two are fixed — `STORE_ORD_MULT` on `items/update`, `DIRECT_SHIP_IND` on `suppliers/update`. The
+next one is `INNER_NAME`, and there is no reason to think it is the last.
 
-What remains is the generation half — reserve numbers → create children → sourcing → country of
-manufacture → approve for the missing subset, inside that step. Note it needs five MFCS calls, so it
-either journals as a sub-flow or the step graph gains conditional steps.
+Rather than adding fields one failure at a time, the cheaper route is probably to read the item's
+existing supplier record through `itemDetail` and send it back with the changes applied. The read
+already carries `innerName`-adjacent fields the write is asking for.
 
-**Not yet exercised live.** The step compiles and appears in the right graphs, but no request has run
-through it against the tenant.
-
-Open question the user raised and we have not tested: when a colour changes on an existing order,
-does the old colour's line need explicit cancellation, or is replacing the detail lines enough?
+Payloads and the exact error strings are in `docs/mfcs-actual-call-flow.md`.
 
 ### 2. Point the console's dropdowns at the code details (loading done)
 
@@ -58,10 +55,15 @@ plus banners and channels. Each value is stored as `CODE_<codeType>` with the co
 What remains is using them: the console's fixed-value fields (order type, status, freight terms, cost
 basis, expense components) still read from `CONFIG` or free text. Point them at `CODE_*` instead.
 
-### 3. Exercise the untested operations
+### 3. Exercise the remaining untested operations
 
-`MODIFY_STYLE`, `MODIFY_ORDER` and `CREATE_ORDER` have never run live. The console's browse tab loads
-a real record straight into the modify form, which is the intended way to try them.
+`MODIFY_ORDER` and `CREATE_ORDER` have never run live. The console's browse tab loads a real record
+straight into the modify form, which is the intended way to try them. Both now carry
+`ENSURE_STYLE_SKUS` at sequence 85, so a colour the style does not have will be created before the
+order is built rather than producing an order against nothing.
+
+Still untested, and the question the user raised: when a colour changes on an existing order, does
+the old colour's line need explicit cancellation, or is replacing the detail lines enough?
 
 ### 4. Non-merchandise costs, end to end
 
@@ -101,6 +103,17 @@ offline coverage against recorded fixtures is unstarted.
   only, and lag by a few seconds.
 - **Resume replays the *stored* payload.** A request that failed because of a bad value in that payload
   cannot be rescued by resuming; it needs a fresh request.
+- **`ENSURE_STYLE_SKUS` is the exception to that**, deliberately. It stores no payload: it re-reads the
+  style on every entry and acts on what it finds, so a resume creates only what is still missing.
+- **`foundation/item/{item}` is a feed read.** It answered 404 for a style created and approved minutes
+  earlier, while `itemDetail` returned it in full. Anything that has to work on a freshly created
+  record must not be built on the feed.
+- **`itemDetail` is a third vocabulary.** Not the item feed's names and not the write services': it says
+  `classAttribute`, `itemDesc`/`shortDesc`, `primarySuppInd`, `originCountryId`, `suppPackSize`.
+  `sku_pkg.style_attributes` translates so callers see one set of names.
+- **The update services want the whole record.** `items/update` demands `STORE_ORD_MULT` even when only
+  a description changed; `suppliers/update` demands `DIRECT_SHIP_IND`, then `INNER_NAME`. The create
+  services default all three.
 
 ## Running things
 

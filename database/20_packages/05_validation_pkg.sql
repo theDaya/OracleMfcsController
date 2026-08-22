@@ -236,7 +236,16 @@ create or replace package body validation_pkg as
             add_error(l_errors, 'PLMSizeCurveDtl.SKU_QTY', 'POSITIVE_WHOLE_NUMBER_REQUIRED', 'Quantities must be positive whole numbers.');
         end if;
 
-        if l_operation in ('CREATE_ORDER', 'MODIFY_STYLE', 'MODIFY_ORDER') then
+        -- Only when the integration has no way to work the SKU out for itself.
+        --
+        -- entity_map is this database's memory, not the tenant's: a style created by
+        -- an earlier install, or by somebody else entirely, leaves no row behind and
+        -- fails this check while being perfectly orderable. ENSURE_STYLE_SKUS reads
+        -- the style and either finds the SKU - recording the mapping as it goes - or
+        -- creates it, so with generation on an unresolvable row is not yet an error.
+        -- With generation off it still is, and failing here costs no side effect.
+        if l_operation in ('CREATE_ORDER', 'MODIFY_STYLE', 'MODIFY_ORDER')
+           and config_pkg.get_config('FEATURE_GENERATE_MISSING_SKUS_YN', 'Y') <> 'Y' then
             for v in (
                 select source_variant_ref, sku_id
                   from json_table(p_payload, '$.PLMSizeCurveDtl[*]'

@@ -37,6 +37,32 @@ create or replace package sku_pkg authid definer as
         p_colour in varchar2,
         p_sizes  in varchar2
     ) return clob;
+
+    -- The attributes a new child has to inherit from the style it joins.
+    --
+    -- A child must sit in its parent's merchandise hierarchy, and the document that
+    -- arrives with an order does not carry one: PLM names a style and expects the
+    -- integration to know the rest. The same read supplies the supplier, cost and
+    -- origin country to fall back on when the document does not name them, which
+    -- matters because MFCS will not approve an item that has no sourcing.
+    --
+    -- This reads itemDetail, not foundation/item, and the difference is not a
+    -- preference. foundation/item is fed by the publish queue: it answered 404 for a
+    -- style that had just been created and approved, while itemDetail returned it in
+    -- full. Anything that has to work on a style this integration created moments
+    -- ago cannot be built on the feed.
+    --
+    -- itemDetail is a third vocabulary, after the item feed's and the write
+    -- services'. It says classAttribute for class, itemDesc/shortDesc for the
+    -- descriptions, primarySuppInd for primarySupplierInd and originCountryId for
+    -- originCountry. Translating is this function's job, so callers see one set of
+    -- names. It carries no costZoneGroupId, standardUom or storeOrderMultiple; those
+    -- keys come back absent and the payload builders fall back to configuration.
+    --
+    -- Returns {"available":true|false, "dept","class","subclass","status",
+    -- "originalRetail","itemDescription","shortDescription","supplier","unitCost",
+    -- "originCountry"}.
+    function style_attributes(p_style in varchar2) return clob;
 end sku_pkg;
 /
 
@@ -178,6 +204,108 @@ create or replace package body sku_pkg as
                       || 'before the request can proceed.'
             end);
         return l_root.to_clob;
+    end;
+
+    function style_attributes(p_style in varchar2) return clob is
+        l_status number;
+        l_body clob;
+        l_arr json_array_t;
+        l_row json_object_t;
+        l_item json_object_t;
+        l_suppliers json_array_t;
+        l_supplier json_object_t;
+        l_countries json_array_t;
+        l_country json_object_t;
+        l_out json_object_t := json_object_t();
+
+        -- json_object_t.put stores an explicit null for a null bind, which then reads
+        -- back as present-but-null. Absent is the honest answer when the tenant did
+        -- not send the field, and it is what lets the payload builders fall back to
+        -- configuration for the few attributes itemDetail does not carry.
+        procedure put_str(p_name in varchar2, p_value in varchar2) is
+        begin
+            if p_value is not null then
+                l_out.put(p_name, p_value);
+            end if;
+        end;
+
+        procedure put_num(p_name in varchar2, p_value in number) is
+        begin
+            if p_value is not null then
+                l_out.put(p_name, p_value);
+            end if;
+        end;
+    begin
+        l_body := client_pkg.get_json(
+            '/RmsReSTServices/services/private/Item/itemDetail?item=' || p_style, l_status);
+
+        if l_status not between 200 and 299 then
+            l_out.put('available', false);
+            l_out.put('message', 'itemDetail returned HTTP ' || l_status);
+            return l_out.to_clob;
+        end if;
+
+        l_arr := json_array_t.parse(l_body);
+        for i in 0 .. l_arr.get_size - 1 loop
+            l_row := treat(l_arr.get(i) as json_object_t);
+            -- The parent is the row that is the item itself; the rest are its
+            -- children. The array is not ordered parent-first.
+            if l_row.get_string('item') = p_style then
+                l_item := l_row;
+                exit;
+            end if;
+        end loop;
+
+        if l_item is null then
+            l_out.put('available', false);
+            l_out.put('message', 'itemDetail returned no row for item ' || p_style);
+            return l_out.to_clob;
+        end if;
+
+        l_out.put('available', true);
+        put_str('item', l_item.get_string('item'));
+        put_num('itemLevel', l_item.get_number('itemLevel'));
+        put_num('dept', l_item.get_number('dept'));
+        -- classAttribute, not class: itemDetail is a third vocabulary again, after
+        -- the item feed's and the write services'. See the header comment.
+        put_num('class', l_item.get_number('classAttribute'));
+        put_num('subclass', l_item.get_number('subclass'));
+        put_str('status', l_item.get_string('status'));
+        put_num('originalRetail', l_item.get_number('originalRetail'));
+        put_str('itemDescription', l_item.get_string('itemDesc'));
+        put_str('shortDescription', l_item.get_string('shortDesc'));
+
+        -- Take the primary supplier, falling back to the first row present. A style
+        -- with no supplier at all is legitimate here: the caller decides whether the
+        -- inbound document covers the gap.
+        if l_item.has('itemSupplier') then
+            l_suppliers := l_item.get_array('itemSupplier');
+            for i in 0 .. nvl(l_suppliers.get_size, 0) - 1 loop
+                l_supplier := treat(l_suppliers.get(i) as json_object_t);
+                if i = 0 or nvl(l_supplier.get_string('primarySuppInd'), 'N') = 'Y' then
+                    put_num('supplier', l_supplier.get_number('supplier'));
+
+                    if l_supplier.has('itemSupplierCountry') then
+                        l_countries := l_supplier.get_array('itemSupplierCountry');
+                        for j in 0 .. nvl(l_countries.get_size, 0) - 1 loop
+                            l_country := treat(l_countries.get(j) as json_object_t);
+                            if j = 0 or nvl(l_country.get_string('primaryCountryInd'), 'N') = 'Y' then
+                                put_str('originCountry', l_country.get_string('originCountryId'));
+                                put_num('unitCost', l_country.get_number('unitCost'));
+                            end if;
+                        end loop;
+                    end if;
+                end if;
+            end loop;
+        end if;
+
+        return l_out.to_clob;
+    exception
+        when others then
+            l_out := json_object_t();
+            l_out.put('available', false);
+            l_out.put('message', substr(sqlerrm, 1, 300));
+            return l_out.to_clob;
     end;
 end sku_pkg;
 /

@@ -22,6 +22,42 @@ create or replace package payload_pkg authid definer as
     -- Exposed so the orchestrator can read one request field without a second
     -- JSON-reading implementation.
     function string_value(p_payload in clob, p_name in varchar2) return varchar2;
+
+    -- Payloads for children this layer decides at run time to create, as opposed to
+    -- ones the inbound document names.
+    --
+    -- The other item builders walk PLMSizeCurveDtl, which is the right source when
+    -- the document describes a whole new style. It is the wrong source when only
+    -- some of its combinations are missing from a style that already exists: the
+    -- rest are already there, and re-sending them either does nothing or produces a
+    -- second child on the same diff pair. These take the subset instead, handed over
+    -- as a plan the orchestrator builds from what the tenant actually holds.
+    --
+    -- p_plan is
+    --   {"style":"<parent>",
+    --    "attributes":{...as returned by sku_pkg.style_attributes...},
+    --    "children":[{"item","size","sizeDiff","colourDiff","sourceVariantRef","skuWidth"}]}
+    -- with "item" already reserved. They are not reachable through build_request:
+    -- a mapper name alone cannot carry the plan.
+    function generated_child_create_request(
+        p_action_request_id in varchar2,
+        p_plan              in clob
+    ) return clob;
+
+    function generated_child_sourcing_request(
+        p_action_request_id in varchar2,
+        p_plan              in clob
+    ) return clob;
+
+    function generated_child_com_request(
+        p_action_request_id in varchar2,
+        p_plan              in clob
+    ) return clob;
+
+    function generated_child_approval_request(
+        p_action_request_id in varchar2,
+        p_plan              in clob
+    ) return clob;
 end payload_pkg;
 /
 
@@ -195,6 +231,11 @@ create or replace package body payload_pkg as
         l_item.put('itemDescription', substr(p_source_ref, 1, 250));
         l_item.put('shortDescription', substr(p_source_ref, 1, 120));
         l_item.put('dataLoadingDestination', 'RMS');
+        -- storeOrderMultiple is not optional on an update, even one that only touches
+        -- descriptions: items/update answers a payload without it with
+        -- "Field must be entered.Field: STORE_ORD_MULT ... CORESVC_ITEM.PROCESS_IM".
+        -- Proven live, which is why it sits outside the create-only block.
+        l_item.put('storeOrderMultiple', l_store_order_multiple);
         if p_operation <> 'MODIFY_STYLE' then
             l_item.put('itemNumberType', 'ITEM');
             l_item.put('itemLevel', 1);
@@ -209,7 +250,6 @@ create or replace package body payload_pkg as
             l_item.put('inventoryInd', 'Y');
             l_item.put('sellableInd', 'Y');
             l_item.put('orderableInd', 'Y');
-            l_item.put('storeOrderMultiple', l_store_order_multiple);
             l_item.put('originalRetail', p_retail);
             l_item.put('costZoneGroupId', l_cost_zone_group_id);
             l_item.put('diff1', l_parent_diff1);
@@ -255,6 +295,8 @@ create or replace package body payload_pkg as
             l_item.put('itemDescription', substr(p_source_ref || ' ' || v.sku_size || ' ' || v.sku_width, 1, 250));
             l_item.put('shortDescription', substr(p_source_ref, 1, 120));
             l_item.put('dataLoadingDestination', 'RMS');
+            -- Required on update as well as create; see append_parent_item.
+            l_item.put('storeOrderMultiple', l_store_order_multiple);
             if p_operation <> 'MODIFY_STYLE' then
                 l_item.put('itemParent', p_style);
                 l_item.put('itemNumberType', 'ITEM');
@@ -270,7 +312,6 @@ create or replace package body payload_pkg as
                 l_item.put('inventoryInd', 'Y');
                 l_item.put('sellableInd', 'Y');
                 l_item.put('orderableInd', 'Y');
-                l_item.put('storeOrderMultiple', l_store_order_multiple);
                 l_item.put('originalRetail', p_retail);
                 l_item.put('costZoneGroupId', l_cost_zone_group_id);
                 l_item.put('diff1', mapped_config_value('MAP.COLOUR.', p_color));
@@ -408,6 +449,11 @@ create or replace package body payload_pkg as
         l_supplier_node := json_object_t();
         l_supplier_node.put('supplier', p_supplier);
         l_supplier_node.put('primarySupplierInd', 'Y');
+        -- The create service defaults this; the update service demands it, with
+        -- "This column should not be null.Field: DIRECT_SHIP_IND ...
+        -- CORESVC_ITEM.PROCESS_IS". Sent on both paths because the tenant stores N
+        -- on every item anyway, so the create payload was only ever relying on luck.
+        l_supplier_node.put('directShipInd', config_pkg.get_config('MFCS_DIRECT_SHIP_IND', 'N'));
         l_supplier_node.put('countryOfSourcing', l_countries);
         l_suppliers := json_array_t();
         l_suppliers.append(l_supplier_node);
@@ -863,6 +909,277 @@ create or replace package body payload_pkg as
         end if;
         l_orders.append(l_order);
         l_root.put('items', l_orders);
+        return l_root.to_clob;
+    end;
+
+    -- Sourcing terms for a generated child. The document wins where it names them,
+    -- because that is the commercial decision the request is carrying. The parent
+    -- style is the fallback, for the order-shaped documents that name a style and
+    -- say nothing about sourcing at all.
+    procedure generated_sourcing_context(
+        p_action_request_id in varchar2,
+        p_plan              in clob,
+        o_supplier          out number,
+        o_cost              out number,
+        o_country           out varchar2
+    ) is
+        l_payload clob := payload(p_action_request_id);
+        l_style_supplier number;
+        l_style_cost number;
+        l_style_country varchar2(3);
+    begin
+        select json_value(l_payload, '$.SUPPLIER' returning number),
+               json_value(l_payload, '$.UNIT_COST' returning number),
+               json_value(l_payload, '$.ORIGIN_COUNTRY' returning varchar2(3))
+          into o_supplier, o_cost, o_country
+          from dual;
+
+        select json_value(p_plan, '$.attributes.supplier' returning number),
+               json_value(p_plan, '$.attributes.unitCost' returning number),
+               json_value(p_plan, '$.attributes.originCountry' returning varchar2(3))
+          into l_style_supplier, l_style_cost, l_style_country
+          from dual;
+
+        o_supplier := coalesce(o_supplier, l_style_supplier);
+        o_cost := coalesce(o_cost, l_style_cost);
+        o_country := coalesce(o_country, l_style_country);
+
+        -- Approval requires sourcing, so a child created without it would be stranded
+        -- in worksheet status. Better to say so before anything has been created.
+        if o_supplier is null or o_country is null then
+            raise_application_error(-20964,
+                'Cannot create children for style '
+                || json_value(p_plan, '$.style' returning varchar2(30))
+                || ': neither the request nor the style itself gives a supplier and origin '
+                || 'country, and MFCS will not approve an item that has no sourcing.');
+        end if;
+    end;
+
+    function generated_child_create_request(
+        p_action_request_id in varchar2,
+        p_plan              in clob
+    ) return clob is
+        l_root json_object_t := json_object_t();
+        l_items json_array_t := json_array_t();
+        l_item json_object_t;
+        l_style varchar2(30);
+        l_dept number;
+        l_class number;
+        l_subclass number;
+        l_retail number;
+        l_cost_zone_group_id number;
+        l_description varchar2(250);
+        l_short_description varchar2(120);
+        l_standard_uom varchar2(10);
+        l_store_order_multiple varchar2(1);
+    begin
+        select json_value(p_plan, '$.style' returning varchar2(30)),
+               json_value(p_plan, '$.attributes.dept' returning number),
+               json_value(p_plan, '$.attributes.class' returning number),
+               json_value(p_plan, '$.attributes.subclass' returning number),
+               json_value(p_plan, '$.attributes.originalRetail' returning number),
+               json_value(p_plan, '$.attributes.costZoneGroupId' returning number),
+               json_value(p_plan, '$.attributes.itemDescription' returning varchar2(250)),
+               json_value(p_plan, '$.attributes.shortDescription' returning varchar2(120)),
+               json_value(p_plan, '$.attributes.standardUom' returning varchar2(10)),
+               json_value(p_plan, '$.attributes.storeOrderMultiple' returning varchar2(1))
+          into l_style, l_dept, l_class, l_subclass, l_retail, l_cost_zone_group_id,
+               l_description, l_short_description, l_standard_uom, l_store_order_multiple
+          from dual;
+
+        -- Everything structural comes from the parent as the tenant holds it, not
+        -- from configuration. A child that disagreed with its parent about the
+        -- hierarchy would be rejected; a child that agreed with our defaults instead
+        -- of with its parent would be worse, because it would be accepted and wrong.
+        -- Configuration only fills in what the read did not carry.
+        l_cost_zone_group_id := nvl(l_cost_zone_group_id,
+            to_number(config_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000')));
+        l_store_order_multiple := nvl(l_store_order_multiple,
+            config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E'));
+        l_standard_uom := nvl(l_standard_uom, 'EA');
+
+        for c in (
+            select item, sku_size, size_diff, colour_diff, sku_width
+              from json_table(p_plan, '$.children[*]'
+                  columns
+                      item varchar2(30) path '$.item',
+                      sku_size varchar2(60) path '$.size',
+                      size_diff varchar2(120) path '$.sizeDiff',
+                      colour_diff varchar2(120) path '$.colourDiff',
+                      sku_width varchar2(60) path '$.skuWidth'
+              )
+        ) loop
+            l_item := json_object_t();
+            l_item.put('item', c.item);
+            l_item.put('itemParent', l_style);
+            l_item.put('itemDescription',
+                substr(trim(l_description || ' ' || c.sku_size || ' ' || c.sku_width), 1, 250));
+            l_item.put('shortDescription', substr(nvl(l_short_description, l_description), 1, 120));
+            l_item.put('dataLoadingDestination', 'RMS');
+            l_item.put('itemNumberType', 'ITEM');
+            l_item.put('itemLevel', 2);
+            l_item.put('tranLevel', 2);
+            l_item.put('dept', l_dept);
+            l_item.put('class', l_class);
+            l_item.put('subclass', l_subclass);
+            l_item.put('status', 'W');
+            l_item.put('approveInd', 'N');
+            l_item.put('standardUom', l_standard_uom);
+            l_item.put('merchandiseInd', 'Y');
+            l_item.put('inventoryInd', 'Y');
+            l_item.put('sellableInd', 'Y');
+            l_item.put('orderableInd', 'Y');
+            l_item.put('storeOrderMultiple', l_store_order_multiple);
+            if l_retail is not null then
+                l_item.put('originalRetail', l_retail);
+            end if;
+            l_item.put('costZoneGroupId', l_cost_zone_group_id);
+            -- The diffs are already resolved. The plan carries the values the gap
+            -- analysis compared against, so a child cannot be created on a different
+            -- combination from the one that was found missing.
+            l_item.put('diff1', c.colour_diff);
+            l_item.put('diff1Type', 'C');
+            l_item.put('diff2', c.size_diff);
+            l_item.put('diff2Type', 'S');
+            l_items.append(l_item);
+        end loop;
+
+        l_root.put('collectionSize', l_items.get_size);
+        l_root.put('items', l_items);
+        return l_root.to_clob;
+    end;
+
+    function generated_child_sourcing_request(
+        p_action_request_id in varchar2,
+        p_plan              in clob
+    ) return clob is
+        l_root json_object_t := json_object_t();
+        l_items json_array_t := json_array_t();
+        l_supplier number;
+        l_cost number;
+        l_country varchar2(3);
+    begin
+        generated_sourcing_context(p_action_request_id, p_plan, l_supplier, l_cost, l_country);
+
+        for c in (
+            select item
+              from json_table(p_plan, '$.children[*]' columns item varchar2(30) path '$.item')
+        ) loop
+            l_items.append(supplier_payload(c.item, l_supplier, l_cost, l_country));
+        end loop;
+
+        l_root.put('collectionSize', l_items.get_size);
+        l_root.put('items', l_items);
+        return l_root.to_clob;
+    end;
+
+    function generated_child_com_request(
+        p_action_request_id in varchar2,
+        p_plan              in clob
+    ) return clob is
+        l_root json_object_t := json_object_t();
+        l_items json_array_t := json_array_t();
+        l_item json_object_t;
+        l_supplier_node json_object_t;
+        l_manufacture_node json_object_t;
+        l_suppliers json_array_t;
+        l_manufacturers json_array_t;
+        l_supplier number;
+        l_cost number;
+        l_country varchar2(3);
+        l_manufacturer_country varchar2(3) :=
+            config_pkg.get_config('MFCS_MANUFACTURER_COUNTRY', 'VN');
+    begin
+        generated_sourcing_context(p_action_request_id, p_plan, l_supplier, l_cost, l_country);
+
+        -- Only the new children. The parent already carries a country of manufacture,
+        -- or it could not have been approved in the first place.
+        for c in (
+            select item
+              from json_table(p_plan, '$.children[*]' columns item varchar2(30) path '$.item')
+        ) loop
+            l_manufacture_node := json_object_t();
+            l_manufacture_node.put('manufacturerCountry', l_manufacturer_country);
+            l_manufacture_node.put('primaryManufacturerCountryInd', 'Y');
+            l_manufacturers := json_array_t();
+            l_manufacturers.append(l_manufacture_node);
+
+            l_supplier_node := json_object_t();
+            l_supplier_node.put('supplier', l_supplier);
+            l_supplier_node.put('countryOfManufacture', l_manufacturers);
+            l_suppliers := json_array_t();
+            l_suppliers.append(l_supplier_node);
+
+            l_item := json_object_t();
+            l_item.put('item', c.item);
+            l_item.put('dataLoadingDestination', 'RMS');
+            l_item.put('supplier', l_suppliers);
+            l_items.append(l_item);
+        end loop;
+
+        l_root.put('collectionSize', l_items.get_size);
+        l_root.put('items', l_items);
+        return l_root.to_clob;
+    end;
+
+    function generated_child_approval_request(
+        p_action_request_id in varchar2,
+        p_plan              in clob
+    ) return clob is
+        l_root json_object_t := json_object_t();
+        l_items json_array_t := json_array_t();
+        l_item json_object_t;
+        l_style varchar2(30);
+        l_style_status varchar2(10);
+        l_description varchar2(250);
+        l_short_description varchar2(120);
+        l_store_order_multiple varchar2(1);
+
+        procedure append_approval(p_item in varchar2, p_description in varchar2) is
+        begin
+            l_item := json_object_t();
+            l_item.put('item', p_item);
+            l_item.put('itemDescription', substr(p_description, 1, 250));
+            l_item.put('shortDescription', substr(nvl(l_short_description, p_description), 1, 120));
+            l_item.put('status', 'A');
+            l_item.put('approveInd', 'Y');
+            l_item.put('storeOrderMultiple', l_store_order_multiple);
+            l_item.put('dataLoadingDestination', 'RMS');
+            l_items.append(l_item);
+        end;
+    begin
+        select json_value(p_plan, '$.style' returning varchar2(30)),
+               json_value(p_plan, '$.attributes.status' returning varchar2(10)),
+               json_value(p_plan, '$.attributes.itemDescription' returning varchar2(250)),
+               json_value(p_plan, '$.attributes.shortDescription' returning varchar2(120)),
+               json_value(p_plan, '$.attributes.storeOrderMultiple' returning varchar2(1))
+          into l_style, l_style_status, l_description, l_short_description, l_store_order_multiple
+          from dual;
+
+        l_store_order_multiple := nvl(l_store_order_multiple,
+            config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E'));
+
+        -- The parent is normally already approved - it has to be for a request to
+        -- have found it through the feeds. Include it only when the read says
+        -- otherwise, because a child cannot be approved under an unapproved parent.
+        if nvl(l_style_status, 'A') <> 'A' then
+            append_approval(l_style, l_description);
+        end if;
+
+        for c in (
+            select item, sku_size, sku_width
+              from json_table(p_plan, '$.children[*]'
+                  columns
+                      item varchar2(30) path '$.item',
+                      sku_size varchar2(60) path '$.size',
+                      sku_width varchar2(60) path '$.skuWidth'
+              )
+        ) loop
+            append_approval(c.item, trim(l_description || ' ' || c.sku_size || ' ' || c.sku_width));
+        end loop;
+
+        l_root.put('collectionSize', l_items.get_size);
+        l_root.put('items', l_items);
         return l_root.to_clob;
     end;
 

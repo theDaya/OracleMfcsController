@@ -27,6 +27,7 @@ using (
     select 'DEFAULT', 'MFCS_INNER_PACK_SIZE', '1', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_PURCHASE_TYPE', '0', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_MANUFACTURER_COUNTRY', 'VN', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_DIRECT_SHIP_IND', 'N', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_LOCATION_HIERARCHY_LEVEL', 'W', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_LOCATION_HIERARCHY_VALUE', '19271', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_STORE_ORDER_MULTIPLE', 'E', 'Y' from dual union all
@@ -37,6 +38,9 @@ using (
     select 'DEFAULT', 'HTTP_TRANSFER_TIMEOUT_SECONDS', '45', 'Y' from dual union all
     select 'DEFAULT', 'FEATURE_INITIAL_RETAIL_YN', 'N', 'Y' from dual union all
     select 'DEFAULT', 'FEATURE_ITEM_LOCATIONS_YN', 'Y', 'Y' from dual union all
+    select 'DEFAULT', 'FEATURE_GENERATE_MISSING_SKUS_YN', 'Y', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_SKU_VERIFY_RETRY_COUNT', '6', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_SKU_VERIFY_RETRY_SLEEP_SECONDS', '5', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_RESERVATION_DAYS_UNTIL_EXPIRY', '1', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_OTB_EOW_DAY', 'SUNDAY', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_EXPENSE_CALC_BASIS', 'V', 'Y' from dual union all

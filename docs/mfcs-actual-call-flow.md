@@ -751,6 +751,73 @@ Successful verification returns the MFCS order document. The fields below are ab
 }
 ```
 
+## Step 25/85: Ensure Style SKUs — live, 2026-08-22
+
+The first run of SKU generation against the tenant. Style `100050355` carried one child,
+colour `08610` / size `070`. A `MODIFY_STYLE` request named sizes 7, 8 and 9, so two children
+had to be created.
+
+**Before** (`RmsReSTServices/services/private/Item/itemDetail?item=100050355`):
+
+```json
+{"available":true,"skus":[{"item":"100050363","diff1":"08610","diff2":"070","status":"A"}]}
+```
+
+**Parent attributes** used to build the children, from the same read. Note `classAttribute`,
+`itemDesc`, `primarySuppInd` and `originCountryId` — itemDetail is a third vocabulary, after the
+item feed's and the write services':
+
+```json
+{"available":true,"item":"100050355","itemLevel":1,"dept":1517,"class":6892,"subclass":1128,
+ "status":"A","originalRetail":100,"itemDescription":"RCT-20260822184151-RESUME",
+ "shortDescription":"RCT-20260822184151-RESUME","supplier":700087,"originCountry":"GB","unitCost":48.49}
+```
+
+Then, in order: one `POST /item/itemNumbers/reserve` per missing child (2), one
+`POST /items/create` carrying both, one `POST /item/suppliers/create`, one
+`POST /item/supplier/countriesOfManufacture/create`, one `PUT /items/update` to approve.
+
+**After**, read back rather than inferred from the four HTTP 200s:
+
+```json
+{"available":true,"skus":[
+  {"item":"100050363","diff1":"08610","diff2":"070","status":"A"},
+  {"item":"100050371","diff1":"08610","diff2":"080","status":"A"},
+  {"item":"100050380","diff1":"08610","diff2":"090","status":"A"}]}
+```
+
+Re-running the same request created nothing: the step read the style, found all three
+combinations present, recorded the mapping and moved on. That is the whole re-entrancy
+argument — a resume re-derives the gap from the tenant rather than replaying a stored payload.
+
+## MODIFY_STYLE: what the update services demand — live, 2026-08-22
+
+Two failures found by running `MODIFY_STYLE` live for the first time. Both are the same shape:
+the create service defaults a column, the update service requires it, and the error names it.
+
+`PUT /items/update` with only descriptions changed:
+
+```json
+{"status":"ERROR","message":"Field must be entered.Field: STORE_ORD_MULT, ITEM: 100050355 returned by program unit CORESVC_ITEM.PROCESS_IM."}
+```
+
+`POST /item/suppliers/update`:
+
+```json
+{"status":"ERROR","message":"This column should not be null.Field: DIRECT_SHIP_IND, ITEM: 100050363, SUPPLIER: 700087 returned by program unit CORESVC_ITEM.PROCESS_IS."}
+```
+
+and, once `directShipInd` was supplied, the next one along:
+
+```json
+{"status":"ERROR","message":"This column should not be null.Field: INNER_NAME, ITEM: 100050363, SUPPLIER: 700087 returned by program unit CORESVC_ITEM.PROCESS_IS."}
+```
+
+`storeOrderMultiple` and `directShipInd` are now sent on both paths. `INNER_NAME` is not yet
+handled — `MODIFY_STYLE` still stops at `CREATE_ITEM_SOURCING`. Expect the update services to
+keep asking for one more field at a time; they appear to want the whole supplier record, not a
+patch.
+
 ## Current Assumptions
 
 These values are configurable and should be replaced with authoritative Office/MFCS foundation mappings when available:
@@ -781,6 +848,10 @@ These values are configurable and should be replaced with authoritative Office/M
 | `MAP.ORDER_LOCATION.1927` | `19271` | Maps Office physical delivery location to MFCS virtual warehouse. |
 | `MFCS_ORDER_VERIFY_RETRY_COUNT` | `12` | Allows for delayed visibility after successful PO create. |
 | `MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS` | `10` | Sleep between procurement GET verification attempts. |
+| `FEATURE_GENERATE_MISSING_SKUS_YN` | `Y` | Creates the children a style lacks instead of stopping the request. |
+| `MFCS_SKU_VERIFY_RETRY_COUNT` | `6` | Newly approved children take a moment to read back. |
+| `MFCS_SKU_VERIFY_RETRY_SLEEP_SECONDS` | `5` | Sleep between read-backs after creating children. |
+| `MFCS_DIRECT_SHIP_IND` | `N` | Required by `suppliers/update`; observed as `N` on every item in the tenant. |
 
 ## Logging Tables
 

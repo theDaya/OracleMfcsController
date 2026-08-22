@@ -25,7 +25,8 @@ which is absent from the spec and is the only way to read a style with its child
 "Not in the spec" is not "not available" — probe.
 
 **Verify writes by reading back.** MFCS returns HTTP 200 `SUCCESS` for an `items/update` that changes a
-differentiator and silently does nothing. A success response is not evidence that anything happened.
+differentiator and silently does nothing. A success response is not evidence that anything happened. This
+is why `ENSURE_STYLE_SKUS` re-reads the style after creating children rather than trusting four 200s.
 
 **Do not let the test suite's result arrive after the commit.** Run it, read it, then commit.
 
@@ -106,6 +107,13 @@ All verified live. Most are silent failures, which is why they are worth memoris
   write wants `quantityOrdered` / `originCountry`.
 - **Resume replays the *stored* payload.** A request that failed on a bad value in that payload cannot be
   rescued by resuming; it needs a fresh request.
+- **`foundation/item/{item}` is a feed read** and 404s on a style created minutes ago. `itemDetail`
+  returns it in full. Never build on the feed anything that must see a fresh record.
+- **`itemDetail` uses a third set of field names**, neither the feed's nor the write services':
+  `classAttribute`, `itemDesc`/`shortDesc`, `primarySuppInd`, `originCountryId`, `suppPackSize`.
+- **The update services want the whole record, not a patch.** `items/update` refuses without
+  `STORE_ORD_MULT` even for a description-only change; `suppliers/update` refuses without
+  `DIRECT_SHIP_IND`, then without `INNER_NAME`. The create services default all of them.
 
 ## Conventions
 

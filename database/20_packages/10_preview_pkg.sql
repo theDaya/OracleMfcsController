@@ -141,10 +141,21 @@ create or replace package body preview_pkg as
             l_call.put('stepCode', s.step_code);
 
             if l_endpoint_key is null then
-                -- Local-only step, e.g. VALIDATE_REQUEST.
+                -- No endpoint the plan can name. Either the step is local, or - for
+                -- ENSURE_STYLE_SKUS - which calls it makes depends on what the tenant
+                -- already holds, which a preview deliberately does not go and look at.
                 l_call.put('local', true);
                 l_call.put('method', 'LOCAL');
-                l_call.put('description', 'Performed inside the integration layer; no MFCS call.');
+                if s.step_code = 'ENSURE_STYLE_SKUS' then
+                    l_call.put('description',
+                        'Reads the style back and compares it against the requested colour and '
+                        || 'size curve. Any combination the style lacks is created here - reserve '
+                        || 'a number, create the child, add sourcing and country of manufacture, '
+                        || 'approve - then the style is read again to confirm it took. The calls '
+                        || 'depend on what the tenant already has, so they cannot be planned ahead.');
+                else
+                    l_call.put('description', 'Performed inside the integration layer; no MFCS call.');
+                end if;
             else
                 l_method := orchestrator_pkg.method_for_step(s.step_code, l_operation);
                 l_endpoint_path := config_pkg.get_config(l_endpoint_key);
