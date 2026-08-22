@@ -333,6 +333,28 @@ create or replace package body validation_pkg as
             end if;
         end if;
 
+        -- Non-merchandise costs. Optional, but a malformed one is worth catching
+        -- here: MFCS applies expenses during order create, and a rejection there
+        -- costs a burned order number.
+        for e in (
+            select component, component_rate, rn
+              from json_table(p_payload, '$.NON_MERCH_COSTS[*]'
+                  columns
+                      rn for ordinality,
+                      component      varchar2(30) path '$.COMPONENT',
+                      component_rate number       path '$.RATE'
+              )
+        ) loop
+            if trim(e.component) is null then
+                add_error(l_errors, 'NON_MERCH_COSTS.COMPONENT', 'REQUIRED',
+                    'COMPONENT is required on non-merchandise cost row ' || e.rn || '.');
+            end if;
+            if e.component_rate is null or e.component_rate < 0 then
+                add_error(l_errors, 'NON_MERCH_COSTS.RATE', 'POSITIVE_VALUE_REQUIRED',
+                    'RATE is required and cannot be negative on non-merchandise cost row ' || e.rn || '.');
+            end if;
+        end loop;
+
         if trim(l_department) is not null and not has_config('MAP.DEPARTMENT.' || l_department) then
             add_error(l_errors, 'DEPARTMENT', 'MAPPING_NOT_FOUND', 'Department mapping is not configured.');
         end if;

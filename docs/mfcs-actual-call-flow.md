@@ -11,22 +11,21 @@ JSON examples are shown as `jsonc` so assumptions can be documented inline. The 
 
 ## Runtime Mode
 
-The current deployed route is:
+There is no runtime switch any more — the integration only ever talks to the real tenant.
 
-- `MFCS_CLIENT_MODE = ACTUAL_MFCS`
 - `MFCS_AUTH_MODE = STATIC_BEARER`
 - `MFCS_BASE_URL = https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs`
 - Bearer token stored externally in `SECRET` under config ref `MFCS_BEARER_TOKEN_REF`
-- Item locations disabled by default with `FEATURE_ITEM_LOCATIONS_YN = N`
+- Item locations enabled with `FEATURE_ITEM_LOCATIONS_YN = Y`, ranging to virtual warehouse 19271
 - Initial retail disabled by default with `FEATURE_INITIAL_RETAIL_YN = N`
 - Purchase-order verification retry enabled with `MFCS_ORDER_VERIFY_RETRY_COUNT = 12` and `MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS = 10`
 
-Item locations are disabled because the item-location create schema is now known, but the dev tenant has not yet exposed a valid store/warehouse/chain hierarchy value via the tested foundation APIs. Once the correct hierarchy value is known, set `FEATURE_ITEM_LOCATIONS_YN = Y` and configure:
+Item locations now work. Every item-location row in the tenant reads location 19271 / locationType W /
+physicalWarehouse 1927, so `MFCS_LOCATION_HIERARCHY_LEVEL = W` and the delivery location is mapped
+through `MAP.ORDER_LOCATION.*` from the physical location to the virtual warehouse — MFCS rejects the
+physical one at hierarchy level W.
 
-- `MFCS_LOCATION_HIERARCHY_LEVEL`
-- `MFCS_LOCATION_HIERARCHY_VALUE`
-- `MFCS_STORE_ORDER_MULTIPLE`
-- `MFCS_TAXABLE_IND`
+Worth knowing: a purchase order ranges its own items, so only style-only creates need this step.
 
 ## Integration Payload Received
 

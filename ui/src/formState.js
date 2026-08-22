@@ -61,6 +61,9 @@ export const initialForm = () => ({
     { sourceVariantRef: `v-${stamp()}-7`, size: '7', width: 'ALL', qty: '1', skuId: '' },
     { sourceVariantRef: `v-${stamp()}-8`, size: '8', width: 'ALL', qty: '1', skuId: '' },
   ],
+  // Non-merchandise costs (the ORDLOC_EXP equivalent). Empty by default: unit
+  // cost alone is a valid order; these add the rest of landed cost.
+  nonMerchCosts: [],
 });
 
 /**

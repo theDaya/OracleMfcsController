@@ -114,11 +114,17 @@ All five are implemented, with their own step graphs, endpoint resolution and HT
 `CREATE_STYLE` and `CREATE_ALL` have been proven against the live tenant. `MODIFY_*` produce correct
 payloads but have not yet been executed live.
 
-Three rules that cost the most time when got wrong:
+For current status and outstanding work see [Status and next steps](docs/status-and-next-steps.md).
+For what each table and package does see [Database objects](docs/database-objects.md).
+
+Rules that cost the most time when got wrong:
 
 - The parent style carries differentiator **groups** (`RMS_ALL_C` / `ALL`); children carry **concrete**
   diff IDs (colour `08610`, sizes `070` / `080`).
 - Item approval fails unless sourcing **and** country of manufacture already exist.
+- A colour change **cannot** be applied to an existing SKU. `items/update` with a changed `diff1`
+  returns HTTP 200 `SUCCESS` and ignores it — a diff combination defines the item, so a new colour
+  means new children.
 - `OTB_EOW_DATE` must fall on the retail week-ending day. The tenant calendar
   (`administration/operations/calendar`) starts every retail month on a Monday, so weeks end on
   **Sunday**. MFCS only enforces this at purchase-order create — step 100 — by which point a style
@@ -141,8 +147,9 @@ Non-secret configuration lives in `CONFIG`. Key entries:
 - `MAP.*` — Office-to-MFCS foundation mappings
 
 `ENDPOINT.INITIAL_RETAIL` is still a placeholder; the tenant spec exposes no matching write service, so
-`FEATURE_INITIAL_RETAIL_YN` stays `N`. `FEATURE_ITEM_LOCATIONS_YN` is `N` because no valid location
-hierarchy value has been confirmed.
+`FEATURE_INITIAL_RETAIL_YN` stays `N`. `FEATURE_ITEM_LOCATIONS_YN` is now `Y`, ranging to virtual
+warehouse 19271 — note that a purchase order ranges its own items, so the step only matters for
+style-only creates.
 
 ## Credentials
 

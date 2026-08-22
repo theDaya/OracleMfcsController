@@ -59,6 +59,31 @@ show errors
 
 create or replace package body browse_pkg as
 
+    -- Upstream failures must not be served to the console as HTTP 200 with an
+    -- HTML body. MFCS answers an expired token with an HTML 401 page; passing
+    -- that through untouched makes a dead credential look like an endpoint that
+    -- works and simply has no data, which is exactly the wrong diagnosis.
+    function passthrough(p_path in varchar2) return clob is
+        l_status number;
+        l_body clob;
+        l_err json_object_t;
+    begin
+        l_body := client_pkg.get_json(p_path, l_status);
+        if l_status between 200 and 299 then
+            return l_body;
+        end if;
+        l_err := json_object_t();
+        l_err.put('error', 'MFCS returned HTTP ' || l_status);
+        l_err.put('httpStatus', l_status);
+        l_err.put('path', p_path);
+        l_err.put('hint', case when l_status = 401
+                               then 'The bearer token is rejected - it has most likely expired.'
+                               else 'See detail for what MFCS reported.' end);
+        l_err.put('detail', substr(dbms_lob.substr(l_body, 900, 1), 1, 900));
+        l_err.put('items', json_array_t());
+        return l_err.to_clob;
+    end;
+
     function display_size(p_diff in varchar2) return varchar2 is
         l_code varchar2(120);
     begin
@@ -93,7 +118,7 @@ create or replace package body browse_pkg as
         if p_dept is not null then
             l_path := l_path || '&deptId=' || p_dept;
         end if;
-        return client_pkg.get_json(l_path, l_status);
+        return passthrough(l_path);
     end;
 
     function list_orders(
@@ -107,7 +132,7 @@ create or replace package body browse_pkg as
         if p_supplier is not null then
             l_path := l_path || '&supplier=' || p_supplier;
         end if;
-        return client_pkg.get_json(l_path, l_status);
+        return passthrough(l_path);
     end;
 
     -- Child item numbers for a style, via the RmsReSTServices item hierarchy read.
@@ -223,10 +248,10 @@ create or replace package body browse_pkg as
         l_child_body clob;
         l_child_items json_array_t;
     begin
-        l_body := client_pkg.get_json(
-            '/MerchIntegrations/services/foundation/item/' || p_item, l_status);
+        l_body := passthrough('/MerchIntegrations/services/foundation/item/' || p_item);
 
-        if nvl(p_with_skus, 'N') <> 'Y' or l_status not between 200 and 299 then
+        if nvl(p_with_skus, 'N') <> 'Y'
+           or json_object_t.parse(l_body).has('error') then
             return l_body;
         end if;
 
@@ -308,8 +333,9 @@ create or replace package body browse_pkg as
         l_style varchar2(30);
         l_colour varchar2(120);
     begin
-        l_body := client_pkg.get_json('/MerchIntegrations/services/procurement/order/' || p_order_no, l_status);
-        if nvl(p_enrich, 'Y') <> 'Y' or l_status not between 200 and 299 then
+        l_body := passthrough('/MerchIntegrations/services/procurement/order/' || p_order_no);
+        if nvl(p_enrich, 'Y') <> 'Y'
+           or json_object_t.parse(l_body).has('error') then
             return l_body;
         end if;
 

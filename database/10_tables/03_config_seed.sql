@@ -39,6 +39,10 @@ using (
     select 'DEFAULT', 'FEATURE_ITEM_LOCATIONS_YN', 'Y', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_RESERVATION_DAYS_UNTIL_EXPIRY', '1', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_OTB_EOW_DAY', 'SUNDAY', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_EXPENSE_CALC_BASIS', 'V', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_EXPENSE_IN_DUTY', 'N', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_EXPENSE_IN_EXPENSE', 'Y', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_EXPENSE_IN_ALC', 'Y', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_TYPE', 'N/B', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_STATUS', 'A', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_ORIGIN', '2', 'Y' from dual union all

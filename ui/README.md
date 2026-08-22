@@ -58,7 +58,7 @@ Deliberately almost all of it is in PL/SQL. The React app holds no mapping rules
 | Field validation | `validation_pkg` |
 | Step graph per operation | `request_pkg.initialize_steps` |
 | Step → endpoint / HTTP method | `orchestrator_pkg` |
-| MFCS payload construction | `mapping_pkg` → `payload_pkg` |
+| MFCS payload construction | `payload_pkg` |
 | Assembling the preview | `preview_pkg` |
 | Master-data fetch and cache | `master_pkg` -> `MASTER_DATA` |
 | Credentials and outbound HTTP | `client_pkg` (sole owner) |

@@ -12,6 +12,13 @@ async function call(path, options = {}) {
   } catch {
     throw new Error(`Non-JSON response (HTTP ${res.status}): ${text.slice(0, 300)}`);
   }
+  // The pass-through readers answer 200 even when MFCS refused them, carrying an
+  // error envelope instead of rows. Surface that as a failure rather than letting
+  // a rejected token look like an endpoint with no data.
+  if (body && typeof body === 'object' && body.error && body.httpStatus) {
+    throw new Error(`${body.error}. ${body.hint || ''}`.trim());
+  }
+
   return { status: res.status, body };
 }
 
@@ -84,6 +91,21 @@ export function buildInboundPayload(form) {
   });
 
   if (isOrder) {
+    // Non-merchandise costs ride along inside the purchase order, the way
+    // ORDLOC_EXP does in RMS. Omitted entirely when none are entered.
+    if ((form.nonMerchCosts || []).length > 0) {
+      payload.NON_MERCH_COSTS = form.nonMerchCosts.map((c) => ({
+        COMPONENT: c.component,
+        RATE: num(c.rate),
+        CURRENCY: str(c.currency) || form.currencyCode,
+        CALCULATION_BASIS: str(c.basis),
+        PER_COUNT: num(c.perCount),
+        PER_COUNT_UOM: str(c.perCountUom),
+        IN_DUTY: c.inDuty ? 'Y' : 'N',
+        IN_EXPENSE: c.inExpense ? 'Y' : 'N',
+        IN_ALC: c.inAlc ? 'Y' : 'N',
+      }));
+    }
     Object.assign(payload, {
       IMPORT_COUNTRY: form.importCountry,
       NOT_BEFORE_DATE: form.notBeforeDate,

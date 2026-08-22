@@ -11,12 +11,6 @@ declare
         'Dayalan all ' || to_char(systimestamp, 'YYYY-MM-DD HH24:MI:SS.FF3');
 begin
     update config
-       set config_value = 'ACTUAL_MFCS',
-           updated_at = systimestamp
-     where environment = 'DEFAULT'
-       and config_key = 'MFCS_CLIENT_MODE';
-
-    update config
        set config_value = 'N',
            updated_at = systimestamp
      where environment = 'DEFAULT'

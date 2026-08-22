@@ -739,6 +739,8 @@ create or replace package body payload_pkg as
         l_order json_object_t := json_object_t();
         l_details json_array_t := json_array_t();
         l_detail json_object_t;
+        l_expenses json_array_t := json_array_t();
+        l_expense json_object_t;
         l_sku varchar2(30);
         l_operation varchar2(30);
         l_order_location number := order_location(l_payload);
@@ -805,8 +807,56 @@ create or replace package body payload_pkg as
             l_detail.put('earliestShipDate', string_value(l_payload, 'EARLIEST_SHIP_DATE'));
             l_detail.put('latestShipDate', string_value(l_payload, 'LATEST_SHIP_DATE'));
             l_details.append(l_detail);
+
+            -- Non-merchandise costs, one expense row per SKU per location. This is
+            -- the ORDLOC_EXP equivalent: unit cost covers the merchandise, these
+            -- cover freight, duty, handling and so on, and together they give
+            -- landed cost. MFCS accepts them inside the order create, so they do
+            -- not need a separate call.
+            for e in (
+                select component, calculation_basis, component_rate, component_currency,
+                       per_count, per_count_uom, in_duty, in_expense, in_alc
+                  from json_table(l_payload, '$.NON_MERCH_COSTS[*]'
+                      columns
+                          component          varchar2(30)  path '$.COMPONENT',
+                          calculation_basis  varchar2(10)  path '$.CALCULATION_BASIS',
+                          component_rate     number        path '$.RATE',
+                          component_currency varchar2(10)  path '$.CURRENCY',
+                          per_count          number        path '$.PER_COUNT',
+                          per_count_uom      varchar2(10)  path '$.PER_COUNT_UOM',
+                          in_duty            varchar2(1)   path '$.IN_DUTY',
+                          in_expense         varchar2(1)   path '$.IN_EXPENSE',
+                          in_alc             varchar2(1)   path '$.IN_ALC'
+                  )
+            ) loop
+                l_expense := json_object_t();
+                l_expense.put('item', l_sku);
+                l_expense.put('location', l_order_location);
+                l_expense.put('locationType', l_location_type);
+                l_expense.put('component', e.component);
+                l_expense.put('calculationBasis',
+                    nvl(e.calculation_basis, config_pkg.get_config('MFCS_EXPENSE_CALC_BASIS', 'V')));
+                l_expense.put('componentRate', e.component_rate);
+                l_expense.put('componentCurrency',
+                    nvl(e.component_currency, string_value(l_payload, 'CURRENCY_CODE')));
+                if e.per_count is not null then
+                    l_expense.put('perCount', e.per_count);
+                    l_expense.put('perCountUom',
+                        nvl(e.per_count_uom, config_pkg.get_config('MFCS_COST_UOM', 'EA')));
+                end if;
+                -- Nomination flags decide whether a component feeds duty, expense
+                -- and actual landed cost. Defaulted rather than omitted, because
+                -- omitting them changes what the cost is counted towards.
+                l_expense.put('inDuty', nvl(e.in_duty, config_pkg.get_config('MFCS_EXPENSE_IN_DUTY', 'N')));
+                l_expense.put('inExpense', nvl(e.in_expense, config_pkg.get_config('MFCS_EXPENSE_IN_EXPENSE', 'Y')));
+                l_expense.put('inAlc', nvl(e.in_alc, config_pkg.get_config('MFCS_EXPENSE_IN_ALC', 'Y')));
+                l_expenses.append(l_expense);
+            end loop;
         end loop;
         l_order.put('details', l_details);
+        if l_expenses.get_size > 0 then
+            l_order.put('expenses', l_expenses);
+        end if;
         l_orders.append(l_order);
         l_root.put('items', l_orders);
         return l_root.to_clob;

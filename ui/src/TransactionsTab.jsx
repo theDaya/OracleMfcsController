@@ -139,6 +139,25 @@ export default function TransactionsTab({ form, setForm, masterData }) {
   const removeSize = (i) =>
     setForm({ ...form, sizeCurve: form.sizeCurve.filter((_, idx) => idx !== i) });
 
+  const updateCost = (i, key, value) =>
+    setForm({
+      ...form,
+      nonMerchCosts: form.nonMerchCosts.map((c, idx) => (idx === i ? { ...c, [key]: value } : c)),
+    });
+
+  const addCost = () =>
+    setForm({
+      ...form,
+      nonMerchCosts: [
+        ...form.nonMerchCosts,
+        { component: '', rate: '', currency: form.currencyCode, basis: 'V',
+          perCount: '', perCountUom: '', inDuty: false, inExpense: true, inAlc: true },
+      ],
+    });
+
+  const removeCost = (i) =>
+    setForm({ ...form, nonMerchCosts: form.nonMerchCosts.filter((_, idx) => idx !== i) });
+
   const opMeta = OPERATIONS.find((o) => o.id === form.operationName);
   const mfcsCalls = preview?.MFCS_CALLS || [];
 
@@ -291,6 +310,52 @@ export default function TransactionsTab({ form, setForm, masterData }) {
 
         {isOrder && (
           <>
+            <h3>
+              Non-merchandise costs
+              <button type="button" className="link" onClick={addCost}>
+                + add cost
+              </button>
+            </h3>
+            <p className="muted small" style={{ margin: '-4px 0 8px' }}>
+              The ORDLOC_EXP equivalent. Added to unit cost to reach landed cost, and sent inside the
+              purchase order. The flags decide what each component counts towards.
+            </p>
+            {form.nonMerchCosts.length === 0 && (
+              <p className="muted small">None. Unit cost alone is a valid order.</p>
+            )}
+            {form.nonMerchCosts.length > 0 && (
+              <table className="sizes">
+                <thead>
+                  <tr>
+                    <th>Component</th>
+                    <th>Rate</th>
+                    <th>Ccy</th>
+                    <th>Basis</th>
+                    <th>Duty</th>
+                    <th>Exp</th>
+                    <th>ALC</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.nonMerchCosts.map((c, i) => (
+                    <tr key={i}>
+                      <td><input value={c.component} onChange={(e) => updateCost(i, 'component', e.target.value)} /></td>
+                      <td><input value={c.rate} onChange={(e) => updateCost(i, 'rate', e.target.value)} /></td>
+                      <td><input value={c.currency} onChange={(e) => updateCost(i, 'currency', e.target.value)} /></td>
+                      <td><input value={c.basis} onChange={(e) => updateCost(i, 'basis', e.target.value)} /></td>
+                      <td><input type="checkbox" checked={c.inDuty} onChange={(e) => updateCost(i, 'inDuty', e.target.checked)} /></td>
+                      <td><input type="checkbox" checked={c.inExpense} onChange={(e) => updateCost(i, 'inExpense', e.target.checked)} /></td>
+                      <td><input type="checkbox" checked={c.inAlc} onChange={(e) => updateCost(i, 'inAlc', e.target.checked)} /></td>
+                      <td>
+                        <button type="button" className="link danger" onClick={() => removeCost(i)}>x</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
             <h3>Order</h3>
             <div className="grid3">
               <Field label="Delivery location">
