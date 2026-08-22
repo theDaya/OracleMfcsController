@@ -1,10 +1,19 @@
 set define off
 
 -- Resolves the outcome of ambiguous calls by correlation ID.
+--
+-- When a transport error leaves a step OUTCOME_UNKNOWN, the truth is in the
+-- tenant, not in this database. This asks MFCS's operation-status service what
+-- happened to the correlation id the attempt journalled: SUCCESS marks the
+-- step done, FAILURE marks it failed, and no record at all means the call
+-- never landed and the step can simply run again.
 
 prompt Creating recovery_pkg
 
 create or replace package recovery_pkg authid definer as
+    -- Resolves the most recent OUTCOME_UNKNOWN attempt of one step. Returns
+    -- SUCCEEDED, FAILED, NO_RECORD (safe to re-run), MANUAL_REVIEW (still
+    -- ambiguous - the request is parked), or NO_UNKNOWN_ATTEMPT.
     function resolve_step(
         p_action_request_id in varchar2,
         p_step_code         in varchar2

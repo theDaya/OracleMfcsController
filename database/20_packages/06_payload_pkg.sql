@@ -1,6 +1,16 @@
 set define off
 
 -- Reads the Office document and builds each MFCS request payload.
+--
+-- The whole MFCS write contract in one place: every request body the
+-- orchestrator sends is built here, from the stored Office document plus
+-- CONFIG defaults and MAP.* translations. orchestrator_pkg calls build_request
+-- statically, so a missing mapper is a compile error, not a runtime surprise.
+--
+-- MFCS's read and write vocabularies disagree (the order feed says
+-- physicalQuantityOrdered / originCountryId where the write wants
+-- quantityOrdered / originCountry); the mappers here speak the write
+-- vocabulary only.
 
 prompt Creating payload_pkg
 

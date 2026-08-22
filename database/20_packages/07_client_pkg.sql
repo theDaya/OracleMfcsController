@@ -1,6 +1,18 @@
 set define off
 
 -- Outbound MFCS calls: credentials, HTTP, attempt journalling.
+--
+-- The only package that resolves a credential or makes an outbound call.
+-- Keep it that way: a second HTTP path is how a stale token once survived in
+-- one code path and not another. The token is read from SECRET on every call,
+-- never cached in a package global - ORDS pools sessions, and a cached
+-- credential outlives the request that read it.
+--
+-- Failure classification matters more than it looks. An HTTP error with a
+-- readable body is a failure (-20950); HTTP 503 and the tenant's nightly
+-- batch refusal are unavailability (-20951); a transport error after the
+-- request may have been sent is an unknown outcome (-20952), resolved later
+-- by recovery_pkg - never assume a send that errored did not land.
 
 prompt Creating client_pkg
 
@@ -51,24 +63,6 @@ show errors
 create or replace package body client_pkg as
     g_access_token varchar2(32767);
     g_token_expires_at timestamp with time zone;
-
-    function log_escape(p_value in varchar2) return varchar2 is
-    begin
-        if p_value is null then
-            return null;
-        end if;
-
-        return replace(
-                   replace(
-                       replace(
-                           replace(p_value, '\', '\\'),
-                           '"', '\"'
-                       ),
-                       chr(10), '\n'
-                   ),
-                   chr(13), '\r'
-               );
-    end;
 
     function get_secret(p_secret_ref in varchar2) return varchar2 is
         l_secret varchar2(32767);
@@ -320,9 +314,9 @@ create or replace package body client_pkg as
             p_step_code => p_step_code,
             p_attempt_id => l_attempt_id,
             p_message => 'Prepared outbound MFCS call.',
-            p_detail_payload => '{"endpointKey":"' || log_escape(p_endpoint_key)
-                || '","endpoint":"' || log_escape(l_endpoint)
-                || '","method":"' || log_escape(p_http_method)
+            p_detail_payload => '{"endpointKey":"' || event_pkg.escape_json(p_endpoint_key)
+                || '","endpoint":"' || event_pkg.escape_json(l_endpoint)
+                || '","method":"' || event_pkg.escape_json(p_http_method)
                 || '","requestBytes":' || coalesce(to_char(dbms_lob.getlength(p_request_payload)), '0') || '}'
         );
 
@@ -344,8 +338,8 @@ create or replace package body client_pkg as
             p_step_code => p_step_code,
             p_attempt_id => l_attempt_id,
             p_message => 'Calling remote MFCS endpoint.',
-            p_detail_payload => '{"endpointKey":"' || log_escape(p_endpoint_key)
-                || '","endpoint":"' || log_escape(l_endpoint)
+            p_detail_payload => '{"endpointKey":"' || event_pkg.escape_json(p_endpoint_key)
+                || '","endpoint":"' || event_pkg.escape_json(l_endpoint)
                 || '","timeoutSeconds":' || config_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45') || '}'
         );
 
@@ -400,7 +394,7 @@ create or replace package body client_pkg as
                 p_event_level => 'ERROR',
                 p_message => substr(sqlerrm, 1, 1000),
                 p_detail_payload => '{"sqlcode":' || sqlcode
-                    || ',"endpointKey":"' || log_escape(p_endpoint_key) || '"}'
+                    || ',"endpointKey":"' || event_pkg.escape_json(p_endpoint_key) || '"}'
             );
 
             if sqlcode in (-20950, -20951, -20952) then

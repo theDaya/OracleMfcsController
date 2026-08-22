@@ -63,7 +63,7 @@ Numbered by dependency order. A package's body may only call packages above it.
 | # | Package | Responsibility |
 | --- | --- | --- |
 | 01 | `config_pkg` | Configuration lookup with defaults |
-| 02 | `event_pkg` | Autonomous event logging |
+| 02 | `event_pkg` | Autonomous event logging; the shared JSON string-escape helper |
 | 03 | `request_pkg` | Request registration, idempotency hashing, status, generated identifiers |
 | 04 | `step_pkg` | Step graph state and attempt journalling |
 | 05 | `validation_pkg` | Field-level validation of the inbound document |
@@ -85,6 +85,12 @@ Numbered by dependency order. A package's body may only call packages above it.
 earlier duplicate is exactly what let a stale cached token survive in one code path and not another.
 It also does *not* cache the token in a package global: ORDS pools sessions, so a cached credential
 outlives the request that read it.
+
+**`event_pkg.escape_json`** is the one copy of the JSON string-escape helper. It used to exist five
+times - three as `json_escape`, two as `log_escape`, identical bodies - which is exactly how one copy
+drifts. Every package that hand-builds a JSON document (log detail payloads, status responses) calls
+this one; `event_pkg` owns it because it loads early and the JSON in question is mostly its own
+detail payloads.
 
 **`payload_pkg`** is the whole MFCS contract in one place. `orchestrator_pkg.payload_for_step` maps a
 step code to a mapper name and calls `payload_pkg.build_request` — statically, so a missing mapper is

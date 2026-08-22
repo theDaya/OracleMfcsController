@@ -1,10 +1,16 @@
 set define off
 
--- Environment configuration lookup.
+-- Environment configuration lookup: one row per key in CONFIG.
+--
+-- Everything tunable lives here - endpoints, MFCS defaults, MAP.* value
+-- translations, feature flags - so behaviour changes are an update statement,
+-- not a redeploy. Seeded by database/10_tables/03_config_seed.sql.
 
 prompt Creating config_pkg
 
 create or replace package config_pkg authid definer as
+    -- Returns the enabled value for a key, or p_default when the key is absent.
+    -- Callers pass the default inline, so a missing row is never an error.
     function get_config(
         p_key         in varchar2,
         p_default     in varchar2 default null,

@@ -1,24 +1,38 @@
 set define off
 
 -- Step graph and attempt journalling for a registered request.
+--
+-- initialize_steps writes the full plan for an operation into STEP before
+-- anything runs; the orchestrator then walks it by asking first_runnable_step.
+-- Every outbound HTTP call is bracketed by begin_attempt / complete_attempt,
+-- which is what makes a request resumable: the journal knows what was sent,
+-- what came back, and which step to pick up from.
 
 prompt Creating step_pkg
 
 create or replace package step_pkg authid definer as
+    -- Writes the operation's full step plan into STEP, all PENDING. See the
+    -- body for why every operation gets its whole write set.
     procedure initialize_steps(
         p_action_request_id in varchar2,
         p_operation_name    in varchar2
     );
 
+    -- The lowest-sequence step still PENDING, FAILED or OUTCOME_UNKNOWN, or
+    -- null when the request is complete. FAILED is runnable on purpose: that
+    -- is what resume means.
     function first_runnable_step(
         p_action_request_id in varchar2
     ) return varchar2;
 
+    -- Whether a step has already succeeded, used by resume to skip work that
+    -- is done.
     function step_succeeded(
         p_action_request_id in varchar2,
         p_step_code         in varchar2
     ) return boolean;
 
+    -- Records a step's current status and, on failure, the error that stopped it.
     procedure set_step_status(
         p_action_request_id in varchar2,
         p_step_code         in varchar2,
@@ -28,6 +42,9 @@ create or replace package step_pkg authid definer as
         p_error_message     in varchar2 default null
     );
 
+    -- Journals an outbound call before it is sent, returning the attempt id and
+    -- a fresh correlation id. Recording first is deliberate: if the process
+    -- dies mid-call, the journal still shows a call may have gone out.
     procedure begin_attempt(
         p_action_request_id in varchar2,
         p_step_code         in varchar2,
@@ -38,6 +55,8 @@ create or replace package step_pkg authid definer as
         o_correlation_id    out varchar2
     );
 
+    -- Closes an attempt with what came back - or with OUTCOME_UNKNOWN when the
+    -- transport failed after the request may have been sent.
     procedure complete_attempt(
         p_attempt_id       in number,
         p_attempt_status   in varchar2,
@@ -50,24 +69,6 @@ end step_pkg;
 show errors
 
 create or replace package body step_pkg as
-    function json_escape(p_value in varchar2) return varchar2 is
-    begin
-        if p_value is null then
-            return null;
-        end if;
-
-        return replace(
-                   replace(
-                       replace(
-                           replace(p_value, '\', '\\'),
-                           '"', '\"'
-                       ),
-                       chr(10), '\n'
-                   ),
-                   chr(13), '\r'
-               );
-    end;
-
     procedure add_step(
         p_action_request_id in varchar2,
         p_step_code in varchar2,
@@ -281,9 +282,9 @@ create or replace package body step_pkg as
             p_attempt_id => o_attempt_id,
             p_message => 'MFCS attempt opened.',
             p_detail_payload => '{"attemptNumber":' || l_attempt_number
-                || ',"correlationId":"' || json_escape(o_correlation_id)
-                || '","httpMethod":"' || json_escape(p_http_method)
-                || '","endpoint":"' || json_escape(p_endpoint) || '"}'
+                || ',"correlationId":"' || event_pkg.escape_json(o_correlation_id)
+                || '","httpMethod":"' || event_pkg.escape_json(p_http_method)
+                || '","endpoint":"' || event_pkg.escape_json(p_endpoint) || '"}'
         );
 
         commit;
@@ -315,7 +316,7 @@ create or replace package body step_pkg as
             p_attempt_id => p_attempt_id,
             p_event_level => case when p_attempt_status = 'SUCCEEDED' then 'INFO' else 'ERROR' end,
             p_message => 'MFCS attempt completed.',
-            p_detail_payload => '{"attemptStatus":"' || json_escape(p_attempt_status)
+            p_detail_payload => '{"attemptStatus":"' || event_pkg.escape_json(p_attempt_status)
                 || '","httpStatus":' || coalesce(to_char(p_http_status), 'null')
                 || ',"responseBytes":' || coalesce(to_char(dbms_lob.getlength(p_response_payload)), '0') || '}'
         );

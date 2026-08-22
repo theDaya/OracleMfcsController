@@ -1,14 +1,29 @@
 set define off
 
--- Step graph, endpoint resolution and request execution.
+-- Request execution: walks the step graph, resolves each step to an MFCS
+-- endpoint and method, sends the payload, and journals the outcome.
+--
+-- Execution is a loop over step_pkg.first_runnable_step, so resume and first
+-- run are the same code path: whatever is not yet SUCCEEDED runs next. Every
+-- operation sends its whole write set - see initialize_steps in step_pkg for
+-- why - and the create-versus-update choice for each step is made here, in
+-- endpoint_for_step, from the operation name alone.
+--
+-- ENSURE_STYLE_SKUS is the one step handled inline rather than through the
+-- endpoint table: what it sends depends on what the tenant already holds.
 
 prompt Creating orchestrator_pkg
 
 create or replace package orchestrator_pkg authid definer as
+    -- Runs every runnable step of a registered request, in sequence, until
+    -- the graph is exhausted or a step fails. Sets the request's final status
+    -- and stores the response document a duplicate submission will replay.
     procedure execute_request(
         p_action_request_id in varchar2
     );
 
+    -- Resume is execute: the loop picks up from the first step that has not
+    -- succeeded. Kept as a named entry point so the API reads honestly.
     procedure resume_request(
         p_action_request_id in varchar2
     );
@@ -43,24 +58,6 @@ create or replace package body orchestrator_pkg as
           from request
          where action_request_id = p_action_request_id;
         return l_payload;
-    end;
-
-    function log_escape(p_value in varchar2) return varchar2 is
-    begin
-        if p_value is null then
-            return null;
-        end if;
-
-        return replace(
-                   replace(
-                       replace(
-                           replace(p_value, '\', '\\'),
-                           '"', '\"'
-                       ),
-                       chr(10), '\n'
-                   ),
-                   chr(13), '\r'
-               );
     end;
 
     function operation_name(p_action_request_id in varchar2) return varchar2 is
@@ -199,8 +196,8 @@ create or replace package body orchestrator_pkg as
             p_event_phase => 'RESERVE_CHUNK_START',
             p_step_code => 'RESERVE_ITEM_NUMBERS',
             p_message => 'Starting chunked item-number reservation.',
-            p_detail_payload => '{"sourceSystem":"' || log_escape(l_source_system)
-                || '","sourceStyleRef":"' || log_escape(l_source_style_ref)
+            p_detail_payload => '{"sourceSystem":"' || event_pkg.escape_json(l_source_system)
+                || '","sourceStyleRef":"' || event_pkg.escape_json(l_source_style_ref)
                 || '","daysUntilExpiry":' || l_days || '}'
         );
 
@@ -227,7 +224,7 @@ create or replace package body orchestrator_pkg as
             p_event_phase => 'RESERVE_STYLE_SUCCEEDED',
             p_step_code => 'RESERVE_ITEM_NUMBERS',
             p_message => 'Reserved MFCS style item number.',
-            p_detail_payload => '{"mfcsStyleNo":"' || log_escape(l_style_no) || '"}'
+            p_detail_payload => '{"mfcsStyleNo":"' || event_pkg.escape_json(l_style_no) || '"}'
         );
 
         request_pkg.save_generated_identifier(
@@ -251,9 +248,9 @@ create or replace package body orchestrator_pkg as
                 p_event_phase => 'RESERVE_SKU_START',
                 p_step_code => 'RESERVE_ITEM_NUMBERS',
                 p_message => 'Reserving MFCS item number for SKU.',
-                p_detail_payload => '{"sourceVariantRef":"' || log_escape(v.source_variant_ref)
-                    || '","skuSize":"' || log_escape(v.sku_size)
-                    || '","skuWidth":"' || log_escape(v.sku_width) || '"}'
+                p_detail_payload => '{"sourceVariantRef":"' || event_pkg.escape_json(v.source_variant_ref)
+                    || '","skuSize":"' || event_pkg.escape_json(v.sku_size)
+                    || '","skuWidth":"' || event_pkg.escape_json(v.sku_width) || '"}'
             );
 
             l_response := client_pkg.call_service(
@@ -272,9 +269,9 @@ create or replace package body orchestrator_pkg as
                 p_event_phase => 'RESERVE_SKU_SUCCEEDED',
                 p_step_code => 'RESERVE_ITEM_NUMBERS',
                 p_message => 'Reserved MFCS SKU item number.',
-                p_detail_payload => '{"sourceVariantRef":"' || log_escape(v.source_variant_ref)
-                    || '","mfcsSkuNo":"' || log_escape(l_sku_no)
-                    || '","mfcsStyleNo":"' || log_escape(l_style_no) || '"}'
+                p_detail_payload => '{"sourceVariantRef":"' || event_pkg.escape_json(v.source_variant_ref)
+                    || '","mfcsSkuNo":"' || event_pkg.escape_json(l_sku_no)
+                    || '","mfcsStyleNo":"' || event_pkg.escape_json(l_style_no) || '"}'
             );
 
             request_pkg.save_generated_identifier(
@@ -294,7 +291,7 @@ create or replace package body orchestrator_pkg as
             p_event_phase => 'RESERVE_CHUNK_COMPLETE',
             p_step_code => 'RESERVE_ITEM_NUMBERS',
             p_message => 'Chunked item-number reservation completed.',
-            p_detail_payload => '{"mfcsStyleNo":"' || log_escape(l_style_no) || '"}'
+            p_detail_payload => '{"mfcsStyleNo":"' || event_pkg.escape_json(l_style_no) || '"}'
         );
     end;
 
@@ -501,7 +498,7 @@ create or replace package body orchestrator_pkg as
                 p_event_phase => 'SKU_MAPPING_RECORDED',
                 p_step_code => 'ENSURE_STYLE_SKUS',
                 p_message => 'Recorded the SKU behind each requested combination.',
-                p_detail_payload => '{"mfcsStyleNo":"' || log_escape(p_style)
+                p_detail_payload => '{"mfcsStyleNo":"' || event_pkg.escape_json(p_style)
                     || '","skuCount":' || l_recorded || '}'
             );
         end if;
@@ -579,8 +576,8 @@ create or replace package body orchestrator_pkg as
             p_event_phase => 'SKU_GENERATION_START',
             p_step_code => p_step_code,
             p_message => 'Creating the children this style is missing.',
-            p_detail_payload => '{"mfcsStyleNo":"' || log_escape(p_style)
-                || '","colour":"' || log_escape(p_colour)
+            p_detail_payload => '{"mfcsStyleNo":"' || event_pkg.escape_json(p_style)
+                || '","colour":"' || event_pkg.escape_json(p_colour)
                 || '","missingCount":' || l_missing.get_size || '}'
         );
 
@@ -643,10 +640,10 @@ create or replace package body orchestrator_pkg as
                 p_event_phase => 'SKU_NUMBER_RESERVED',
                 p_step_code => p_step_code,
                 p_message => 'Reserved an item number for a missing combination.',
-                p_detail_payload => '{"mfcsSkuNo":"' || log_escape(l_item)
-                    || '","size":"' || log_escape(l_size)
-                    || '","sizeDiff":"' || log_escape(l_entry.get_string('sizeDiff'))
-                    || '","colourDiff":"' || log_escape(l_entry.get_string('colourDiff')) || '"}'
+                p_detail_payload => '{"mfcsSkuNo":"' || event_pkg.escape_json(l_item)
+                    || '","size":"' || event_pkg.escape_json(l_size)
+                    || '","sizeDiff":"' || event_pkg.escape_json(l_entry.get_string('sizeDiff'))
+                    || '","colourDiff":"' || event_pkg.escape_json(l_entry.get_string('colourDiff')) || '"}'
             );
         end loop;
 
@@ -696,8 +693,8 @@ create or replace package body orchestrator_pkg as
             p_event_phase => 'SKU_GENERATION_SENT',
             p_step_code => p_step_code,
             p_message => 'Created, sourced and approved the missing children.',
-            p_detail_payload => '{"mfcsStyleNo":"' || log_escape(p_style)
-                || '","children":"' || log_escape(substr(l_created, 1, 900)) || '"}'
+            p_detail_payload => '{"mfcsStyleNo":"' || event_pkg.escape_json(p_style)
+                || '","children":"' || event_pkg.escape_json(substr(l_created, 1, 900)) || '"}'
         );
 
         -- Read the style back rather than trusting four HTTP 200s. This is the whole
@@ -739,7 +736,7 @@ create or replace package body orchestrator_pkg as
             p_event_phase => 'SKU_GENERATION_VERIFIED',
             p_step_code => p_step_code,
             p_message => 'Style ' || p_style || ' now carries every requested combination.',
-            p_detail_payload => '{"mfcsStyleNo":"' || log_escape(p_style)
+            p_detail_payload => '{"mfcsStyleNo":"' || event_pkg.escape_json(p_style)
                 || '","createdCount":' || l_children.get_size || '}'
         );
     end;
@@ -881,8 +878,8 @@ create or replace package body orchestrator_pkg as
             p_action_request_id => p_action_request_id,
             p_event_phase => 'REQUEST_EXECUTE_START',
             p_message => 'MFCS orchestration started.',
-            p_detail_payload => '{"operationName":"' || log_escape(l_operation)
-                || '","userId":"' || log_escape(l_user_id)
+            p_detail_payload => '{"operationName":"' || event_pkg.escape_json(l_operation)
+                || '","userId":"' || event_pkg.escape_json(l_user_id)
                 || '","budgetSeconds":' || l_budget_seconds || '}'
         );
         step_pkg.set_step_status(p_action_request_id, 'VALIDATE_REQUEST', 'SUCCEEDED');
@@ -938,8 +935,8 @@ create or replace package body orchestrator_pkg as
                 p_event_phase => 'STEP_START',
                 p_step_code => l_step,
                 p_message => 'MFCS orchestration step started.',
-                p_detail_payload => '{"endpointKey":"' || log_escape(l_endpoint_key)
-                    || '","method":"' || log_escape(l_method)
+                p_detail_payload => '{"endpointKey":"' || event_pkg.escape_json(l_endpoint_key)
+                    || '","method":"' || event_pkg.escape_json(l_method)
                     || '","requestBytes":' || coalesce(to_char(dbms_lob.getlength(l_request_payload)), '0') || '}'
             );
 

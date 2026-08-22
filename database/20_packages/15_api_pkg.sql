@@ -1,28 +1,51 @@
 set define off
 
 -- Public entry points behind the ORDS handlers.
+--
+-- The only package ORDS calls for transaction work. Each procedure returns the
+-- HTTP status and the response body; the handlers emit them verbatim, so
+-- everything the console or Office sees is decided here, not in the handler.
+--
+-- Application error codes used across the packages:
+--   -20820        unknown payload mapper (a compile-time wiring bug)
+--   -20830        MFCS reservation response carried no item number
+--   -20950        MFCS rejected a call (HTTP 4xx/5xx with a readable body)
+--   -20951        MFCS unavailable: HTTP 503 or the nightly batch window
+--   -20952        transport failed after the request may have been sent;
+--                 the outcome is unknown until recovery_pkg resolves it
+--   -20960..20965 ENSURE_STYLE_SKUS: lookup failed, combinations missing,
+--                 parent unreadable, unmapped size, no sourcing, verify failed
 
 prompt Creating api_pkg
 
 create or replace package api_pkg authid definer as
+    -- Validates, registers and executes an Office document. Replays the stored
+    -- outcome for a duplicate, 409s a conflicting reuse of the id, 422s a
+    -- document that fails validation.
     procedure submit_transaction(
         p_payload      in clob,
         o_http_status  out number,
         o_response     out clob
     );
 
+    -- Runs validation only. Nothing is registered and nothing reaches MFCS.
     procedure validate_transaction(
         p_payload      in clob,
         o_http_status  out number,
         o_response     out clob
     );
 
+    -- Returns the current status document for a registered request.
     procedure get_transaction(
         p_action_request_id in varchar2,
         o_http_status       out number,
         o_response          out clob
     );
 
+    -- Re-enters a partially completed request: succeeded steps are skipped,
+    -- the failed or unknown step is retried, and execution continues from
+    -- there. A request that failed on a bad stored value needs a fresh
+    -- request instead - resume replays the stored payload.
     procedure resume_transaction(
         p_action_request_id in varchar2,
         o_http_status       out number,

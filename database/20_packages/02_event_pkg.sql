@@ -1,10 +1,23 @@
 set define off
 
--- Autonomous event log. Records progress even when a step later fails.
+-- Autonomous event log, and the one JSON string-escape helper.
+--
+-- Every package that talks to MFCS logs its progress here. The autonomous
+-- transaction is the point: an event survives the rollback of the step that
+-- logged it, so a failed request still tells its story. A logging failure is
+-- swallowed - the log must never be the reason a request fails.
 
 prompt Creating event_pkg
 
 create or replace package event_pkg authid definer as
+    -- Escapes a value for embedding inside a JSON string literal. Public because
+    -- several packages hand-build small JSON documents (detail payloads, status
+    -- responses); this is the single copy they all share. Returns null for null.
+    function escape_json(p_value in varchar2) return varchar2;
+
+    -- Appends one row to EVENT_LOG in an autonomous transaction and commits it.
+    -- p_detail_payload is expected to be a JSON document; build its string
+    -- values with escape_json.
     procedure log_event(
         p_action_request_id in varchar2,
         p_event_phase       in varchar2,
@@ -20,7 +33,7 @@ end event_pkg;
 show errors
 
 create or replace package body event_pkg as
-    function json_escape(p_value in varchar2) return varchar2 is
+    function escape_json(p_value in varchar2) return varchar2 is
     begin
         if p_value is null then
             return null;

@@ -1,12 +1,23 @@
 set define off
 
--- Request lifecycle: registration, idempotency hashing, status and generated identifiers.
+-- Request lifecycle: registration, idempotency, status, generated identifiers.
+--
+-- A request is registered once under its ACTION_REQUEST_ID and never changes:
+-- the same id with the same payload replays the stored outcome, the same id
+-- with a different payload is a 409 conflict. Identifiers MFCS generates along
+-- the way (style, SKU and order numbers) are recorded in ENTITY_MAP so later
+-- requests naming the same source references can resolve them.
 
 prompt Creating request_pkg
 
 create or replace package request_pkg authid definer as
+    -- SHA-256 of the payload, used to tell a replay from a conflicting reuse
+    -- of the same ACTION_REQUEST_ID.
     function payload_hash(p_payload in clob) return varchar2;
 
+    -- Registers a request, or recognises one already seen. o_result is one of
+    -- NEW, DUPLICATE (same payload - o_response_payload carries the stored
+    -- outcome to replay) or CONFLICT (same id, different payload).
     procedure register_request(
         p_action_request_id in varchar2,
         p_operation_name    in varchar2,
@@ -17,12 +28,17 @@ create or replace package request_pkg authid definer as
         o_response_payload  out clob
     );
 
+    -- Sets REQUEST.REQUEST_STATUS and, when given, the stored response payload
+    -- that a later duplicate submission will replay.
     procedure set_request_status(
         p_action_request_id in varchar2,
         p_status            in varchar2,
         p_response_payload  in clob default null
     );
 
+    -- Upserts one ENTITY_MAP row keyed on the source references. Null
+    -- parameters leave the existing column values in place, so partial
+    -- knowledge accumulates across steps rather than overwriting.
     procedure save_generated_identifier(
         p_action_request_id   in varchar2,
         p_source_system       in varchar2,
@@ -36,6 +52,9 @@ create or replace package request_pkg authid definer as
         p_mfcs_order_no       in varchar2 default null
     );
 
+    -- Builds the canonical status document for a request: status, completed and
+    -- failed steps, generated identifiers, errors. Every response the API
+    -- returns for an executed request comes from here.
     function build_status_response(
         p_action_request_id in varchar2,
         p_status_override   in varchar2 default null
@@ -46,24 +65,6 @@ end request_pkg;
 show errors
 
 create or replace package body request_pkg as
-    function json_escape(p_value in varchar2) return varchar2 is
-    begin
-        if p_value is null then
-            return null;
-        end if;
-
-        return replace(
-                   replace(
-                       replace(
-                           replace(p_value, '\', '\\'),
-                           '"', '\"'
-                       ),
-                       chr(10), '\n'
-                   ),
-                   chr(13), '\r'
-               );
-    end;
-
     function canonicalize(p_element in json_element_t) return clob is
         l_object json_object_t;
         l_array json_array_t;
@@ -105,7 +106,7 @@ create or replace package body request_pkg as
                         end if;
 
                         l_result := l_result
-                            || '"' || json_escape(l_key) || '":'
+                            || '"' || event_pkg.escape_json(l_key) || '":'
                             || canonicalize(l_object.get(l_key));
                     end if;
                 end loop;
@@ -370,12 +371,12 @@ create or replace package body request_pkg as
 
         l_retryable := case when l_status in ('PARTIALLY_COMPLETED', 'OUTCOME_UNKNOWN', 'FAILED_NO_SIDE_EFFECT') then 'true' else 'false' end;
         l_response := '{'
-            || '"OPERATION_NAME":"' || json_escape(l_operation) || '",'
-            || '"ACTION_REQUEST_ID":"' || json_escape(p_action_request_id) || '",'
-            || '"STATUS":"' || json_escape(l_status) || '",'
+            || '"OPERATION_NAME":"' || event_pkg.escape_json(l_operation) || '",'
+            || '"ACTION_REQUEST_ID":"' || event_pkg.escape_json(p_action_request_id) || '",'
+            || '"STATUS":"' || event_pkg.escape_json(l_status) || '",'
             || '"RETRYABLE":' || l_retryable || ','
-            || '"STYLE":' || case when l_style is null then 'null' else '"' || json_escape(l_style) || '"' end || ','
-            || '"ORDER_NO":' || case when l_order is null then 'null' else '"' || json_escape(l_order) || '"' end || ','
+            || '"STYLE":' || case when l_style is null then 'null' else '"' || event_pkg.escape_json(l_style) || '"' end || ','
+            || '"ORDER_NO":' || case when l_order is null then 'null' else '"' || event_pkg.escape_json(l_order) || '"' end || ','
             || '"PLMSizeCurveDtl":[';
 
         for r in (
@@ -395,10 +396,10 @@ create or replace package body request_pkg as
             end if;
 
             l_response := l_response
-                || '{"SOURCE_VARIANT_REF":"' || json_escape(r.source_variant_ref) || '",'
-                || '"SKU_SIZE":"' || json_escape(r.sku_size) || '",'
-                || '"SKU_WIDTH":"' || json_escape(r.sku_width) || '",'
-                || '"SKU_ID":"' || json_escape(r.mfcs_sku_no) || '"}';
+                || '{"SOURCE_VARIANT_REF":"' || event_pkg.escape_json(r.source_variant_ref) || '",'
+                || '"SKU_SIZE":"' || event_pkg.escape_json(r.sku_size) || '",'
+                || '"SKU_WIDTH":"' || event_pkg.escape_json(r.sku_width) || '",'
+                || '"SKU_ID":"' || event_pkg.escape_json(r.mfcs_sku_no) || '"}';
         end loop;
 
         l_response := l_response || '],"COMPLETED_STEPS":[';
@@ -415,7 +416,7 @@ create or replace package body request_pkg as
             else
                 l_response := l_response || ',';
             end if;
-            l_response := l_response || '"' || json_escape(s.step_code) || '"';
+            l_response := l_response || '"' || event_pkg.escape_json(s.step_code) || '"';
         end loop;
 
         l_response := l_response || '],"FAILED_STEP":';
@@ -430,15 +431,15 @@ create or replace package body request_pkg as
                    order by step_sequence
               )
              where rownum = 1;
-            l_response := l_response || '"' || json_escape(l_failed_step) || '"';
+            l_response := l_response || '"' || event_pkg.escape_json(l_failed_step) || '"';
         exception
             when no_data_found then
                 l_response := l_response || 'null';
         end;
 
         l_response := l_response || ',"GENERATED_IDENTIFIERS":{'
-            || '"STYLE":' || case when l_style is null then 'null' else '"' || json_escape(l_style) || '"' end
-            || ',"ORDER_NO":' || case when l_order is null then 'null' else '"' || json_escape(l_order) || '"' end
+            || '"STYLE":' || case when l_style is null then 'null' else '"' || event_pkg.escape_json(l_style) || '"' end
+            || ',"ORDER_NO":' || case when l_order is null then 'null' else '"' || event_pkg.escape_json(l_order) || '"' end
             || '},"ERRORS":[]}';
 
         return l_response;

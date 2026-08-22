@@ -1,10 +1,19 @@
 set define off
 
 -- Field-level validation of the inbound Office document.
+--
+-- Runs before anything is registered or sent, so a rejected request has no
+-- side effects anywhere. Checks presence, types, dates and the MAP.* config
+-- translations; rules MFCS only enforces late (OTB_EOW_DATE falling on a
+-- Sunday, for one) are checked here so they fail before a style exists and an
+-- order number is burned.
 
 prompt Creating validation_pkg
 
 create or replace package validation_pkg authid definer as
+    -- Returns true when the document is executable. On false, o_errors is a
+    -- JSON array of {FIELD, CODE, MESSAGE} - every problem found, not only
+    -- the first.
     function validate_request(
         p_payload in clob,
         o_errors  out clob
