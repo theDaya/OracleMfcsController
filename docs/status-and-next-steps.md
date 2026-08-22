@@ -14,10 +14,14 @@ the `MFCS_CLIENT_MODE` switch were removed — if you find a reference to them, 
 | Failure / resume paths | 20 assertions passing, fault-injected against the real tenant |
 | Console (`ui/`) | Build, Activity, Styles & orders, Master data, MFCS spec |
 | Item ranging | On, using virtual warehouse 19271 |
-| Non-merchandise costs | Wired into the order payload; not yet exercised live |
+| Non-merchandise costs | `NON_MERCH_COSTS` → order `expenses`, validated and previewing; not yet sent live |
 
 Environment: MFCS `https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs`,
 IDCS token host is different. Local install in `MFCS_INTEGRATION` on the `adb-free` container.
+
+**If the coverage suite is failing, check the token before suspecting the code.** A stale token makes
+every MFCS step fail with `-20950` and the suite reports roughly half its assertions failed. That is
+not a regression. `GET /token-status` says so in one line.
 
 **Bearer tokens last one hour.** Most "nothing is working" moments are an expired token — the console
 header shows remaining validity, and `GET /token-status` decodes it.
