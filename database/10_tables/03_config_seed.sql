@@ -2,6 +2,11 @@ set define off
 
 -- This integration always talks to the real MFCS tenant. There is no client-mode
 -- switch: the simulators and MOCK/PUBLIC_MOCK/LOCAL_MFCS modes were removed.
+--
+-- Item locations: every item-location row in the tenant reads
+-- location 19271 / locationType W / physicalWarehouse 1927, which is why the
+-- previous CH / 1 defaults never worked. Note that a purchase order ranges its
+-- items automatically - only items created without an order need this step.
 prompt Seeding OFFICE MFCS non-secret configuration
 
 merge into config c
@@ -22,8 +27,8 @@ using (
     select 'DEFAULT', 'MFCS_INNER_PACK_SIZE', '1', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_PURCHASE_TYPE', '0', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_MANUFACTURER_COUNTRY', 'VN', 'Y' from dual union all
-    select 'DEFAULT', 'MFCS_LOCATION_HIERARCHY_LEVEL', 'CH', 'Y' from dual union all
-    select 'DEFAULT', 'MFCS_LOCATION_HIERARCHY_VALUE', '1', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_LOCATION_HIERARCHY_LEVEL', 'W', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_LOCATION_HIERARCHY_VALUE', '19271', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_STORE_ORDER_MULTIPLE', 'E', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_TAXABLE_IND', 'Y', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_PARENT_DIFF1_GROUP', 'RMS_ALL_C', 'Y' from dual union all
@@ -31,7 +36,7 @@ using (
     select 'DEFAULT', 'INTERNAL_TIME_BUDGET_SECONDS', '240', 'Y' from dual union all
     select 'DEFAULT', 'HTTP_TRANSFER_TIMEOUT_SECONDS', '45', 'Y' from dual union all
     select 'DEFAULT', 'FEATURE_INITIAL_RETAIL_YN', 'N', 'Y' from dual union all
-    select 'DEFAULT', 'FEATURE_ITEM_LOCATIONS_YN', 'N', 'Y' from dual union all
+    select 'DEFAULT', 'FEATURE_ITEM_LOCATIONS_YN', 'Y', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_RESERVATION_DAYS_UNTIL_EXPIRY', '1', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_OTB_EOW_DAY', 'SUNDAY', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_TYPE', 'N/B', 'Y' from dual union all

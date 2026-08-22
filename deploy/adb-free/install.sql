@@ -37,8 +37,9 @@ prompt -- Packages
 @@../../database/20_packages/10_preview_pkg.sql
 @@../../database/20_packages/11_master_pkg.sql
 @@../../database/20_packages/12_browse_pkg.sql
-@@../../database/20_packages/13_api_pkg.sql
-@@../../database/20_packages/14_ords_util_pkg.sql
+@@../../database/20_packages/14_sku_pkg.sql
+@@../../database/20_packages/15_api_pkg.sql
+@@../../database/20_packages/16_ords_util_pkg.sql
 
 prompt
 prompt -- ORDS
