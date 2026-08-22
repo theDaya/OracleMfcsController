@@ -573,10 +573,18 @@ create or replace package body payload_pkg as
     begin
         select json_value(l_payload, '$.DELIVERY_LOC' returning number)
           into l_delivery from dual;
-        l_hierarchy_value := coalesce(
-            l_delivery,
-            to_number(config_pkg.get_config('MFCS_LOCATION_HIERARCHY_VALUE', '1'))
-        );
+        -- DELIVERY_LOC is an Office PHYSICAL location (1927). At hierarchyLevel W
+        -- MFCS wants the VIRTUAL warehouse (19271) and rejects the physical one
+        -- with "Invalid Warehouse". Map it the same way the purchase order does,
+        -- so item ranging and ordering cannot disagree about where the item goes.
+        l_hierarchy_value := to_number(
+            coalesce(
+                case when l_delivery is not null
+                     then config_pkg.get_config('MAP.ORDER_LOCATION.' || l_delivery)
+                end,
+                to_char(l_delivery),
+                config_pkg.get_config('MFCS_LOCATION_HIERARCHY_VALUE', '19271')
+            ));
         for v in (
             select source_variant_ref, sku_id
               from json_table(l_payload, '$.PLMSizeCurveDtl[*]'
