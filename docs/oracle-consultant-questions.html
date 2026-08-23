@@ -1,0 +1,708 @@
+<title>MFCS API Open Questions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@600;700&display=swap">
+
+<style>
+  :root {
+    --ground:   #fbfcfd;
+    --surface:  #f3f6f9;
+    --raised:   #ffffff;
+    --line:     #dce3ea;
+    --line-soft:#e8edf2;
+    --text:     #0e141b;
+    --muted:    #5b6775;
+    --accent:   #1f6feb;
+    --accent-soft: rgba(31, 111, 235, 0.09);
+    --good:     #1a7f37;
+    --warn:     #9a6700;
+    --warn-soft:rgba(154, 103, 0, 0.09);
+    --crit:     #cf222e;
+    --crit-soft:rgba(207, 34, 46, 0.07);
+    --code-bg:  #f1f4f8;
+
+    --measure: 68ch;
+    --step--1: 0.8125rem;
+    --step-0:  1rem;
+    --step-1:  1.1875rem;
+    --step-2:  1.5rem;
+    --step-3:  2rem;
+    --step-4:  2.75rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:   #0f1216;
+      --surface:  #171b21;
+      --raised:   #1b2027;
+      --line:     #2a323c;
+      --line-soft:#222932;
+      --text:     #e6eaf0;
+      --muted:    #93a1b3;
+      --accent:   #4c9aff;
+      --accent-soft: rgba(76, 154, 255, 0.13);
+      --good:     #3fb950;
+      --warn:     #d29922;
+      --warn-soft:rgba(210, 153, 34, 0.13);
+      --crit:     #f85149;
+      --crit-soft:rgba(248, 81, 73, 0.11);
+      --code-bg:  #0b0e12;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:   #0f1216;
+    --surface:  #171b21;
+    --raised:   #1b2027;
+    --line:     #2a323c;
+    --line-soft:#222932;
+    --text:     #e6eaf0;
+    --muted:    #93a1b3;
+    --accent:   #4c9aff;
+    --accent-soft: rgba(76, 154, 255, 0.13);
+    --good:     #3fb950;
+    --warn:     #d29922;
+    --warn-soft:rgba(210, 153, 34, 0.13);
+    --crit:     #f85149;
+    --crit-soft:rgba(248, 81, 73, 0.11);
+    --code-bg:  #0b0e12;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1.1rem, 4vw, 2.5rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.25rem;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead { display: flex; flex-direction: column; gap: 1.1rem; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 700;
+    font-size: var(--step-4);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .standfirst {
+    font-size: var(--step-1);
+    color: var(--muted);
+    max-width: var(--measure);
+    margin: 0;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-top: 0.4rem;
+  }
+  .tag {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 0.25rem 0.6rem;
+    background: var(--surface);
+  }
+
+  /* ---------- callout ---------- */
+  .callout {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    padding: 1.25rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .callout h2 {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: var(--step-0);
+    font-weight: 600;
+    margin: 0;
+  }
+  .callout p { margin: 0; color: var(--muted); max-width: var(--measure); }
+
+  /* ---------- tiers ---------- */
+  .tier { display: flex; flex-direction: column; gap: 1.5rem; }
+  .tier-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.9rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .tier-rank {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    font-weight: 600;
+    color: var(--ground);
+    background: var(--accent);
+    border-radius: 2px;
+    padding: 0.2rem 0.5rem;
+    letter-spacing: 0.05em;
+  }
+  h2.tier-title {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: var(--step-2);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .tier-note {
+    color: var(--muted);
+    font-size: var(--step--1);
+    margin: 0;
+    flex-basis: 100%;
+  }
+
+  /* ---------- question ---------- */
+  .q {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1.4rem 1.5rem;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+  }
+  .q-ask {
+    font-size: var(--step-1);
+    font-weight: 600;
+    line-height: 1.45;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .q p { margin: 0; max-width: var(--measure); }
+  .q p.why { color: var(--muted); }
+  .label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 0.35rem;
+  }
+
+  .evidence {
+    background: var(--code-bg);
+    border: 1px solid var(--line-soft);
+    border-left: 3px solid var(--warn);
+    border-radius: 2px;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+  }
+  .evidence pre {
+    margin: 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    line-height: 1.6;
+    white-space: pre;
+  }
+  .evidence.proven { border-left-color: var(--crit); }
+
+  ul.points { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.4rem; }
+  ul.points li { max-width: var(--measure); }
+  ul.points li::marker { color: var(--accent); }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.875em;
+    background: var(--accent-soft);
+    padding: 0.1em 0.35em;
+    border-radius: 2px;
+  }
+  .evidence code { background: none; padding: 0; }
+
+  .flag {
+    display: inline-block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.18rem 0.45rem;
+    border-radius: 2px;
+    border: 1px solid currentColor;
+  }
+  .flag.proven { color: var(--crit); background: var(--crit-soft); }
+  .flag.blocked { color: var(--warn); background: var(--warn-soft); }
+  .flag.unknown { color: var(--accent); background: var(--accent-soft); }
+
+  .q-head { display: flex; align-items: flex-start; gap: 0.8rem; flex-wrap: wrap; }
+  .q-head .q-ask { flex: 1; min-width: 16rem; }
+
+  /* ---------- asks table ---------- */
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
+  th, td { text-align: left; padding: 0.7rem 0.95rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td code { font-size: 0.8125rem; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 1.5rem;
+    color: var(--muted);
+    font-size: var(--step--1);
+    max-width: var(--measure);
+  }
+  footer p { margin: 0 0 0.5rem; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a { transition: opacity 0.15s ease; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Truworths &middot; MFCS integration</p>
+    <h1>MFCS API Open Questions</h1>
+    <p class="standfirst">
+      Questions for Oracle, ordered by how much the answer would change what we build.
+      Every claim below is something we observed on our own dev tenant, with the
+      response text included — these are confirmations and clarifications, not guesses.
+    </p>
+    <div class="meta">
+      <span class="tag">Tenant: rgbu-rex-truw-stg3-mfcs</span>
+      <span class="tag">Spec 26.1.201.0</span>
+      <span class="tag">Evidence: docs/mfcs-actual-call-flow.md</span>
+    </div>
+  </header>
+
+  <div class="callout">
+    <h2>Context worth stating at the top of the meeting</h2>
+    <p>
+      We have five operations running end to end against the dev tenant — style create,
+      style modify, order create, order modify, and order line synchronisation —
+      including failure recovery and resume. The questions below come from building
+      that, not from reading documentation. Where we say a service behaves a certain
+      way, we have the request and response on file.
+    </p>
+  </div>
+
+  <!-- ================= TIER 1 ================= -->
+  <section class="tier">
+    <div class="tier-head">
+      <span class="tier-rank">Tier 1</span>
+      <h2 class="tier-title">Behaviour that shapes our architecture</h2>
+      <p class="tier-note">If the meeting runs short, these four are the ones to get answered.</p>
+    </div>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">Is there any way to make a write that changes nothing fail, instead of returning SUCCESS?</h3>
+        <span class="flag proven">Proven</span>
+      </div>
+      <div>
+        <p class="label">What we see</p>
+        <div class="evidence proven"><pre>PUT items/update          diff1 changed → {"status":"SUCCESS"} → item unchanged
+PUT purchaseOrders/update details[] sent  → {"status":"SUCCESS"} → lines unchanged
+PUT details/update        quantityCancelled repeated → SUCCESS → nothing cancelled</pre></div>
+      </div>
+      <p class="why">
+        This is the single most consequential behaviour we have found. Because a successful
+        response is not evidence that anything happened, we verify every write by reading
+        the record back — which costs an extra call, a retry loop, and tolerance for feed
+        lag on every operation. If there is a strict mode, a validation flag, or a response
+        field we are ignoring, it would remove a large amount of machinery.
+      </p>
+      <ul class="points">
+        <li>Is silent no-op the intended contract, or are these gaps?</li>
+        <li>Is there a response field that distinguishes "applied" from "accepted"?</li>
+        <li>Is read-back the pattern you would recommend, or is there something better?</li>
+      </ul>
+    </article>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">Do the update services require the complete record, or should a partial payload work?</h3>
+        <span class="flag proven">Proven</span>
+      </div>
+      <div>
+        <p class="label">What we see — each fix revealed the next missing column</p>
+        <div class="evidence proven"><pre>"Field must be entered.Field: STORE_ORD_MULT, ITEM: 100050355
+  returned by program unit CORESVC_ITEM.PROCESS_IM."
+
+"This column should not be null.Field: DIRECT_SHIP_IND, ITEM: 100050363,
+  SUPPLIER: 700087 returned by program unit CORESVC_ITEM.PROCESS_IS."
+
+"This column should not be null.Field: INNER_NAME, ITEM: 100050363,
+  SUPPLIER: 700087 returned by program unit CORESVC_ITEM.PROCESS_IS."</pre></div>
+      </div>
+      <p class="why">
+        The first of those was a <strong>description-only change</strong> — nothing to do with
+        store order multiple. We discovered the required set by trial, one error at a time,
+        and we have no way to know whether we have found all of it.
+      </p>
+      <ul class="points">
+        <li>Is "send the whole record" the design, or are these defaulting gaps?</li>
+        <li>Is there a documented required-field set per update service?</li>
+        <li>Should we be doing read-modify-write — fetch current state, apply the change, send it back complete? That is where we would go next, and it is a significant design decision.</li>
+        <li>What does <code>dataLoadingDestination</code> actually control? We send <code>"RMS"</code> everywhere without a clear reason.</li>
+      </ul>
+    </article>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">Why does <code>purchaseOrders/update</code> accept a <code>details</code> array it ignores?</h3>
+        <span class="flag proven">Proven</span>
+      </div>
+      <p class="why">
+        We sent replaced items and quantities: SUCCESS, order untouched. We then sent a plain
+        quantity change on the order's own existing lines — same items, nothing else different:
+        SUCCESS, still untouched, minutes later. We have since moved to
+        <code>purchaseOrder/details/create</code> and <code>details/update</code>, which work
+        correctly. But the bulk service accepting and discarding line data cost us real time,
+        because it reads as working.
+      </p>
+      <ul class="points">
+        <li>Is the <code>details</code> array on that service deprecated, or does it need something we are not sending?</li>
+        <li>Is header-only the intended scope of <code>purchaseOrders/update</code>?</li>
+      </ul>
+    </article>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">What is the consistency contract between a write and a subsequent read?</h3>
+        <span class="flag proven">Proven</span>
+      </div>
+      <div>
+        <p class="label">Measured on our tenant</p>
+        <div class="evidence"><pre>Item/style publish feeds      a few seconds
+Order detail line changes     ~30 seconds
+foundation/item/{item}        HTTP 404 for a style created minutes earlier
+RmsReSTServices itemDetail    returns that same style in full, immediately</pre></div>
+      </div>
+      <p class="why">
+        Our verification loops are tuned to numbers we measured, not numbers we were given.
+        That is fragile — if the lag characteristics differ in production or under load, our
+        retry budgets are wrong and requests will fail that should have succeeded.
+      </p>
+      <ul class="points">
+        <li>Is there a documented or guaranteed maximum publish lag?</li>
+        <li>Is there a read path that reflects committed state immediately, rather than the publish feed?</li>
+        <li>Do these characteristics change with production volume?</li>
+      </ul>
+    </article>
+  </section>
+
+  <!-- ================= TIER 2 ================= -->
+  <section class="tier">
+    <div class="tier-head">
+      <span class="tier-rank">Tier 2</span>
+      <h2 class="tier-title">Bulk data access for on-premise reads</h2>
+      <p class="tier-note">
+        We have data-heavy custom applications that read RMS directly today. Rewriting them
+        to be service-based is not viable, so we need a replicated read path. These answers
+        determine that architecture entirely — they are contract questions more than technical ones.
+      </p>
+    </div>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">Does our subscription include a Data Access Schema — read-only SQL access to a replica?</h3>
+        <span class="flag unknown">Unknown</span>
+      </div>
+      <p class="why">
+        This is the highest-value question in the section. If we can query RMS-shaped data
+        directly, our existing applications keep their SQL and only their write paths change.
+        Without it, everything downstream gets substantially harder.
+      </p>
+      <ul class="points">
+        <li>Is it available, and what entities does it cover?</li>
+        <li>What are the concurrency, throughput and retention limits?</li>
+        <li>Is the schema RMS-shaped, or transformed?</li>
+      </ul>
+    </article>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">What bulk extract mechanisms are available, and do they preserve RMS table structures?</h3>
+        <span class="flag unknown">Unknown</span>
+      </div>
+      <p class="why">
+        We need to know specifically whether Retail Data Extractor / Retail Insights gives us
+        RMS-shaped data or a dimensional analytics model. If it is dimensional, it does not
+        solve our problem — our applications expect RMS structures, and reshaping them is the
+        rewrite we are trying to avoid.
+      </p>
+      <ul class="points">
+        <li>Scheduled file extracts to OCI Object Storage — available, and at what granularity?</li>
+        <li>RDE / RI — RMS-shaped or dimensional?</li>
+        <li>Is GoldenGate against the MFCS source possible at all, or is CDC off the table for SaaS?</li>
+        <li>Full initial load plus incrementals — what is the supported mechanism?</li>
+      </ul>
+    </article>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">Which foundation publish feeds are actually populated on our tenant?</h3>
+        <span class="flag blocked">Blocked</span>
+      </div>
+      <div>
+        <p class="label">Returning HTTP 200 with zero rows</p>
+        <div class="evidence"><pre>merchhier/*    diffid      difftype    diffgroup
+supplier       store       warehouse   uda</pre></div>
+      </div>
+      <p class="why">
+        We work around this by deriving hierarchy, differentiator and supplier values from the
+        item and order feeds, and recording the source on every row. That is fragile and
+        incomplete. It also tells us the REST layer cannot be our bulk replication path — a
+        data store built on these feeds would have no hierarchy, no suppliers and no locations.
+      </p>
+      <ul class="points">
+        <li>Is this a publishing configuration we can have enabled, or expected for this environment?</li>
+        <li>If enabled, do they carry full data sets or only deltas from the point of activation?</li>
+      </ul>
+    </article>
+  </section>
+
+  <!-- ================= TIER 3 ================= -->
+  <section class="tier">
+    <div class="tier-head">
+      <span class="tier-rank">Tier 3</span>
+      <h2 class="tier-title">Service semantics we inferred and want confirmed</h2>
+      <p class="tier-note">We have working answers for most of these. We want to know whether they are the sanctioned ones before they harden into our design.</p>
+    </div>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">Which services are idempotent, and which reject a repeated create?</h3>
+        <span class="flag proven">Proven</span>
+      </div>
+      <div class="evidence proven"><pre>POST countriesOfManufacture/create   on an existing row →
+"This item/supplier/manufacturing country already exists.
+ ITEM: 100050398, SUPPLIER: 700087, COUNTRY: VN
+ returned by program unit CORESVC_ITEM.PROCESS_ISMC."</pre></div>
+      <p class="why">
+        Most services silently succeed on a repeat; this one fails. Because every operation we
+        run sends its complete write set every time, we need to know which services tolerate
+        that. We now route existing styles to the <code>update</code> variant — is that correct?
+        A list of idempotent versus non-idempotent services would let us stop discovering this
+        one failure at a time.
+      </p>
+    </article>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">Is <code>quantityOrdered: 0</code> with <code>cancelInd</code> the correct way to cancel an order line?</h3>
+        <span class="flag proven">Proven</span>
+      </div>
+      <p class="why">
+        We found that <code>quantityCancelled</code> is cumulative-absolute: a line that already
+        had 2 cancelled ignores a fresh <code>quantityCancelled: 2</code> entirely. One of three
+        identical cancellations silently did nothing until we understood this. We now drive
+        <code>quantityOrdered</code> to zero with <code>cancelInd: "Y"</code> and a cancel code,
+        which works regardless of history.
+      </p>
+      <ul class="points">
+        <li>Is cumulative-absolute the intended semantics for <code>quantityCancelled</code>?</li>
+        <li>Is <code>quantityOrdered: 0</code> the sanctioned full-line cancellation, or is there a proper mechanism?</li>
+        <li>We use ORCA codes <code>S</code> for a colour switch and <code>B</code> for a reduction — is that the expected usage?</li>
+      </ul>
+    </article>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">What are the correct services and sequence for order cancellation, reinstatement, and pack lots?</h3>
+        <span class="flag unknown">Not yet built</span>
+      </div>
+      <p class="why">
+        These are our next three pieces of work, and the only ones where we have no evidence at
+        all. Given what the first five operations taught us, we would rather ask than discover.
+        Pack lots in particular we have not touched — we do not know whether it is a variation
+        of what we have or a different model entirely.
+      </p>
+      <ul class="points">
+        <li>Whole-order cancellation — is it <code>purchaseOrders/delete</code>, a status change, or line-by-line?</li>
+        <li>Reinstatement — <code>reinstateInd</code> on the line, or an order-level service? Does it work after a full cancellation?</li>
+        <li>Pack lots — which services, and what is the item model?</li>
+      </ul>
+    </article>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">Is <code>RmsReSTServices/.../Item/itemDetail</code> supported, and why is it absent from the OpenAPI document?</h3>
+        <span class="flag unknown">Unknown</span>
+      </div>
+      <p class="why">
+        It is the only call that returns a style with its children in one request, and the only
+        read that works on a style created moments earlier. We depend on it in production paths.
+        It does not appear in the 26.1.201.0 specification we were given, which makes us nervous
+        about its stability.
+      </p>
+      <ul class="points">
+        <li>Is it supported, and will it survive upgrades?</li>
+        <li>Are there other services serving on the tenant that the specification omits?</li>
+        <li>Is there a MerchIntegrations equivalent we have missed?</li>
+      </ul>
+    </article>
+
+    <article class="q">
+      <div class="q-head">
+        <h3 class="q-ask">How do we manage differentiator group membership, UDA definitions, and initial retail?</h3>
+        <span class="flag blocked">Blocked</span>
+      </div>
+      <p class="why">Three separate things we are currently unable to complete, all foundation-side rather than integration-side.</p>
+      <ul class="points">
+        <li><strong>Diff groups.</strong> A child colour must belong to the parent's group — <code>BLACK</code> was rejected, <code>08621</code> accepted. What is the process for adding a colour to a group: API, or manual setup?</li>
+        <li><strong>UDAs.</strong> <code>foundation/uda</code> returns zero rows and <code>itemUda</code> is null on every item. We send an empty array, which succeeds trivially. Is this setup we should be requesting?</li>
+        <li><strong>Initial retail.</strong> We can find no write service for it in the tenant specification. Does one exist under a path we have not found?</li>
+      </ul>
+    </article>
+  </section>
+
+  <!-- ================= TIER 4 ================= -->
+  <section class="tier">
+    <div class="tier-head">
+      <span class="tier-rank">Tier 4</span>
+      <h2 class="tier-title">Platform and operational</h2>
+      <p class="tier-note">Lower stakes individually, but several affect whether we can run this unattended.</p>
+    </div>
+
+    <article class="q">
+      <h3 class="q-ask">Automated token acquisition, and the batch window</h3>
+      <p class="why">
+        Two things standing between us and unattended operation.
+      </p>
+      <ul class="points">
+        <li>
+          <strong>Tokens.</strong> We currently paste an hourly bearer token in by hand. We have
+          <code>MFCS_TOKEN_URL</code>, a client id and a secret reference configured but have not
+          completed the client-credentials flow. What is the correct grant, scope and rotation
+          policy? Any rate limit on token issuance?
+        </li>
+        <li>
+          <strong>Batch window.</strong> Writes fail with HTTP 400 and the body
+          <code>"Batch Running Indicator is ON"</code>. What is the schedule, is it queryable so we
+          can defer rather than fail, and does it differ per environment?
+        </li>
+      </ul>
+    </article>
+
+    <article class="q">
+      <h3 class="q-ask">Field naming, unknown parameters, and idempotency</h3>
+      <ul class="points">
+        <li>
+          <strong>Three vocabularies.</strong> The feed says <code>originCountryId</code> /
+          <code>physicalQuantityOrdered</code>; writes want <code>originCountry</code> /
+          <code>quantityOrdered</code>; itemDetail says <code>classAttribute</code>,
+          <code>itemDesc</code>, <code>primarySuppInd</code>. Is there a canonical mapping document?
+        </li>
+        <li>
+          <strong>Unknown query parameters are silently ignored.</strong> <code>dept</code> instead of
+          <code>deptId</code> returns an unfiltered feed that looks filtered. Is rejecting unknown
+          parameters on the roadmap?
+        </li>
+        <li>
+          <strong>Idempotency.</strong> Is there a native idempotency-key mechanism? We built request
+          hashing ourselves and it may be redundant.
+        </li>
+        <li>
+          <strong>Recovery.</strong> After a transport failure we resolve the outcome through the
+          operation-status service by correlation id. Is that the sanctioned pattern?
+        </li>
+        <li>
+          <strong>Limits.</strong> Rate limits, concurrent request ceilings, maximum collection sizes
+          per call, payload size caps?
+        </li>
+      </ul>
+    </article>
+  </section>
+
+  <!-- ================= ASKS ================= -->
+  <section class="tier">
+    <div class="tier-head">
+      <span class="tier-rank">Asks</span>
+      <h2 class="tier-title">Concrete things to leave with</h2>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Request</th><th>Why it matters to us</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Required-field matrix per update service</td>
+            <td>Removes the discover-by-error-message loop that has cost us the most time</td>
+          </tr>
+          <tr>
+            <td>Confirmation of Data Access Schema availability and scope</td>
+            <td>Determines the entire on-premise read architecture; blocking for migration planning</td>
+          </tr>
+          <tr>
+            <td>List of idempotent vs. non-idempotent services</td>
+            <td>We send complete write sets every time and need to know what tolerates replay</td>
+          </tr>
+          <tr>
+            <td>Guidance on cancellation, reinstatement and pack lots</td>
+            <td>Our next three builds, and the only areas where we have no evidence</td>
+          </tr>
+          <tr>
+            <td>Support position on <code>RmsReSTServices</code> endpoints</td>
+            <td>We depend on <code>itemDetail</code> in production paths and it is undocumented</td>
+          </tr>
+          <tr>
+            <td>A second tenant or refreshable environment</td>
+            <td>Our tests create real records; we have no way to reset</td>
+          </tr>
+          <tr>
+            <td>Batch window schedule, ideally queryable</td>
+            <td>Lets us defer work rather than fail it</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      Prepared from <code>docs/mfcs-actual-call-flow.md</code>, which holds the full request and
+      response text for every behaviour cited here. Worth offering them a copy — it is the same
+      artefact a discovery engagement would produce, and it moves the conversation from
+      "can this be done" to "confirm what we found".
+    </p>
+    <p>Truworths &middot; MFCS integration layer &middot; 23 August 2026</p>
+  </footer>
+
+</div>

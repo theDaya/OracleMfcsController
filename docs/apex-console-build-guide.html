@@ -1,0 +1,740 @@
+<title>APEX Console Build Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@600;700&display=swap">
+
+<style>
+  :root {
+    --ground:   #fbfcfd;
+    --surface:  #f3f6f9;
+    --raised:   #ffffff;
+    --line:     #dce3ea;
+    --line-soft:#e8edf2;
+    --text:     #0e141b;
+    --muted:    #5b6775;
+    --accent:   #1f6feb;
+    --accent-soft: rgba(31, 111, 235, 0.09);
+    --good:     #1a7f37;
+    --good-soft:rgba(26, 127, 55, 0.09);
+    --warn:     #9a6700;
+    --warn-soft:rgba(154, 103, 0, 0.09);
+    --crit:     #cf222e;
+    --crit-soft:rgba(207, 34, 46, 0.07);
+    --code-bg:  #f1f4f8;
+
+    --measure: 68ch;
+    --step--1: 0.8125rem;
+    --step-0:  1rem;
+    --step-1:  1.1875rem;
+    --step-2:  1.5rem;
+    --step-3:  2rem;
+    --step-4:  2.75rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:   #0f1216;
+      --surface:  #171b21;
+      --raised:   #1b2027;
+      --line:     #2a323c;
+      --line-soft:#222932;
+      --text:     #e6eaf0;
+      --muted:    #93a1b3;
+      --accent:   #4c9aff;
+      --accent-soft: rgba(76, 154, 255, 0.13);
+      --good:     #3fb950;
+      --good-soft:rgba(63, 185, 80, 0.13);
+      --warn:     #d29922;
+      --warn-soft:rgba(210, 153, 34, 0.13);
+      --crit:     #f85149;
+      --crit-soft:rgba(248, 81, 73, 0.11);
+      --code-bg:  #0b0e12;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:   #0f1216;
+    --surface:  #171b21;
+    --raised:   #1b2027;
+    --line:     #2a323c;
+    --line-soft:#222932;
+    --text:     #e6eaf0;
+    --muted:    #93a1b3;
+    --accent:   #4c9aff;
+    --accent-soft: rgba(76, 154, 255, 0.13);
+    --good:     #3fb950;
+    --good-soft:rgba(63, 185, 80, 0.13);
+    --warn:     #d29922;
+    --warn-soft:rgba(210, 153, 34, 0.13);
+    --crit:     #f85149;
+    --crit-soft:rgba(248, 81, 73, 0.11);
+    --code-bg:  #0b0e12;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 64rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1.1rem, 4vw, 2.5rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.25rem;
+  }
+
+  .masthead { display: flex; flex-direction: column; gap: 1.1rem; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 700;
+    font-size: var(--step-4);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .standfirst {
+    font-size: var(--step-1);
+    color: var(--muted);
+    max-width: var(--measure);
+    margin: 0;
+  }
+
+  .callout {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    padding: 1.25rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+  .callout h2 {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: var(--step-0);
+    font-weight: 600;
+    margin: 0;
+  }
+  .callout p { margin: 0; color: var(--muted); max-width: var(--measure); }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.warn h2 { color: var(--warn); }
+
+  /* ---------- stages ---------- */
+  .stage { display: flex; flex-direction: column; gap: 1.4rem; }
+  .stage-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.9rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .stage-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step-1);
+    font-weight: 600;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  h2.stage-title {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: var(--step-2);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .stage-note { color: var(--muted); font-size: var(--step--1); margin: 0; flex-basis: 100%; }
+
+  h3 {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: var(--step-1);
+    font-weight: 600;
+    margin: 0.6rem 0 0;
+    text-wrap: balance;
+  }
+  h4 {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    margin: 0.4rem 0 -0.4rem;
+  }
+  p { margin: 0; max-width: var(--measure); }
+  .stage > p, .block > p { max-width: var(--measure); }
+
+  .block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1.4rem 1.5rem;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+  }
+
+  pre {
+    margin: 0;
+    background: var(--code-bg);
+    border: 1px solid var(--line-soft);
+    border-radius: 2px;
+    padding: 0.9rem 1.05rem;
+    overflow-x: auto;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    line-height: 1.6;
+  }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.875em;
+    background: var(--accent-soft);
+    padding: 0.1em 0.35em;
+    border-radius: 2px;
+  }
+  pre code { background: none; padding: 0; font-size: 1em; }
+
+  ul { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.45rem; }
+  li { max-width: var(--measure); }
+  li::marker { color: var(--accent); }
+
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
+  th, td { text-align: left; padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td code { font-size: 0.8125rem; white-space: nowrap; }
+
+  .pill {
+    display: inline-block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.18rem 0.45rem;
+    border-radius: 2px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .pill.easy { color: var(--good); background: var(--good-soft); }
+  .pill.mid  { color: var(--accent); background: var(--accent-soft); }
+  .pill.hard { color: var(--warn); background: var(--warn-soft); }
+
+  .stage-head .pill { margin-left: auto; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 1.5rem;
+    color: var(--muted);
+    font-size: var(--step--1);
+    max-width: var(--measure);
+  }
+  footer p { margin: 0 0 0.5rem; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Truworths &middot; MFCS integration</p>
+    <h1>APEX Console Build Guide</h1>
+    <p class="standfirst">
+      How to rebuild the browse, create and modify screens in APEX. Covers the four
+      operational pages; the existing React console keeps the reference material that
+      does not belong in a database-hosted app.
+    </p>
+  </header>
+
+  <div class="callout">
+    <h2>The reason this is straightforward</h2>
+    <p>
+      All business logic already lives in PL/SQL. The React client only assembles the inbound
+      document — validation, the step graph, endpoint resolution, payload construction and
+      every MFCS call come from the database. <strong>Nothing under <code>database/</code>
+      changes.</strong> And because APEX runs inside the database, it calls the packages
+      directly instead of marshalling JSON over HTTP, so this removes a boundary rather than
+      adding one.
+    </p>
+    <p>
+      Keep the ORDS module regardless. Office and PLM call those endpoints machine-to-machine;
+      APEX becomes a second consumer alongside the REST API, not a replacement for it.
+    </p>
+  </div>
+
+  <!-- ============ 1 ============ -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">01</span>
+      <h2 class="stage-title">The one piece of new code</h2>
+      <span class="pill mid">Half a day</span>
+      <p class="stage-note">Do this before any page, because all four pages depend on it.</p>
+    </div>
+
+    <p>
+      Today the inbound document is assembled in JavaScript (<code>ui/src/formState.js</code>).
+      Rebuilding that in APEX page processes would leave two implementations to drift apart.
+      Put it in a package instead — <code>ui_pkg</code> — so the document is built the same way
+      whoever asks for it.
+    </p>
+
+    <div class="block">
+      <h4>Package outline</h4>
+      <pre><code>create or replace package ui_pkg authid definer as
+    -- Assembles the Office-shaped document from page values plus the size-curve
+    -- collection. Presentation glue, but written in PL/SQL so the document that
+    -- APEX submits is built by the same code path a test can exercise.
+    function build_document(
+        p_operation        in varchar2,
+        p_source_style_ref in varchar2,
+        p_style            in varchar2 default null,
+        p_order_no         in varchar2 default null,
+        p_department       in number,
+        p_class            in number,
+        p_subclass         in number,
+        p_supplier         in number,
+        p_colour           in varchar2,
+        p_unit_cost        in number,
+        p_retail_price     in number,
+        p_delivery_loc     in number,
+        p_collection_name  in varchar2 default 'SIZE_CURVE'
+        -- ... remaining header fields
+    ) return clob;
+end ui_pkg;</code></pre>
+      <p>
+        The size curve is read from an APEX collection inside the body, using
+        <code>c001</code> for source variant ref, <code>c002</code> size, <code>c003</code> width,
+        <code>n001</code> quantity, <code>c004</code> SKU id. Depending on APEX here is fine —
+        this package is presentation glue by intent, and it is the only place that is.
+      </p>
+    </div>
+
+    <div class="callout warn">
+      <h2>Generate <code>ACTION_REQUEST_ID</code> before submitting, not inside</h2>
+      <p>
+        The page needs the id to poll status afterwards (stage 03). Generate it into a page item
+        when the form is first rendered, and pass it through — do not let the builder invent one.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 2 ============ -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">02</span>
+      <h2 class="stage-title">Shared foundations</h2>
+      <span class="pill easy">Half a day</span>
+    </div>
+
+    <h3>List of values, from data you already cache</h3>
+    <p>
+      <code>MASTER_DATA</code> is shaped for this: <code>data_type</code>, <code>data_code</code>,
+      <code>parent_code</code>, <code>description</code>. Cascading LOVs fall straight out of it.
+    </p>
+    <div class="block">
+      <h4>Department, then class cascading on department</h4>
+      <pre><code>-- P10_DEPARTMENT
+select description as d, data_code as r
+  from master_data
+ where data_type = 'DEPARTMENT'
+ order by data_code;
+
+-- P10_CLASS   (Parent Item: P10_DEPARTMENT)
+select description as d, data_code as r
+  from master_data
+ where data_type   = 'CLASS'
+   and parent_code = :P10_DEPARTMENT
+ order by data_code;
+
+-- P10_SUBCLASS  (Parent Items: P10_DEPARTMENT, P10_CLASS)
+select description as d, data_code as r
+  from master_data
+ where data_type   = 'SUBCLASS'
+   and parent_code = :P10_CLASS
+ order by data_code;</code></pre>
+      <p>
+        The same table holds <code>CODE_&lt;codeType&gt;</code> rows — 797 code types, 7,049 values
+        loaded from the tenant. Point the fixed-value fields (order type, status, freight terms,
+        cost basis, expense components, cancel reasons) at those rather than hard-coding them.
+        That closes an outstanding item on its own.
+      </p>
+    </div>
+
+    <h3>Token status in the global page</h3>
+    <p>
+      Bearer tokens last an hour, and an expired one makes every operation fail in ways that
+      look like unrelated bugs. Put it in the navigation bar where it cannot be missed.
+    </p>
+    <div class="block">
+      <pre><code>-- PL/SQL Dynamic Content region on page 0
+declare
+    l_status clob := client_pkg.token_status;
+begin
+    htp.p('&lt;span class="t-Badge"&gt;token: ' ||
+        apex_escape.html(json_value(l_status, '$.message')) || '&lt;/span&gt;');
+end;</code></pre>
+      <p>Refresh it with a Dynamic Action on a 60-second timer, exactly as the React header does.</p>
+    </div>
+
+    <h3>A reusable JSON viewer</h3>
+    <p>
+      Several pages need to show a CLOB of JSON. One PL/SQL Dynamic Content region, taking the
+      CLOB from a collection, covers all of them — see the CLOB note in stage 06.
+    </p>
+  </section>
+
+  <!-- ============ 3 ============ -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">03</span>
+      <h2 class="stage-title">Page 10 — Build (create and modify)</h2>
+      <span class="pill hard">3–4 days</span>
+      <p class="stage-note">The most involved page, and the one where the asynchronous decision matters.</p>
+    </div>
+
+    <h3>Regions and items</h3>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Region</th><th>Type</th><th>Contents</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Operation</td><td>Static</td>
+            <td><code>P10_OPERATION</code> select list — the five operations. Drives conditional display of <code>STYLE</code> and <code>ORDER_NO</code>.</td>
+          </tr>
+          <tr>
+            <td>Identity</td><td>Static</td>
+            <td>Action request id (generated, read-only), source system, source style ref, source order ref, version, user, description.</td>
+          </tr>
+          <tr>
+            <td>Merchandise</td><td>Static</td>
+            <td>Department → class → subclass cascading; supplier, colour, origin and import country, currency, unit cost, retail price.</td>
+          </tr>
+          <tr>
+            <td>Size curve</td><td>Interactive Grid</td>
+            <td>On an APEX collection. Columns: source variant ref, size, width, quantity, SKU id (populated when browsing an existing style).</td>
+          </tr>
+          <tr>
+            <td>Order</td><td>Static, conditional</td>
+            <td>Dates, delivery location, exchange rate. Shown only for order operations.</td>
+          </tr>
+          <tr>
+            <td>Result</td><td>PL/SQL Dynamic Content</td>
+            <td>Validation errors, the preview call plan, or the submitted request's live progress.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Buttons and processes</h3>
+    <div class="block">
+      <h4>Validate — synchronous, instant, safe</h4>
+      <pre><code>declare
+    l_status number;
+    l_resp   clob;
+begin
+    api_pkg.validate_transaction(ui_pkg.build_document(...), l_status, l_resp);
+    -- l_status 200 = valid; 422 = errors, l_resp.ERRORS is an array of
+    -- {FIELD, CODE, MESSAGE} - every problem, not just the first
+end;</code></pre>
+      <p>Nothing is registered and nothing reaches MFCS. Wire this to a Dynamic Action so it can run freely.</p>
+    </div>
+
+    <div class="block">
+      <h4>Preview — the full call plan, still sending nothing</h4>
+      <pre><code>preview_pkg.preview_transaction(ui_pkg.build_document(...), l_status, l_resp);
+-- l_resp.MFCS_CALLS[] = {sequence, stepCode, method, endpointPath, payload}</code></pre>
+      <p>
+        Render it as a report over <code>json_table</code> on <code>$.MFCS_CALLS[*]</code>. Because
+        preview resolves through the orchestrator's own <code>resolve_step</code>, it cannot drift
+        from what execution would really do.
+      </p>
+    </div>
+
+    <div class="callout warn">
+      <h2>Submit must not be a synchronous page process</h2>
+      <p>
+        A <code>CREATE_ALL</code> makes roughly thirteen MFCS calls, and
+        <code>VERIFY_PURCHASE_ORDER</code> alone retries up to twelve times with ten-second
+        sleeps. The internal budget is 240 seconds. A blocking page submit will exceed browser
+        and load-balancer timeouts and leave the user staring at a dead page while the request
+        is, in fact, succeeding.
+      </p>
+    </div>
+
+    <div class="block">
+      <h4>Submit — enqueue, then poll</h4>
+      <pre><code>-- 1. Validate synchronously so a bad document fails immediately.
+-- 2. Stash the document, then hand execution to a job:
+
+dbms_scheduler.create_job(
+    job_name   => 'MFCS_SUBMIT_' || :P10_ACTION_REQUEST_ID,
+    job_type   => 'PLSQL_BLOCK',
+    job_action => 'declare l_s number; l_r clob; begin '
+               || '  api_pkg.submit_transaction(ui_pkg.stashed_document('''
+               || :P10_ACTION_REQUEST_ID || '''), l_s, l_r); end;',
+    enabled    => true);</code></pre>
+      <p>
+        Then poll on a Dynamic Action timer. This is where APEX beats the current console: the
+        <code>STEP</code> table already holds live progress, so you can show the steps ticking
+        over instead of a spinner.
+      </p>
+      <pre><code>select step_sequence, step_code, step_status, last_error_message
+  from step
+ where action_request_id = :P10_ACTION_REQUEST_ID
+ order by step_sequence;</code></pre>
+      <p>
+        Stop polling when <code>request.request_status</code> leaves <code>IN_PROGRESS</code>.
+        Colour the rows by status — succeeded, failed, pending — and the screen explains itself.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 4 ============ -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">04</span>
+      <h2 class="stage-title">Page 20 — Browse styles and orders</h2>
+      <span class="pill mid">2–3 days</span>
+    </div>
+
+    <p>
+      <code>browse_pkg</code> returns JSON CLOBs; <code>json_table</code> turns them into reports.
+      These reads are deliberately uncached — a browse screen should show current tenant state.
+    </p>
+
+    <div class="block">
+      <h4>Style list</h4>
+      <pre><code>select *
+  from json_table(
+         browse_pkg.list_styles(
+             p_limit      =&gt; :P20_LIMIT,
+             p_dept       =&gt; :P20_DEPT,
+             p_item_level =&gt; '1'),
+         '$.items[*]'
+         columns (
+             item        varchar2(30)  path '$.item',
+             description varchar2(250) path '$.itemDescription',
+             dept        number        path '$.dept',
+             class       number        path '$.class',
+             status      varchar2(2)   path '$.status'
+         ));</code></pre>
+    </div>
+
+    <div class="block">
+      <h4>Style detail, with its children</h4>
+      <pre><code>-- p_with_skus =&gt; 'Y' attaches children under resolved.skus
+select *
+  from json_table(
+         browse_pkg.get_style(:P20_ITEM, 'Y'),
+         '$.items[0].resolved.skus[*]'
+         columns (
+             sku    varchar2(30) path '$.item',
+             diff1  varchar2(60) path '$.diff1',
+             diff2  varchar2(60) path '$.diff2',
+             status varchar2(2)  path '$.status'
+         ));</code></pre>
+      <p>
+        <code>resolved.source</code> records whether the children came from
+        <code>itemDetail</code> or the feed-scan fallback. Show it — when a list looks short, that
+        field is the first thing worth seeing.
+      </p>
+    </div>
+
+    <div class="callout warn">
+      <h2>Always read orders with <code>p_enrich =&gt; 'Y'</code></h2>
+      <p>
+        An order read does not carry the parent style behind its SKUs, nor the display size behind
+        each line's diff. Enrichment resolves both. Without it, a browsed order loaded into the
+        form fails validation on <code>STYLE_REQUIRED_OR_RESOLVABLE</code> and
+        <code>MAPPING_NOT_FOUND</code>. The default is already <code>'Y'</code> — do not override it.
+      </p>
+    </div>
+
+    <h3>Load into the form — the feature that makes this page worth building</h3>
+    <p>
+      A button that populates page 10 from the selected record is what turns browsing into
+      modifying. Parse the JSON, set the page items, seed the size-curve collection from
+      <code>resolved.skus</code> (or the order's enriched detail lines), then redirect.
+    </p>
+    <div class="block">
+      <pre><code>apex_collection.create_or_truncate_collection('SIZE_CURVE');
+for r in (
+    select sku, diff2, size_display
+      from json_table(browse_pkg.get_order(:P20_ORDER_NO, 'Y'),
+           '$.items[0].orderDetail[*]'
+           columns (
+               sku          varchar2(30) path '$.item',
+               diff2        varchar2(60) path '$.diff2',
+               size_display varchar2(60) path '$.resolved.size'
+           ))
+) loop
+    apex_collection.add_member(
+        p_collection_name =&gt; 'SIZE_CURVE',
+        p_c002 =&gt; r.size_display,
+        p_c004 =&gt; r.sku);
+end loop;</code></pre>
+    </div>
+  </section>
+
+  <!-- ============ 5 ============ -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">05</span>
+      <h2 class="stage-title">Pages 30 and 40 — Activity and Master data</h2>
+      <span class="pill easy">2 days for both</span>
+      <p class="stage-note">Where APEX is straightforwardly better than what we hand-built.</p>
+    </div>
+
+    <h3>Activity — four Interactive Reports, drilling down</h3>
+    <p>
+      Pure table reads: <code>REQUEST</code> → <code>STEP</code> → <code>ATTEMPT</code> →
+      <code>EVENT_LOG</code>, each filtered by the selection above it. Interactive Reports give
+      filtering, sorting, saved views and Excel export for nothing, which is more than the React
+      version has.
+    </p>
+    <ul>
+      <li>
+        <strong>Resume button</strong> on a failed or partially completed request:
+        <code>api_pkg.resume_transaction(:P30_ID, l_status, l_resp)</code>. Background it the same
+        way as submit — a resume can be just as long.
+      </li>
+      <li>
+        <strong>Attempt payloads are CLOBs.</strong> Show them in a modal PL/SQL region rather than
+        a report column, and pretty-print with <code>json_serialize(... pretty)</code>.
+      </li>
+      <li>
+        <strong>Highlight the error rows.</strong> <code>EVENT_LOG.event_level = 'ERROR'</code> is
+        where diagnosis starts; a report highlight condition makes it findable.
+      </li>
+    </ul>
+
+    <h3>Master data — one report and one button</h3>
+    <div class="block">
+      <pre><code>select data_type, data_code, parent_code, description, source, refreshed_at
+  from master_data
+ order by data_type, data_code;</code></pre>
+      <p>
+        The refresh calls <code>master_pkg.refresh_all(l_summary)</code>, which loads thousands of
+        rows across many services. <strong>Background it</strong> — same reasoning as submit.
+        Show <code>MASTER_REFRESH</code> underneath as the run log: per data type, its source, row
+        count and any message.
+      </p>
+    </div>
+    <p>
+      <code>SOURCE</code> is worth surfacing prominently. Most foundation services on this tenant
+      are empty publish queues, so a good deal of this data is derived from the item and order
+      feeds rather than read directly. Anyone trusting a value should be able to see where it
+      came from.
+    </p>
+  </section>
+
+  <!-- ============ 6 ============ -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">06</span>
+      <h2 class="stage-title">Three things that will bite</h2>
+      <span class="pill hard">Read before starting</span>
+    </div>
+
+    <div class="block">
+      <h3>CLOBs do not fit in page items</h3>
+      <p>
+        APEX page item values are VARCHAR2-bound. Every interesting thing here — the built
+        document, the preview plan, the status response, attempt payloads — is a CLOB, and several
+        comfortably exceed the limit.
+      </p>
+      <ul>
+        <li>Move CLOBs through <code>apex_collection</code> <code>clob001</code>, never page items.</li>
+        <li>Render them in PL/SQL Dynamic Content regions that read the collection directly.</li>
+        <li>For reports, go straight from the CLOB into <code>json_table</code> — never via an item.</li>
+      </ul>
+    </div>
+
+    <div class="block">
+      <h3>Long-running work needs jobs, not page processes</h3>
+      <p>
+        Said in stage 03 and again here because it is the decision most likely to be skipped and
+        most expensive to retrofit. Submit, resume and master-data refresh all belong in
+        <code>DBMS_SCHEDULER</code> jobs with the page polling for progress. Build it that way
+        from the first page rather than converting later.
+      </p>
+    </div>
+
+    <div class="block">
+      <h3>The document builder is the seam — keep it thin</h3>
+      <p>
+        <code>ui_pkg</code> should assemble a document and nothing else. The moment it starts
+        deciding defaults, translating values or making rules, you have a second implementation of
+        logic that already exists in <code>validation_pkg</code>, <code>config_pkg</code> and
+        <code>payload_pkg</code>, and the REST and APEX paths will diverge. If a rule feels like it
+        belongs in the form, it belongs in the database.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 7 ============ -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">07</span>
+      <h2 class="stage-title">Sequence and effort</h2>
+      <span class="pill mid">~2 weeks to parity</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Order</th><th>Work</th><th>Effort</th><th>Why here</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Master data page</td><td>1 day</td><td>Trivial, proves the app and gives you the LOV data to look at</td></tr>
+          <tr><td>2</td><td>Activity pages</td><td>1 day</td><td>Pure reports; immediately useful for debugging everything after it</td></tr>
+          <tr><td>3</td><td><code>ui_pkg</code> document builder</td><td>0.5 day</td><td>Everything below depends on it</td></tr>
+          <tr><td>4</td><td>Build page — validate and preview</td><td>2 days</td><td>Safe to iterate on; nothing reaches MFCS</td></tr>
+          <tr><td>5</td><td>Submit with job and polling</td><td>1.5 days</td><td>The asynchronous pattern, once, reused by resume and refresh</td></tr>
+          <tr><td>6</td><td>Browse pages</td><td>2 days</td><td>Needs the Build page to exist for load-into-form</td></tr>
+          <tr><td>7</td><td>Token banner, polish, navigation</td><td>1 day</td><td>Cheap once the pages are real</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      Out of scope by intent: the <strong>MFCS spec viewer</strong> and the <strong>How it works</strong>
+      flows. Both are client-side reference material — a browser over a 2.7&nbsp;MB OpenAPI document,
+      and clickable end-to-end diagrams — and neither is a good fit for a database-hosted app. Keep
+      them in the React console and link across.
+    </p>
+    <p>Truworths &middot; MFCS integration layer &middot; 23 August 2026</p>
+  </footer>
+
+</div>
