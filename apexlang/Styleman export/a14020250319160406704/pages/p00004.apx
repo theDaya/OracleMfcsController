@@ -1,0 +1,15 @@
+page 4 (
+    name: Config
+    title: Config
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+)
+

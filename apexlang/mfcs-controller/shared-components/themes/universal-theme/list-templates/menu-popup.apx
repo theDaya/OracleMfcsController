@@ -1,0 +1,71 @@
+listTemplate menu-popup (
+    name: Menu Popup
+    templateClass: pullDownMenu
+    list {
+        beforeEntries: <div id="#PARENT_STATIC_ID#_menu" class="#COMPONENT_CSS_CLASSES#" style="display:none;"><ul>
+        afterEntries: </ul></div>
+    }
+    entry {
+        current:
+            ```html
+            <li data-id="#A01#" data-disabled="#A02#" data-hide="#A03#" data-shortcut="#A05#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a></li>
+            
+            ```
+        currentWithSublist: <li data-id="#A01#" data-disabled="#A02#" data-hide="#A03#" data-shortcut="#A05#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a>
+        noncurrent:
+            ```html
+            <li data-id="#A01#" data-disabled="#A02#" data-hide="#A03#" data-shortcut="#A05#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a></li>
+            
+            ```
+        noncurrentWithSublist: <li data-id="#A01#" data-disabled="#A02#" data-hide="#A03#" data-shortcut="#A05#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a>
+    }
+    sublist {
+        beforeEntries: <ul>
+        afterEntries: </ul></li>
+    }
+    sublistEntry {
+        current: <li data-id="#A01#" data-disabled="#A02#" data-hide="#A03#" data-shortcut="#A05#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a></li>
+        currentWithSublist: <li data-id="#A01#" data-disabled="#A02#" data-hide="#A03#" data-shortcut="#A05#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a>
+        noncurrent: <li data-id="#A01#" data-disabled="#A02#" data-hide="#A03#" data-shortcut="#A05#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a></li>
+        noncurrentWithSublist: <li data-id="#A01#" data-disabled="#A02#" data-hide="#A03#" data-shortcut="#A05#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a>
+    }
+    javaScript {
+        executeWhenPageLoads:
+            ```javascript-browser
+            var e = apex.jQuery("##PARENT_STATIC_ID#_menu", apex.gPageContext$);
+            if (e.hasClass("js-addActions")) {
+              apex.actions.addFromMarkup( e );
+            }
+            e.menu({ slide: e.hasClass("js-slide"), iconType: 'fa'});
+            ```
+    }
+    attributeDescriptions {
+        a01: Data ID
+        a02: Disabled (True/False)
+        a03: Hidden (True/False)
+        a04: Title Attribute
+        a05: Shortcut
+    }
+    advanced {
+        identifier: MENU_POPUP
+    }
+    subscription {
+        master: @menu-popup
+    }
+
+    templateOption add-actions (
+        name: Add Actions
+        sequence: 10
+        appearance {
+            cssClasses: js-addActions
+        }
+        help {
+            helpText: Enables you to define a keyboard shortcut to activate the menu item.
+        }
+        advanced {
+            identifier: ADD_ACTIONS
+        }
+    )
+
+)
+

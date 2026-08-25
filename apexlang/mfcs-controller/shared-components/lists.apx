@@ -1,0 +1,131 @@
+list desktop-navigation-bar (
+    name: Desktop Navigation Bar
+
+    entry app-user (
+        label: &APP_USER.
+        icon {
+            imageIconCssClasses: fa-user
+        }
+        layout {
+            sequence: 10
+        }
+        link {
+            target: {
+                type: url
+                url: #
+            }
+        }
+        userDefinedAttributes {
+            2: has-username
+        }
+    )
+
+    entry separator (
+        label: ---
+        layout {
+            sequence: 20
+            parentEntry: @app-user
+        }
+        link {
+            target: {
+                type: url
+                url: separator
+            }
+        }
+    )
+
+    entry sign-out (
+        label: Sign Out
+        icon {
+            imageIconCssClasses: fa-sign-out
+        }
+        layout {
+            sequence: 30
+            parentEntry: @app-user
+        }
+        link {
+            target: {
+                type: url
+                url: &LOGOUT_URL.
+            }
+        }
+    )
+
+)
+
+list desktop-navigation-menu (
+    name: Desktop Navigation Menu
+
+    entry home (
+        label: Home
+        icon {
+            imageIconCssClasses: fa-home
+        }
+        layout {
+            sequence: 10
+        }
+        link {
+            target: {
+                page: 1
+            }
+        }
+    )
+
+    entry create-edit (
+        label: Create / Edit
+        icon {
+            imageIconCssClasses: fa-database-plus
+        }
+        layout {
+            sequence: 20
+        }
+        isCurrent {
+            type: pages
+            pages: 3
+        }
+        link {
+            target: {
+                page: 3
+            }
+        }
+    )
+
+    entry browse-mfcs (
+        label: Browse MFCS
+        icon {
+            imageIconCssClasses: fa-list-alt
+        }
+        layout {
+            sequence: 30
+        }
+        isCurrent {
+            type: pages
+            pages: 5
+        }
+        link {
+            target: {
+                page: 5
+            }
+        }
+    )
+
+    entry activity (
+        label: Activity
+        icon {
+            imageIconCssClasses: fa-table-search
+        }
+        layout {
+            sequence: 40
+        }
+        isCurrent {
+            type: pages
+            pages: 4
+        }
+        link {
+            target: {
+                page: 4
+            }
+        }
+    )
+
+)

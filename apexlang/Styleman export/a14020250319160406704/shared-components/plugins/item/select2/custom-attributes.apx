@@ -1,0 +1,598 @@
+customAttribute attribute_01 (
+    apexlangName: noResultsFoundMessage
+    attribute: 1
+    name: No Results Found Message
+    scope: app
+    appearance {
+        sequence: 10
+    }
+    builder {
+        translatable: true
+    }
+    help {
+        helpText: The default message is "No results found".
+    }
+)
+
+customAttribute attribute_01 (
+    apexlangName: selectListType
+    attribute: 1
+    name: Select List Type
+    type: selectList
+    validation {
+        required: true
+    }
+    appearance {
+        sequence: 10
+    }
+    default {
+        value: SINGLE
+    }
+    help {
+        helpText: A single-value select list allows the user to select one option, while the multi-value select list makes it possible to select multiple items. When tagging support is enabled, the user can select from pre-existing options or create new options on the fly.
+    }
+
+    entry multiValueSelectList (
+        sequence: 20
+        display: Multi-value Select List
+        return: MULTI
+    )
+
+    entry singleValueSelectList (
+        sequence: 10
+        display: Single-value Select List
+        return: SINGLE
+    )
+
+    entry taggingSupport (
+        sequence: 30
+        display: Tagging Support
+        return: TAG
+    )
+
+)
+
+customAttribute attribute_02 (
+    apexlangName: inputTooShortMessage
+    attribute: 2
+    name: Input Too Short Message
+    scope: app
+    appearance {
+        sequence: 20
+    }
+    builder {
+        translatable: true
+    }
+    help {
+        helpText: The default message is "Please enter x or more characters". It is possible to reference the substitution variables #TERM#, #MINLENGTH# and #REMAININGCHARS#.
+    }
+)
+
+customAttribute attribute_02 (
+    apexlangName: minimumResultsForSearchField
+    attribute: 2
+    name: Minimum Results for Search Field
+    type: integer
+    appearance {
+        sequence: 20
+    }
+    builder {
+        displayWidth: 8
+    }
+    dependingOn {
+        attribute: @attribute_01/component
+        conditionType: inList
+        list: SINGLE
+    }
+    help {
+        helpText: The minimum number of results that must be populated in order to display the search field. A negative value will always hide the search field.
+    }
+)
+
+customAttribute attribute_03 (
+    apexlangName: selectionTooBigMessage
+    attribute: 3
+    name: Selection Too Big Message
+    scope: app
+    appearance {
+        sequence: 30
+    }
+    builder {
+        translatable: true
+    }
+    help {
+        helpText: The default message is "You can only select x item(s)". It is possible to reference the substitution variable #MAXSIZE#.
+    }
+)
+
+customAttribute attribute_03 (
+    apexlangName: minimumInputLength
+    attribute: 3
+    name: Minimum Input Length
+    type: integer
+    appearance {
+        sequence: 30
+    }
+    builder {
+        displayWidth: 8
+    }
+    help {
+        helpText: The minimum length for a search term or a new option entered by the user.
+    }
+)
+
+customAttribute attribute_04 (
+    apexlangName: searchingMessage
+    attribute: 4
+    name: Searching Message
+    scope: app
+    appearance {
+        sequence: 40
+    }
+    builder {
+        translatable: true
+    }
+    help {
+        helpText: The default message is "Searching...".
+    }
+)
+
+customAttribute attribute_04 (
+    apexlangName: maximumInputLength
+    attribute: 4
+    name: Maximum Input Length
+    type: integer
+    appearance {
+        sequence: 40
+    }
+    builder {
+        displayWidth: 8
+    }
+    help {
+        helpText: Maximum number of characters that can be entered for a search term or new option while tagging.
+    }
+)
+
+customAttribute attribute_05 (
+    apexlangName: labelForNullOptionGroup
+    attribute: 5
+    name: Label for Null Option Group
+    scope: app
+    appearance {
+        sequence: 50
+    }
+    builder {
+        translatable: true
+    }
+    help {
+        helpText: The name of the option group for records whose grouping column value is null.
+    }
+)
+
+customAttribute attribute_05 (
+    apexlangName: maximumSelectionSize
+    attribute: 5
+    name: Maximum Selection Size
+    type: integer
+    appearance {
+        sequence: 50
+    }
+    builder {
+        displayWidth: 8
+    }
+    dependingOn {
+        attribute: @attribute_01/component
+        conditionType: inList
+        list: [
+            MULTI
+            TAG
+        ]
+    }
+    help {
+        helpText: The maximum number of items that can be selected.
+    }
+)
+
+customAttribute attribute_06 (
+    apexlangName: loadingMoreResultsMessage
+    attribute: 6
+    name: Loading More Results Message
+    scope: app
+    appearance {
+        sequence: 45
+    }
+    builder {
+        translatable: true
+    }
+    help {
+        helpText: The default message is "Loading more results...".
+    }
+)
+
+customAttribute attribute_06 (
+    apexlangName: rapidSelection
+    attribute: 6
+    name: Rapid Selection
+    type: checkboxes
+    appearance {
+        sequence: 60
+    }
+    dependingOn {
+        attribute: @attribute_01/component
+        conditionType: inList
+        list: [
+            MULTI
+            TAG
+        ]
+    }
+    help {
+        helpText: Prevent the dropdown from closing when an item is selected, allowing for rapid selection of multiple items.
+    }
+
+    entry attributeValue (
+        sequence: 10
+        display: " "
+        return: Y
+    )
+
+)
+
+customAttribute attribute_07 (
+    apexlangName: lookAndFeel
+    attribute: 7
+    name: Look and Feel
+    scope: app
+    type: selectList
+    validation {
+        required: true
+    }
+    appearance {
+        sequence: 5
+    }
+    default {
+        value: SELECT2
+    }
+    help {
+        helpText: Choose how Select2 items should look like.
+    }
+
+    entry custom (
+        sequence: 30
+        display: Custom
+        return: CUSTOM
+    )
+
+    entry select2 (
+        sequence: 10
+        display: Select2
+        return: SELECT2
+    )
+
+    entry select2Classic (
+        sequence: 20
+        display: Select2 Classic
+        return: SELECT2_CLASSIC
+    )
+
+)
+
+customAttribute attribute_07 (
+    apexlangName: selectOnBlur
+    attribute: 7
+    name: Select on Blur
+    type: checkboxes
+    appearance {
+        sequence: 70
+    }
+    help {
+        helpText: Determines whether the currently highlighted option is selected when the select list loses focus.
+    }
+
+    entry attributeValue (
+        sequence: 10
+        display: " "
+        return: Y
+    )
+
+)
+
+customAttribute attribute_08 (
+    apexlangName: errorLoadingMessage
+    attribute: 8
+    name: Error Loading Message
+    scope: app
+    appearance {
+        sequence: 60
+    }
+    builder {
+        translatable: true
+    }
+    help {
+        helpText: The default message is "The results could not be loaded".
+    }
+)
+
+customAttribute attribute_08 (
+    apexlangName: searchLogic
+    attribute: 8
+    name: Search Logic
+    type: selectList
+    validation {
+        required: true
+    }
+    appearance {
+        sequence: 80
+    }
+    default {
+        value: CIC
+    }
+    help {
+        helpText: Defines how the search with the entered value should be performed.
+    }
+
+    entry containsCaseSensitive (
+        sequence: 20
+        display: Contains & Case Sensitive
+        return: CCS
+    )
+
+    entry containsIgnoreCase (
+        sequence: 10
+        display: Contains & Ignore Case
+        return: CIC
+    )
+
+    entry containsIgnoreCaseWithDiacritics (
+        sequence: 15
+        display: Contains & Ignore Case, with Diacritics
+        return: CICD
+    )
+
+    entry exactCaseSensitive (
+        sequence: 40
+        display: Exact & Case Sensitive
+        return: ECS
+    )
+
+    entry exactIgnoreCase (
+        sequence: 30
+        display: Exact & Ignore Case
+        return: EIC
+    )
+
+    entry multiWordSearch (
+        sequence: 70
+        display: Multi-word Search
+        return: MW
+    )
+
+    entry startsWithCaseSensitive (
+        sequence: 60
+        display: Starts With & Case Sensitive
+        return: SCS
+    )
+
+    entry startsWithIgnoreCase (
+        sequence: 50
+        display: Starts With & Ignore Case
+        return: SIC
+    )
+
+)
+
+customAttribute attribute_09 (
+    apexlangName: inputTooLongMessage
+    attribute: 9
+    name: Input Too Long Message
+    scope: app
+    appearance {
+        sequence: 25
+    }
+    builder {
+        translatable: true
+    }
+    help {
+        helpText: The default message is "Please delete x characters". It is possible to reference the substitution variables #TERM#, #MAXLENGTH# and #OVERCHARS#.
+    }
+)
+
+customAttribute attribute_09 (
+    apexlangName: labelForNullOptionGroup
+    attribute: 9
+    name: Label for Null Option Group
+    appearance {
+        sequence: 90
+    }
+    builder {
+        translatable: true
+        displayWidth: 40
+    }
+    help {
+        helpText: The name of the option group for records whose grouping column value is null. Overwrites the "Label for Null Option Group" attribute in component settings if filled in.
+    }
+)
+
+customAttribute attribute_10 (
+    apexlangName: pathToCustomCssFile
+    attribute: 10
+    name: Path to Custom CSS File
+    scope: app
+    validation {
+        required: true
+    }
+    appearance {
+        sequence: 6
+    }
+    dependingOn {
+        attribute: @attribute_07/app
+        conditionType: inList
+        list: CUSTOM
+    }
+    help {
+        helpText: The path to the custom CSS file to style the Select2 items. You are allowed to use substitution strings here.
+    }
+)
+
+customAttribute attribute_10 (
+    apexlangName: width
+    attribute: 10
+    name: Width
+    appearance {
+        sequence: 15
+    }
+    builder {
+        displayWidth: 10
+    }
+    help {
+        helpText:
+            ```
+            Controls the width style attribute of the Select2 item. The following values are supported:
+            
+            <ul>
+              <li><b>element</b> (default): Uses JavaScript to calculate the width of the source element.</li>
+              <li><b>off</b>: No width attribute will be set. Keep in mind that the Select2 item copies classes from the source element so setting the width attribute may not always be necessary.</li>
+              <li><b>copy</b>: Copies the value of the width style attribute set on the source element.</li>
+              <li><b>resolve</b>: First attempts to copy than falls back on element.</li>
+              <li><b>other values</b>: Any valid CSS style width value (e.g. 400px or 100%).</li>
+            </ul>
+            ```
+    }
+)
+
+customAttribute attribute_11 (
+    apexlangName: customCssFilenameNoExtension
+    attribute: 11
+    name: Custom CSS Filename (no extension)
+    scope: app
+    validation {
+        required: true
+    }
+    appearance {
+        sequence: 7
+    }
+    dependingOn {
+        attribute: @attribute_07/app
+        conditionType: inList
+        list: CUSTOM
+    }
+    help {
+        helpText: The name of the custom CSS file to style the Select2 items. Do not add the .css extension in this field. You are allowed to use substitution strings here.
+    }
+)
+
+customAttribute attribute_11 (
+    apexlangName: dragAndDropSorting
+    attribute: 11
+    name: Drag and Drop Sorting
+    type: checkboxes
+    appearance {
+        sequence: 65
+    }
+    dependingOn {
+        attribute: @attribute_01/component
+        conditionType: inList
+        list: [
+            MULTI
+            TAG
+        ]
+    }
+    help {
+        helpText: Allow drag and drop sorting of selected choices.
+    }
+
+    entry attributeValue (
+        sequence: 10
+        display: " "
+        return: Y
+    )
+
+)
+
+customAttribute attribute_12 (
+    apexlangName: tokenSeparators
+    attribute: 12
+    name: Token Separators
+    appearance {
+        sequence: 100
+    }
+    builder {
+        displayWidth: 20
+    }
+    dependingOn {
+        attribute: @attribute_01/component
+        conditionType: inList
+        list: TAG
+    }
+    help {
+        helpText:
+            ```
+            Select2 supports the ability to add choices automatically as the user is typing into the search field. Use the JavaScript array notation to specify one or more token separators.
+            
+            The following example defines the comma and space characters as token separators: [',', ' ']
+            ```
+    }
+)
+
+customAttribute attribute_13 (
+    apexlangName: extraOptions
+    attribute: 13
+    name: Extra Options
+    type: textarea
+    appearance {
+        sequence: 130
+    }
+    builder {
+        displayWidth: 60
+    }
+    help {
+        helpText:
+            ```
+            Enter any extra Select2 jQuery plugin options. For example:<br><br>
+            
+            dir: "rtl",<br>
+            dropdownParent: $('.ui-dialog'),
+            ```
+    }
+)
+
+customAttribute attribute_14 (
+    apexlangName: lazyLoading
+    attribute: 14
+    name: Lazy Loading
+    type: checkboxes
+    appearance {
+        sequence: 110
+    }
+    help {
+        helpText: Decide whether you want to enable lazy loading. Lazy loading is an AJAX-driven technique that improves page performance by not executing the LOV query until the point at which it is actually needed.
+    }
+
+    entry attributeValue (
+        sequence: 10
+        display: " "
+        return: Y
+    )
+
+)
+
+customAttribute attribute_15 (
+    apexlangName: lazyAppendRowCount
+    attribute: 15
+    name: Lazy-append Row Count
+    type: integer
+    appearance {
+        sequence: 120
+    }
+    builder {
+        displayWidth: 8
+    }
+    dependingOn {
+        attribute: @attribute_14/component
+        conditionType: inList
+        list: Y
+    }
+    help {
+        helpText: Select2 supports lazy-appending of results when the result list is scrolled to the end. This setting allows you to determine the amount of rows that get appended to the item's result list. Leave empty to disable lazy-appending, which means that all rows will get populated immediately.
+    }
+)
+

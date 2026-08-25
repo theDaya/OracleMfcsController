@@ -1,0 +1,147 @@
+theme universal-theme (
+    name: Universal Theme
+    themeNumber: 42
+    version: 1.3
+    style {
+        currentThemeStyle: @vita-slate-copy
+    }
+    javaScript {
+        fileUrls: [
+            #IMAGE_PREFIX#libraries/apex/#MIN_DIRECTORY#widget.stickyWidget#MIN#.js?v=#APEX_VERSION#
+            #THEME_IMAGES#js/theme42#MIN#.js?v=#APEX_VERSION#
+        ]
+    }
+    css {
+        fileUrls: #THEME_IMAGES#css/Core#MIN#.css?v=#APEX_VERSION#
+    }
+    componentDefaults {
+        page: @standard
+        navigationBarList: @navigation-bar
+        navigationMenuListPosition: side
+        navigationMenuListTop: @top-navigation-menu
+        navigationMenuListSide: @side-navigation-menu
+        loginPage: @login
+        errorPage: @login
+        printerFriendlyPage: @standard
+        breadcrumb: @breadcrumb
+        button: @text
+        defaultLabel: @optional-floating
+        optionalLabel: @optional-floating
+        requiredLabel: @required-floating
+        list: @links-list
+        region: @standard
+        classicReport: @standard
+    }
+    regionDefaults {
+        breadcrumbs: @title-bar
+        charts: @standard
+        forms: @standard
+        lists: @standard
+        reports: @standard
+        wizards: @standard
+        interactiveReports: @interactive-report
+    }
+    dialogDefaults {
+        dialogContentRegion: @blank-with-attributes
+        dialogButtonRegion: @buttons-container
+        dialogPage: @modal-dialog
+    }
+    icons {
+        library: fontApex
+    }
+    advanced {
+        filePrefix: #IMAGE_PREFIX#themes/theme_42/1.3/
+        identifier: UNIVERSAL_THEME
+    }
+    subscription {
+        master: @/8842/universal-theme
+    }
+
+    style vista (
+        name: Vista
+        css {
+            fileUrls: #THEME_IMAGES#css/Vista#MIN#.css?v=#APEX_VERSION#
+        }
+        themeRollerAttributes {
+            readOnly: true
+        }
+        advanced {
+            endUserCanPick: true
+        }
+    )
+
+    style vita (
+        name: Vita
+        themeRollerAttributes {
+            readOnly: true
+            inputParameterFileUrls: #THEME_IMAGES#less/theme/Vita.less
+            outputCssFileUrl: #THEME_IMAGES#css/Vita#MIN#.css?v=#APEX_VERSION#
+        }
+        advanced {
+            endUserCanPick: true
+            accessibilityTested: true
+        }
+        subscription {
+            master: @vita
+        }
+    )
+
+    style vita-dark (
+        name: Vita - Dark
+        themeRollerAttributes {
+            readOnly: true
+            inputParameterFileUrls: #THEME_IMAGES#less/theme/Vita-Dark.less
+            outputCssFileUrl: #THEME_IMAGES#css/Vita-Dark#MIN#.css?v=#APEX_VERSION#
+        }
+        advanced {
+            endUserCanPick: true
+        }
+        subscription {
+            master: @vita-dark
+        }
+    )
+
+    style vita-red (
+        name: Vita - Red
+        themeRollerAttributes {
+            readOnly: true
+            inputParameterFileUrls: #THEME_IMAGES#less/theme/Vita-Red.less
+            outputCssFileUrl: #THEME_IMAGES#css/Vita-Red#MIN#.css?v=#APEX_VERSION#
+        }
+        advanced {
+            endUserCanPick: true
+        }
+        subscription {
+            master: @vita-red
+        }
+    )
+
+    style vita-slate (
+        name: Vita - Slate
+        themeRollerAttributes {
+            readOnly: true
+            inputParameterFileUrls: #THEME_IMAGES#less/theme/Vita-Slate.less
+            outputCssFileUrl: #THEME_IMAGES#css/Vita-Slate#MIN#.css?v=#APEX_VERSION#
+        }
+        advanced {
+            endUserCanPick: true
+        }
+        subscription {
+            master: @vita-slate
+        }
+    )
+
+    style vita-slate-copy (
+        name: Vita - Slate (Copy)
+        themeRollerAttributes {
+            inputParameterFileUrls: #THEME_IMAGES#less/theme/Vita-Slate.less
+            outputCssFileUrl: #THEME_DB_IMAGES#43084597072272077.css
+            jsonConfig: {"customCSS":"","vars":{}}
+        }
+        advanced {
+            endUserCanPick: true
+        }
+    )
+
+)
+

@@ -1,0 +1,11 @@
+{
+  "app" : {
+    "id" : 102,
+    "databaseSession" : {
+      "parsingSchema" : "MFCS_INTEGRATION"
+    },
+    "runtime" : {
+      "debugging" : true
+    }
+  }
+}

@@ -1,0 +1,1737 @@
+page 3 (
+    name: Create Style
+    title: Create Style
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    javaScript {
+        functionAndGlobalVariableDeclaration: var htmldb_delete_message='"DELETE_CONFIRM_MSG"';
+        executeWhenPageLoads:
+            ```javascript-browser
+                document.getElementById('P3_MARGIN').setAttribute('readonly', true)
+                $('#P3_MARGIN').css('color','red');
+            ```
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+        formAutoComplete: false
+    }
+
+    region associated-items (
+        name: Associated Items
+        type: regionDisplaySelector
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        advanced {
+            regionDisplaySelector: true
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P3_WORKSHEET_ID
+        }
+        settings {
+            includeShowAll: false
+            rememberSelection: bySession
+        }
+    )
+
+    region create-style (
+        name: Create Style
+        type: form
+        source {
+            location: localDatabase
+            tableName: WORKSHEET_STYLE
+        }
+        layout {
+            sequence: 10
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+    )
+
+    region skus (
+        name: SKUS
+        type: interactiveReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery: select * from worksheet_sku where worksheet_id = :P3_WORKSHEET_ID
+        }
+        layout {
+            sequence: 30
+            parentRegion: @associated-items
+            slot: subRegions
+        }
+        appearance {
+            template: @interactive-report
+            templateOptions: #DEFAULT#
+        }
+        advanced {
+            regionDisplaySelector: true
+        }
+        link {
+            linkColumn: customTarget
+            target: {
+                page: 6
+                items: {
+                    P6_WORKSHEET_SKU_ID: #WORKSHEET_SKU_ID#
+                }
+                action: resetPagination
+            }
+            linkIcon: <img src="#IMAGE_PREFIX#app_ui/img/icons/apex-edit-pencil.png" class="apex-edit-pencil" alt="">
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        pagination {
+            type: rowRangesXToY
+        }
+        performance {
+            maxRowsToProcess: 1000000
+        }
+        advanced {
+            savedReportMappingIdentifier: 37687164163240041
+        }
+
+        column RMS_SKU (
+            type: plainText
+            heading {
+                heading: Rms Sku
+                alignment: center
+            }
+            layout {
+                sequence: 30
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: C
+            }
+        )
+
+        column SKU_QTY (
+            type: plainText
+            heading {
+                heading: Sku Qty
+                alignment: center
+            }
+            layout {
+                sequence: 50
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: E
+            }
+        )
+
+        column SKU_SIZE (
+            type: plainText
+            heading {
+                heading: Sku Size
+                alignment: center
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: D
+            }
+        )
+
+        column WORKSHEET_ID (
+            type: plainText
+            heading {
+                heading: Worksheet Id
+                alignment: center
+            }
+            layout {
+                sequence: 20
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: B
+            }
+        )
+
+        column WORKSHEET_SKU_ID (
+            type: plainText
+            heading {
+                heading: Worksheet Sku Id
+                alignment: center
+            }
+            layout {
+                sequence: 10
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: A
+            }
+        )
+
+        page {
+            width: 8.5
+            height: 11
+            borderWidth: 0.5
+            borderColor: #666666
+        }
+        columnHeadings {
+            fontWeight: normal
+            backgroundColor: #9bafde
+        }
+        columns {
+            backgroundColor: #efefef
+        }
+
+        savedReport 430160 (
+            visibility: primaryDefault
+            view {
+                rowsPerPage: 50
+            }
+
+            displayColumn RMS_SKU (
+                sequence: 3
+            )
+
+            displayColumn SKU_QTY (
+                sequence: 5
+            )
+
+            displayColumn SKU_SIZE (
+                sequence: 4
+            )
+
+            displayColumn WORKSHEET_ID (
+                sequence: 2
+            )
+
+            displayColumn WORKSHEET_SKU_ID (
+                sequence: 1
+            )
+
+        )
+
+    )
+
+    region udas (
+        name: UDAS
+        type: interactiveReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select u.uda_id, u.uda_desc, uv.uda_value, uv.uda_value_desc
+                from worksheet_uda wu, uda@dasprd u, uda_values@dasprd uv
+                where worksheet_id = :P3_worksheet_id
+                and wu.uda_id = u.uda_id(+)
+                and wu.uda_id = uv.uda_id(+)
+                and wu.uda_value = uv.uda_value(+);
+                
+                ```
+        }
+        layout {
+            sequence: 40
+            parentRegion: @associated-items
+            slot: subRegions
+        }
+        appearance {
+            template: @interactive-report
+            templateOptions: #DEFAULT#
+        }
+        advanced {
+            regionDisplaySelector: true
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        pagination {
+            type: rowRangesXToY
+        }
+        performance {
+            maxRowsToProcess: 1000000
+        }
+        advanced {
+            savedReportMappingIdentifier: 43030574410238420
+        }
+
+        column UDA_DESC (
+            type: plainText
+            heading {
+                heading: Uda Desc
+                alignment: center
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: E
+            }
+        )
+
+        column UDA_ID (
+            type: plainText
+            heading {
+                heading: Uda Id
+                alignment: center
+            }
+            layout {
+                sequence: 30
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: C
+            }
+        )
+
+        column UDA_VALUE (
+            type: plainText
+            heading {
+                heading: Uda Value
+                alignment: center
+            }
+            layout {
+                sequence: 40
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: D
+            }
+        )
+
+        column UDA_VALUE_DESC (
+            type: plainText
+            heading {
+                heading: Uda Value Desc
+                alignment: center
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: F
+            }
+        )
+
+        page {
+            width: 8.5
+            height: 11
+            borderWidth: 0.5
+            borderColor: #666666
+        }
+        columnHeadings {
+            fontWeight: normal
+            backgroundColor: #9bafde
+        }
+        columns {
+            backgroundColor: #efefef
+        }
+
+        savedReport 430646 (
+            visibility: primaryDefault
+            view {
+                rowsPerPage: 50
+            }
+
+            displayColumn UDA_DESC (
+                sequence: 2
+            )
+
+            displayColumn UDA_ID (
+                sequence: 1
+            )
+
+            displayColumn UDA_VALUE (
+                sequence: 3
+            )
+
+            displayColumn UDA_VALUE_DESC (
+                sequence: 4
+            )
+
+        )
+
+    )
+
+    pageItem P3_CLASS (
+        type: selectList
+        label {
+            label: Category
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: select distinct class ||' - '|| class_name, class from r$das_class where dept = :P3_DEPT;
+        }
+        cascadingLov {
+            parentItems: P3_DEPT
+            itemsToSubmit: P3_DEPT
+        }
+        layout {
+            sequence: 60
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            height: 1
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @create-style
+            column: CLASS
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_COLOUR_GROUP (
+        type: displayOnly
+        label {
+            label: Colour Group
+            alignment: left
+        }
+        layout {
+            sequence: 90
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @create-style
+            column: COLOUR_GROUP
+            dataType: varchar2
+        }
+        default {
+            type: static
+            staticValue: RMS_ALL_C
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_COLOUR_ID (
+        type: selectList
+        label {
+            label: Colour Id
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: SELECT  diff_id ||' - '||diff_desc, diff_id FROM nb_v_diff_ids@dasprd WHERE diff_id IN ( SELECT diff_id FROM diff_group_detail@dasprd WHERE diff_group_id = 'PLM_ALL_C')
+        }
+        layout {
+            sequence: 100
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            height: 1
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @create-style
+            column: COLOUR_ID
+            dataType: varchar2
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_COST_PRICE (
+        type: numberField
+        label {
+            label: Cost Price
+            alignment: left
+        }
+        settings {
+            numberAlignment: end
+            virtualKeyboard: text
+        }
+        layout {
+            sequence: 160
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            formatMask: 9990D00
+            width: 32
+        }
+        validation {
+            valueRequired: true
+            maxLength: 255
+        }
+        source {
+            formRegion: @create-style
+            column: COST_PRICE
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_DELIVERY_LOC (
+        type: selectList
+        label {
+            label: Delivery Loc
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: SELECT wh||' - '||wh_name, wh FROM wh@dasprd   WHERE stockholding_ind = 'Y'
+        }
+        layout {
+            sequence: 180
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            height: 1
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @create-style
+            column: DELIVERY_LOC
+            dataType: number
+        }
+        serverSideCondition {
+            type: never
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_DEPT (
+        type: selectList
+        label {
+            label: Sub dept
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select distinct dept ||' - '||dept_name, dept from r$das_deps where group_no in (select  dept from styleman_deps)
+                union
+                select distinct dept ||' - '||dept_name, dept from r$das_deps where dept = 220
+                
+                ```
+        }
+        layout {
+            sequence: 50
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            height: 1
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @create-style
+            column: DEPT
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_MANUFACTURE_CTRY (
+        type: selectList
+        label {
+            label: Manufacture Ctry
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: SELECT country_id ||' - '|| country_desc, country_id  FROM nb_v_country@dasprd
+        }
+        layout {
+            sequence: 200
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            height: 1
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @create-style
+            column: MANUFACTURE_CTRY
+            dataType: varchar2
+        }
+        quickPicks {
+            type: static
+            label1: China
+            value1: CN
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_MARGIN (
+        type: textField
+        label {
+            label: Margin
+            alignment: left
+        }
+        layout {
+            sequence: 170
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            width: 30
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_ORIGIN_COUNTRY (
+        type: selectList
+        label {
+            label: Origin Country
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: SELECT country_id ||' - '|| country_desc, country_id  FROM nb_v_country@dasprd
+        }
+        layout {
+            sequence: 190
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            height: 1
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @create-style
+            column: ORIGIN_COUNTRY
+            dataType: varchar2
+        }
+        quickPicks {
+            type: static
+            label1: South Africa
+            value1: ZA
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_PACK_SIZE_CASE (
+        type: displayOnly
+        label {
+            label: Pack Size Case
+            alignment: left
+        }
+        layout {
+            sequence: 230
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @create-style
+            column: PACK_SIZE_CASE
+            dataType: number
+        }
+        default {
+            type: static
+            staticValue: 1
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_PACK_SIZE_INNER (
+        type: displayOnly
+        label {
+            label: Pack Size Inner
+            alignment: left
+        }
+        layout {
+            sequence: 240
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @create-style
+            column: PACK_SIZE_INNER
+            dataType: number
+        }
+        default {
+            type: static
+            staticValue: 1
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_PHASE (
+        type: selectList
+        label {
+            label: Phase
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: SELECT phase_id ||' - '||phase_desc, phase_id FROM phases@dasprd WHERE season_id = :P3_SEASON
+        }
+        cascadingLov {
+            parentItems: P3_SEASON
+            itemsToSubmit: P3_SEASON
+        }
+        layout {
+            sequence: 220
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            height: 1
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @create-style
+            column: PHASE
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_RMS_STYLE (
+        type: displayOnly
+        label {
+            label: Rms Style
+            alignment: left
+        }
+        layout {
+            sequence: 20
+            region: @create-style
+            slot: regionBody
+            alignment: left
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @create-style
+            column: RMS_STYLE
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_RSP (
+        type: numberField
+        label {
+            label: Rsp
+            alignment: left
+        }
+        settings {
+            numberAlignment: end
+            virtualKeyboard: text
+        }
+        layout {
+            sequence: 150
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            width: 32
+        }
+        validation {
+            valueRequired: true
+            maxLength: 255
+        }
+        source {
+            formRegion: @create-style
+            column: RSP
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_SEASON (
+        type: selectList
+        label {
+            label: Season
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: SELECT season_desc, season_id  FROM nb_v_seasons@dasprd  WHERE start_date > (SYSDATE-365)
+            displayExtraValues: false
+        }
+        layout {
+            sequence: 210
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            height: 1
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @create-style
+            column: SEASON
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_SIZE_GROUP (
+        type: displayOnly
+        label {
+            label: Size Group
+            alignment: left
+        }
+        layout {
+            sequence: 110
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @create-style
+            column: SIZE_GROUP
+            dataType: varchar2
+        }
+        default {
+            type: static
+            staticValue: 1020
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_STYLE_DESC (
+        type: textField
+        label {
+            label: Style Desc
+            alignment: left
+        }
+        layout {
+            sequence: 120
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            width: 60
+        }
+        validation {
+            valueRequired: true
+            maxLength: 100
+        }
+        source {
+            formRegion: @create-style
+            column: STYLE_DESC
+            dataType: varchar2
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_STYLE_SHORT_DESC (
+        type: textField
+        label {
+            label: Style Short Desc
+            alignment: left
+        }
+        layout {
+            sequence: 130
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            width: 60
+        }
+        validation {
+            valueRequired: true
+            maxLength: 100
+        }
+        source {
+            formRegion: @create-style
+            column: STYLE_SHORT_DESC
+            dataType: varchar2
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_SUBCLASS (
+        type: selectList
+        label {
+            label: Typecode
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select distinct subclass ||' - '|| sub_name, subclass from nb_v_subclass@dasprd where dept = :P3_DEPT 
+                and class = :P3_class;
+                ```
+        }
+        cascadingLov {
+            parentItems: [
+                P3_CLASS
+                P3_DEPT
+            ]
+            itemsToSubmit: [
+                P3_CLASS
+                P3_DEPT
+            ]
+        }
+        layout {
+            sequence: 70
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            height: 1
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @create-style
+            column: SUBCLASS
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_SUPPLIER (
+        type: plugin/select2
+        label {
+            label: Supplier
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                SELECT supplier ||' - '|| sup_name, supplier FROM nb_v_sups@dasprd
+                where supplier_parent is not null order by supplier  asc
+                ```
+        }
+        layout {
+            sequence: 80
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+            columnCssClasses: [
+                selectlist
+                apex-item-select
+            ]
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @create-style
+            column: SUPPLIER
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_VPN (
+        type: textField
+        label {
+            label: Vpn
+            alignment: left
+        }
+        settings {
+            trimSpaces: none
+        }
+        layout {
+            sequence: 140
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            width: 32
+        }
+        validation {
+            valueRequired: true
+            maxLength: 20
+        }
+        source {
+            formRegion: @create-style
+            column: VPN
+            dataType: varchar2
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_WORKSHEET_ID (
+        type: displayOnly
+        label {
+            label: Worskheet ID
+            alignment: left
+        }
+        layout {
+            sequence: 30
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @create-style
+            column: WORKSHEET_ID
+            dataType: number
+            queryOnly: true
+            primaryKey: true
+        }
+        security {
+            sessionStateProtection: checksumRequiredSessionLevel
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_WORKSHEET_STATUS (
+        type: displayOnly
+        label {
+            label: Worksheet Status
+            alignment: left
+        }
+        layout {
+            sequence: 40
+            region: @create-style
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @create-style
+            column: WORKSHEET_STATUS
+            dataType: varchar2
+        }
+        default {
+            type: static
+            staticValue: W
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    button activate (
+        buttonName: Activate
+        label: Approve
+        layout {
+            sequence: 50
+            region: @create-style
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: functionBody
+            plsqlFunctionBody:
+                ```plsql
+                declare
+                l_count_skus number;
+                l_count_udas number;
+                
+                begin
+                
+                if(:p3_worksheet_id is null) then
+                return false;
+                end if;
+                
+                if(:p3_worksheet_status = 'A') then
+                return false;
+                end if;
+                
+                select count(1) into l_count_skus
+                from worksheet_sku where worksheet_id = :P3_WORKSHEET_ID;
+                
+                select count(1) into l_count_udas
+                from worksheet_uda where worksheet_id = :P3_WORKSHEET_ID;
+                
+                if(l_count_skus > 0 and l_count_udas > 0  ) then
+                
+                return true;
+                
+                end if;
+                
+                
+                end;
+                ```
+        }
+    )
+
+    button amend (
+        buttonName: Amend
+        label: Worksheet
+        layout {
+            sequence: 60
+            region: @create-style
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: never
+        }
+    )
+
+    button cancel (
+        buttonName: CANCEL
+        label: Cancel
+        layout {
+            sequence: 10
+            region: @create-style
+            slot: close
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 3
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button copy (
+        buttonName: Copy
+        label: Copy
+        layout {
+            sequence: 70
+            region: @create-style
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 2
+                clearCache: 2
+                action: resetPagination
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: itemIsNull
+            item: P3_WORKSHEET_ID
+        }
+    )
+
+    button create (
+        buttonName: CREATE
+        label: Create
+        layout {
+            sequence: 40
+            region: @create-style
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: insert
+        }
+        serverSideCondition {
+            type: itemIsNull
+            item: P3_WORKSHEET_ID
+        }
+    )
+
+    button create-sku (
+        buttonName: Create_SKU
+        label: Create Sku
+        layout {
+            sequence: 10
+            region: @skus
+            slot: rightOfInteractiveReportSearchBar
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 6
+                items: {
+                    P6_WORKSHEET_ID: &P3_WORKSHEET_ID.
+                    P6_SIZE_GROUP: &P3_SIZE_GROUP.
+                    P6_WORKSHEET_SKU_ID:
+                }
+                action: resetPagination
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: item=value
+            item: P3_WORKSHEET_STATUS
+            value: W
+        }
+    )
+
+    button create-uda (
+        buttonName: Create_UDA
+        label: Create/Edit UDAs
+        layout {
+            sequence: 10
+            region: @udas
+            slot: rightOfInteractiveReportSearchBar
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 8
+                items: {
+                    P8_WORKSHEET_ID: &P3_WORKSHEET_ID.
+                }
+                action: resetPagination
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: item=value
+            item: P3_WORKSHEET_STATUS
+            value: W
+        }
+    )
+
+    button delete (
+        buttonName: DELETE
+        label: Delete
+        layout {
+            sequence: 20
+            region: @create-style
+            slot: delete
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectUrl
+            targetUrl: javascript:apex.confirm(htmldb_delete_message,'DELETE');
+            executeValidations: false
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: delete
+        }
+        serverSideCondition {
+            type: expression
+            plsqlExpression: :P3_WORKSHEET_ID is not null and :P3_WORKSHEET_STATUS = 'W'
+        }
+    )
+
+    button save (
+        buttonName: SAVE
+        label: Apply Changes
+        layout {
+            sequence: 30
+            region: @create-style
+            slot: change
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: update
+        }
+        serverSideCondition {
+            type: expression
+            plsqlExpression: :P3_WORKSHEET_ID is not null and :P3_WORKSHEET_STATUS = 'W'
+        }
+    )
+
+    dynamicAction calc-margin (
+        name: Calc Margin
+        execution {
+            sequence: 40
+        }
+        when {
+            event: keyup
+            selectionType: items
+            items: [
+                P3_RSP
+                P3_COST_PRICE
+            ]
+        }
+
+        action native-javascript-code (
+            action: executeJsCode
+            settings {
+                jsCode:
+                    ```javascript-browser
+                     $("#P3_MARGIN").val("");
+                    try{
+                        var l_rsp = Number($("#P3_RSP").val());
+                        var l_cost= Number($("#P3_COST_PRICE").val());
+                        var l_vat = Number(1.15);
+                        var l_rsp_exvat = l_rsp/l_vat;
+                        
+                        if(l_rsp>0 && l_cost > 0){
+                       // var l_margin = "Margin : "+Math.round(((l_rsp/l_cost)-1)*100)+" %";
+                         //var l_margin = "Margin : "+Math.round(((l_rsp_exvat-l_cost)/l_rsp_exvat)*100)+" %";
+                        var l_margin = "Margin : "+parseFloat(((l_rsp_exvat-l_cost)/l_rsp_exvat)*100).toFixed(2)+" %";
+                        //$("#P3_MARGIN").value(number($("#P3_COST_PRICE").val())+3);
+                      //  alert(Number($("#P3_COST_PRICE").val())+3);
+                        $("#P3_MARGIN").val(l_margin);
+                        }
+                        document.getElementById('P3_MARGIN').setAttribute('readonly', true)
+                        
+                    }
+                    catch (err) {
+                    null;
+                    }
+                    
+                    ```
+            }
+            execution {
+                sequence: 10
+            }
+        )
+
+    )
+
+    dynamicAction change-styledesc (
+        name: Change styledesc
+        execution {
+            sequence: 30
+        }
+        when {
+            selectionType: items
+            items: P3_STYLE_DESC
+        }
+
+        action native-set-value (
+            action: setValue
+            settings {
+                type: plsqlExpression
+                plsqlExpression: :P3_STYLE_DESC
+                itemsToSubmit: P3_STYLE_DESC
+            }
+            affectedElements {
+                selectionType: items
+                items: P3_STYLE_SHORT_DESC
+            }
+            execution {
+                sequence: 10
+            }
+        )
+
+    )
+
+    dynamicAction refresh-on-dialog-close (
+        name: Refresh on dialog close
+        execution {
+            sequence: 10
+        }
+        when {
+            event: apexafterclosedialog
+            selectionType: region
+            region: @skus
+        }
+
+        action native-refresh (
+            action: refresh
+            affectedElements {
+                selectionType: region
+                region: @skus
+            }
+            execution {
+                sequence: 10
+                fireOnInit: false
+            }
+        )
+
+    )
+
+    dynamicAction refresh-on-dialog-close-2 (
+        name: Refresh on dialog close_1
+        execution {
+            sequence: 20
+        }
+        when {
+            event: apexafterclosedialog
+            selectionType: region
+            region: @udas
+        }
+
+        action native-refresh (
+            action: refresh
+            affectedElements {
+                selectionType: region
+                region: @udas
+            }
+            execution {
+                sequence: 10
+                fireOnInit: false
+            }
+        )
+
+    )
+
+    validation rsp-must-be-greater-than-cost (
+        name: RSP must be greater than cost
+        execution {
+            sequence: 10
+        }
+        validation {
+            plsqlExpression: to_number(:P3_RSP) > to_number(:P3_COST_PRICE)
+        }
+        error {
+            errorMessage: RSP must be greater than Cost Price
+        }
+        serverSideCondition {
+            type: itemIsNotInColonDelimitedList
+            item: P3_DEPT
+            list: [
+                220
+                134
+            ]
+        }
+    )
+
+    process activate-style (
+        name: Activate style
+        type: executeCode
+        source {
+            plsqlCode: STYLEMAN_ENGINE.ACTIVATE_worksheet_STYLE(:p3_WORKSHEET_ID,:APP_USER);
+        }
+        execution {
+            sequence: 30
+        }
+        successMessage {
+            successMessage: Style Approved!
+        }
+        advanced {
+            executionMappingIdentifier: 43031504378238430
+        }
+        serverSideCondition {
+            whenButtonPressed: @activate
+        }
+    )
+
+    process initialize-form-create-form (
+        name: Initialize form Create Form
+        type: formInitialization
+        formRegion: @create-style
+        execution {
+            sequence: 10
+            point: beforeHeader
+        }
+        advanced {
+            executionMappingIdentifier: 42975018234825971
+        }
+    )
+
+    process process-form-create-form (
+        name: Process form Create Form
+        type: formAutoRowProcessing
+        formRegion: @create-style
+        execution {
+            sequence: 10
+        }
+        advanced {
+            executionMappingIdentifier: 42975414257825971
+        }
+    )
+
+    process put-in-worksheet (
+        name: Put in worksheet
+        type: executeCode
+        source {
+            plsqlCode: Update worksheet_style set worksheet_status = 'W' where worksheet_id = :P3_worksheet_id;
+        }
+        execution {
+            sequence: 40
+        }
+        advanced {
+            executionMappingIdentifier: 43032149907238436
+        }
+        serverSideCondition {
+            whenButtonPressed: @amend
+        }
+    )
+
+    process set-default-udas (
+        name: Set Default UDAs
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                declare
+                cursor c_recs is 
+                SELECT uda_id, uda_value FROM     UDA_ITEM_DEFAULTS@dasprd WHERE dept = :P3_DEPT AND class IS NULL 
+                AND required_ind = 'Y' 
+                UNION
+                SELECT uda_id, uda_value FROM      UDA_ITEM_DEFAULTS@dasprd WHERE dept = :P3_DEPT AND class = :P3_CLASS AND subclass IS null 
+                AND required_ind = 'Y' 
+                UNION
+                SELECT uda_id, uda_value FROM      UDA_ITEM_DEFAULTS@dasprd WHERE dept = :P3_DEPT AND class = :P3_CLASS AND subclass =:P3_SUBCLASS
+                AND required_ind = 'Y' 
+                union
+                select uda_id, uda_value from styleman_uda_defaults where dept = :P3_DEPT AND class = :P3_CLASS ;
+                
+                begin
+                
+                for r_recs in c_recs loop
+                 insert into worksheet_uda (WORKSHEET_ID, UDA_ID, UDA_VALUE)  values (:P3_WORKSHEET_ID, r_recs.uda_id, r_recs.uda_value);
+                
+                end loop;
+                
+                
+                end;
+                
+                ```
+        }
+        execution {
+            sequence: 20
+        }
+        advanced {
+            executionMappingIdentifier: 23743396393999719
+        }
+        serverSideCondition {
+            whenButtonPressed: @create
+        }
+    )
+
+)
+

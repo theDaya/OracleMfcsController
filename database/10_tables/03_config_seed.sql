@@ -94,7 +94,7 @@ using (
     select 'DEFAULT', 'MAP.DEPARTMENT.1517', '1517', 'Y' from dual union all
     select 'DEFAULT', 'MAP.CLASS.1517.6892', '6892', 'Y' from dual union all
     select 'DEFAULT', 'MAP.SUBCLASS.1517.6892.1128', '1128', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.SUPPLIER.70001', '70001', 'Y' from dual union all
+    select 'DEFAULT', 'MAP.SUPPLIER.70001', '70001', 'N' from dual union all
     select 'DEFAULT', 'MAP.SUPPLIER.700087', '700087', 'Y' from dual union all
     select 'DEFAULT', 'MAP.COUNTRY.ZA', 'ZA', 'Y' from dual union all
     select 'DEFAULT', 'MAP.COUNTRY.CN', 'CN', 'Y' from dual union all

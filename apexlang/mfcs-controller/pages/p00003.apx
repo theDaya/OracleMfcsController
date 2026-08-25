@@ -1,0 +1,1609 @@
+page 3 (
+    name: Create / Edit
+    title: Create / Edit
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    javaScript {
+        executeWhenPageLoads:
+            ```javascript-browser
+            (function () {
+                if (apex.item("P3_DRAFT_ID").getValue()) {
+                    return;
+                }
+            
+                function pad(n) {
+                    return String(n).padStart(2, "0");
+                }
+            
+                function ymd(date) {
+                    return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate());
+                }
+            
+                function addDays(base, days) {
+                    var date = new Date(base);
+                    date.setDate(date.getDate() + days);
+                    return date;
+                }
+            
+                function setIfBlank(itemName, value) {
+                    var item = apex.item(itemName);
+                    if (!item.getValue()) {
+                        item.setValue(value, null, true);
+                    }
+                }
+            
+                var today = new Date();
+                today.setHours(0, 0, 0, 0);
+            
+                var nowStamp = new Date().toISOString().replace("T", " ").substring(0, 19);
+                var daysUntilSunday = (7 - today.getDay()) % 7 || 7;
+            
+                setIfBlank("P3_DESCRIPTION", "apexTest " + nowStamp);
+                setIfBlank("P3_SOURCE_STYLE_REF", "apexStyle " + nowStamp);
+                setIfBlank("P3_SOURCE_ORDER_REF", "apexOrder " + nowStamp);
+                setIfBlank("P3_NOT_BEFORE_DATE", ymd(addDays(today, 1)));
+                setIfBlank("P3_NOT_AFTER_DATE", ymd(addDays(today, 7)));
+                setIfBlank("P3_OTB_EOW_DATE", ymd(addDays(today, daysUntilSunday)));
+                setIfBlank("P3_EARLIEST_SHIP_DATE", ymd(addDays(today, 1)));
+                setIfBlank("P3_LATEST_SHIP_DATE", ymd(addDays(today, 7)));
+            })();
+            ```
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+        formAutoComplete: false
+    }
+
+    region draft (
+        name: MFCS Draft
+        type: form
+        source {
+            location: localDatabase
+            tableName: UI_DRAFT
+        }
+        layout {
+            sequence: 10
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+    )
+
+    region associated-items (
+        name: Associated Items
+        type: regionDisplaySelector
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        advanced {
+            regionDisplaySelector: true
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P3_DRAFT_ID
+        }
+        settings {
+            includeShowAll: false
+            rememberSelection: bySession
+        }
+    )
+
+    region skus (
+        name: SKUS
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_sku_id,
+                       draft_id,
+                       source_variant_ref,
+                       sku_size,
+                       sku_width,
+                       sku_qty,
+                       sku_id
+                  from ui_draft_sku
+                 where draft_id = :P3_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 30
+            parentRegion: @associated-items
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        toolbar {
+            controls: [
+                searchCol
+                searchField
+                actionsMenu
+                resetButton
+                saveButton
+            ]
+        }
+        heading {
+            fixedTo: region
+            fixedReportHeight: 320
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @SKU_SIZE
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @SKU_WIDTH
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @SKU_QTY
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @SKU_ID
+                layout {
+                    sequence: 4
+                }
+            )
+
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 10
+            }
+        )
+
+        column APEX$ROW_SELECTOR (
+            type: rowSelector
+            layout {
+                sequence: 20
+            }
+        )
+
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+            default {
+                type: item
+                item: P3_DRAFT_ID
+            }
+        )
+
+        column DRAFT_SKU_ID (
+            type: hidden
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: DRAFT_SKU_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+            exportPrinting {
+                includeInExportPrint: false
+            }
+        )
+
+        column SOURCE_VARIANT_REF (
+            type: hidden
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: SOURCE_VARIANT_REF
+                dataType: varchar2
+            }
+            exportPrinting {
+                includeInExportPrint: false
+            }
+        )
+
+        column SKU_SIZE (
+            type: selectList
+            heading {
+                heading: SKU Size
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select substr(config_key, length('MAP.SIZE.') + 1)
+                           || ' - ' || dbms_lob.substr(config_value, 200, 1),
+                           substr(config_key, length('MAP.SIZE.') + 1)
+                      from config
+                     where environment = 'DEFAULT'
+                       and enabled_ind = 'Y'
+                       and config_key like 'MAP.SIZE.%'
+                     order by 1
+                    ```
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                databaseColumn: SKU_SIZE
+                dataType: varchar2
+            }
+        )
+
+        column SKU_WIDTH (
+            type: textField
+            heading {
+                heading: SKU Width
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                databaseColumn: SKU_WIDTH
+                dataType: varchar2
+            }
+            default {
+                type: static
+                staticValue: ALL
+            }
+        )
+
+        column SKU_QTY (
+            type: numberField
+            heading {
+                heading: SKU Qty
+                alignment: end
+            }
+            settings {
+                numberAlignment: end
+                virtualKeyboard: text
+            }
+            layout {
+                sequence: 80
+                columnAlignment: end
+            }
+            source {
+                databaseColumn: SKU_QTY
+                dataType: number
+            }
+            default {
+                type: static
+                staticValue: 1
+            }
+        )
+
+        column SKU_ID (
+            type: textField
+            heading {
+                heading: MFCS SKU
+            }
+            layout {
+                sequence: 90
+            }
+            source {
+                databaseColumn: SKU_ID
+                dataType: varchar2
+            }
+        )
+
+    )
+
+    region preview (
+        name: Payload Preview
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select request_payload,
+                       preview_payload,
+                       response_payload
+                  from ui_draft
+                 where draft_id = :P3_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 40
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P3_DRAFT_ID
+        }
+
+        column PREVIEW_PAYLOAD (
+            type: plainText
+            heading {
+                heading: Preview Payload
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column REQUEST_PAYLOAD (
+            type: plainText
+            heading {
+                heading: Request Payload
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column RESPONSE_PAYLOAD (
+            type: plainText
+            heading {
+                heading: Response Payload
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+    )
+
+    pageItem P3_DRAFT_ID (
+        type: displayOnly
+        label {
+            label: Draft ID
+            alignment: left
+        }
+        layout {
+            sequence: 10
+            region: @draft
+            slot: regionBody
+            alignment: left
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: DRAFT_ID
+            dataType: number
+            queryOnly: true
+            primaryKey: true
+        }
+        security {
+            sessionStateProtection: checksumRequiredSessionLevel
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_DRAFT_STATUS (
+        type: displayOnly
+        label {
+            label: Status
+            alignment: left
+        }
+        layout {
+            sequence: 20
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: DRAFT_STATUS
+            dataType: varchar2
+        }
+        default {
+            type: static
+            staticValue: DRAFT
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_ACTION_REQUEST_ID (
+        type: displayOnly
+        label {
+            label: Action Request ID
+            alignment: left
+        }
+        layout {
+            sequence: 30
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: ACTION_REQUEST_ID
+            dataType: varchar2
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P3_OPERATION_NAME (
+        type: selectList
+        label {
+            label: Operation
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select 'CREATE_ALL' d, 'CREATE_ALL' r from dual
+                union all select 'CREATE_STYLE', 'CREATE_STYLE' from dual
+                union all select 'CREATE_ORDER', 'CREATE_ORDER' from dual
+                union all select 'MODIFY_STYLE', 'MODIFY_STYLE' from dual
+                union all select 'MODIFY_ORDER', 'MODIFY_ORDER' from dual
+                ```
+        }
+        layout {
+            sequence: 40
+            region: @draft
+            slot: regionBody
+            alignment: left
+            columnSpan: 2
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: OPERATION_NAME
+            dataType: varchar2
+        }
+        default {
+            type: static
+            staticValue: CREATE_ALL
+        }
+    )
+
+    pageItem P3_SOURCE_SYSTEM (
+        type: textField
+        label {
+            label: Source System
+            alignment: left
+        }
+        layout {
+            sequence: 50
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: SOURCE_SYSTEM
+            dataType: varchar2
+        }
+        default {
+            type: static
+            staticValue: APEX
+        }
+    )
+
+    pageItem P3_SOURCE_STYLE_REF (
+        type: textField
+        label {
+            label: Source Style Ref
+            alignment: left
+        }
+        layout {
+            sequence: 60
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: SOURCE_STYLE_REF
+            dataType: varchar2
+        }
+    )
+
+    pageItem P3_SOURCE_ORDER_REF (
+        type: textField
+        label {
+            label: Source Order Ref
+            alignment: left
+        }
+        layout {
+            sequence: 70
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: SOURCE_ORDER_REF
+            dataType: varchar2
+        }
+    )
+
+    pageItem P3_DESCRIPTION (
+        type: textField
+        label {
+            label: Description
+            alignment: left
+        }
+        layout {
+            sequence: 80
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            width: 80
+        }
+        source {
+            formRegion: @draft
+            column: DESCRIPTION
+            dataType: varchar2
+        }
+    )
+
+    pageItem P3_STYLE (
+        type: textField
+        label {
+            label: MFCS Style
+            alignment: left
+        }
+        layout {
+            sequence: 90
+            region: @draft
+            slot: regionBody
+            alignment: left
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: STYLE
+            dataType: varchar2
+        }
+    )
+
+    pageItem P3_ORDER_NO (
+        type: textField
+        label {
+            label: MFCS Order
+            alignment: left
+        }
+        layout {
+            sequence: 100
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: ORDER_NO
+            dataType: varchar2
+        }
+    )
+
+    pageItem P3_DEPARTMENT (
+        type: selectList
+        label {
+            label: Department
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select dept_code || ' - ' || nvl(md.description, mapped_dept), dept_code
+                  from (
+                        select substr(config_key, length('MAP.DEPARTMENT.') + 1) dept_code,
+                               dbms_lob.substr(config_value, 200, 1) mapped_dept
+                          from config
+                         where environment = 'DEFAULT'
+                           and enabled_ind = 'Y'
+                           and config_key like 'MAP.DEPARTMENT.%'
+                       ) c
+                  left join master_data md
+                    on md.data_type = 'DEPARTMENT'
+                   and md.data_code = c.mapped_dept
+                 order by to_number(nullif(regexp_replace(dept_code, '[^0-9]', ''), '')), dept_code
+                ```
+        }
+        layout {
+            sequence: 110
+            region: @draft
+            slot: regionBody
+            alignment: left
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: DEPARTMENT
+            dataType: number
+        }
+    )
+
+    pageItem P3_CLASS (
+        type: selectList
+        label {
+            label: Class
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select class_code || ' - ' || nvl(md.description, mapped_class), class_code
+                  from (
+                        select regexp_substr(config_key, '[^.]+', 1, 4) class_code,
+                               dbms_lob.substr(config_value, 200, 1) mapped_class
+                          from config
+                         where environment = 'DEFAULT'
+                           and enabled_ind = 'Y'
+                           and config_key like 'MAP.CLASS.' || :P3_DEPARTMENT || '.%'
+                       ) c
+                  left join master_data md
+                    on md.data_type = 'CLASS'
+                   and md.parent_code = to_char(:P3_DEPARTMENT)
+                   and md.data_code = c.mapped_class
+                 order by class_code
+                ```
+        }
+        cascadingLov {
+            parentItems: P3_DEPARTMENT
+            itemsToSubmit: P3_DEPARTMENT
+        }
+        layout {
+            sequence: 120
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: CLASS
+            dataType: number
+        }
+    )
+
+    pageItem P3_SUBCLASS (
+        type: selectList
+        label {
+            label: Subclass
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select subclass_code || ' - ' || nvl(md.description, mapped_subclass), subclass_code
+                  from (
+                        select regexp_substr(config_key, '[^.]+', 1, 5) subclass_code,
+                               dbms_lob.substr(config_value, 200, 1) mapped_subclass
+                          from config
+                         where environment = 'DEFAULT'
+                           and enabled_ind = 'Y'
+                           and config_key like 'MAP.SUBCLASS.' || :P3_DEPARTMENT || '.' || :P3_CLASS || '.%'
+                       ) c
+                  left join master_data md
+                    on md.data_type = 'SUBCLASS'
+                   and md.parent_code = to_char(:P3_DEPARTMENT) || '.' || to_char(:P3_CLASS)
+                   and md.data_code = c.mapped_subclass
+                 order by subclass_code
+                ```
+        }
+        cascadingLov {
+            parentItems: [
+                P3_DEPARTMENT
+                P3_CLASS
+            ]
+            itemsToSubmit: [
+                P3_DEPARTMENT
+                P3_CLASS
+            ]
+        }
+        layout {
+            sequence: 130
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: SUBCLASS
+            dataType: number
+        }
+    )
+
+    pageItem P3_SUPPLIER (
+        type: selectList
+        label {
+            label: Supplier
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select supplier_code || ' - ' || nvl(md.description, mapped_supplier), supplier_code
+                  from (
+                        select substr(config_key, length('MAP.SUPPLIER.') + 1) supplier_code,
+                               dbms_lob.substr(config_value, 200, 1) mapped_supplier
+                          from config
+                         where environment = 'DEFAULT'
+                           and enabled_ind = 'Y'
+                           and config_key like 'MAP.SUPPLIER.%'
+                       ) c
+                  left join master_data md
+                    on md.data_type = 'SUPPLIER'
+                   and md.data_code = c.mapped_supplier
+                 where md.data_code is not null
+                 order by supplier_code
+                ```
+        }
+        layout {
+            sequence: 140
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: SUPPLIER
+            dataType: number
+        }
+    )
+
+    pageItem P3_COLOUR (
+        type: selectList
+        label {
+            label: Colour
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select colour_code || ' - ' || mapped_colour, colour_code
+                  from (
+                        select substr(config_key, length('MAP.COLOUR.') + 1) colour_code,
+                               dbms_lob.substr(config_value, 200, 1) mapped_colour
+                          from config
+                         where environment = 'DEFAULT'
+                           and enabled_ind = 'Y'
+                           and config_key like 'MAP.COLOUR.%'
+                       )
+                 order by colour_code
+                ```
+        }
+        layout {
+            sequence: 150
+            region: @draft
+            slot: regionBody
+            alignment: left
+            columnSpan: 2
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: COLOUR
+            dataType: varchar2
+        }
+    )
+
+    pageItem P3_ORIGIN_COUNTRY (
+        type: selectList
+        label {
+            label: Origin Country
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select substr(config_key, length('MAP.COUNTRY.') + 1)
+                       || ' - ' || dbms_lob.substr(config_value, 200, 1),
+                       substr(config_key, length('MAP.COUNTRY.') + 1)
+                  from config
+                 where environment = 'DEFAULT'
+                   and enabled_ind = 'Y'
+                   and config_key like 'MAP.COUNTRY.%'
+                 order by 1
+                ```
+        }
+        layout {
+            sequence: 160
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: ORIGIN_COUNTRY
+            dataType: varchar2
+        }
+    )
+
+    pageItem P3_IMPORT_COUNTRY (
+        type: selectList
+        label {
+            label: Import Country
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select substr(config_key, length('MAP.COUNTRY.') + 1)
+                       || ' - ' || dbms_lob.substr(config_value, 200, 1),
+                       substr(config_key, length('MAP.COUNTRY.') + 1)
+                  from config
+                 where environment = 'DEFAULT'
+                   and enabled_ind = 'Y'
+                   and config_key like 'MAP.COUNTRY.%'
+                 order by 1
+                ```
+        }
+        layout {
+            sequence: 170
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: IMPORT_COUNTRY
+            dataType: varchar2
+        }
+    )
+
+    pageItem P3_CURRENCY_CODE (
+        type: selectList
+        label {
+            label: Currency
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select substr(config_key, length('MAP.CURRENCY.') + 1)
+                       || ' - ' || dbms_lob.substr(config_value, 200, 1),
+                       substr(config_key, length('MAP.CURRENCY.') + 1)
+                  from config
+                 where environment = 'DEFAULT'
+                   and enabled_ind = 'Y'
+                   and config_key like 'MAP.CURRENCY.%'
+                 order by 1
+                ```
+        }
+        layout {
+            sequence: 180
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: CURRENCY_CODE
+            dataType: varchar2
+        }
+    )
+
+    pageItem P3_UNIT_COST (
+        type: numberField
+        label {
+            label: Unit Cost
+            alignment: left
+        }
+        settings {
+            numberAlignment: end
+            virtualKeyboard: text
+        }
+        layout {
+            sequence: 190
+            region: @draft
+            slot: regionBody
+            alignment: left
+            columnSpan: 2
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+            formatMask: 9999990D00
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: UNIT_COST
+            dataType: number
+        }
+    )
+
+    pageItem P3_RETAIL_PRICE (
+        type: numberField
+        label {
+            label: Retail Price
+            alignment: left
+        }
+        settings {
+            numberAlignment: end
+            virtualKeyboard: text
+        }
+        layout {
+            sequence: 200
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @required-above
+            templateOptions: #DEFAULT#
+            formatMask: 9999990D00
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: RETAIL_PRICE
+            dataType: number
+        }
+    )
+
+    pageItem P3_DELIVERY_LOC (
+        type: selectList
+        label {
+            label: Delivery Loc
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select location_code || ' - virtual ' || mapped_location, location_code
+                  from (
+                        select substr(config_key, length('MAP.ORDER_LOCATION.') + 1) location_code,
+                               dbms_lob.substr(config_value, 200, 1) mapped_location
+                          from config
+                         where environment = 'DEFAULT'
+                           and enabled_ind = 'Y'
+                           and config_key like 'MAP.ORDER_LOCATION.%'
+                       )
+                 order by location_code
+                ```
+        }
+        layout {
+            sequence: 210
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: DELIVERY_LOC
+            dataType: number
+        }
+    )
+
+    pageItem P3_NOT_BEFORE_DATE (
+        type: datePicker
+        label {
+            label: Not Before Date
+            alignment: left
+        }
+        layout {
+            sequence: 220
+            region: @draft
+            slot: regionBody
+            alignment: left
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            formatMask: YYYY-MM-DD
+        }
+        source {
+            formRegion: @draft
+            column: NOT_BEFORE_DATE
+            dataType: date
+        }
+    )
+
+    pageItem P3_NOT_AFTER_DATE (
+        type: datePicker
+        label {
+            label: Not After Date
+            alignment: left
+        }
+        layout {
+            sequence: 230
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            formatMask: YYYY-MM-DD
+        }
+        source {
+            formRegion: @draft
+            column: NOT_AFTER_DATE
+            dataType: date
+        }
+    )
+
+    pageItem P3_OTB_EOW_DATE (
+        type: datePicker
+        label {
+            label: OTB EOW Date
+            alignment: left
+        }
+        layout {
+            sequence: 240
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            formatMask: YYYY-MM-DD
+        }
+        source {
+            formRegion: @draft
+            column: OTB_EOW_DATE
+            dataType: date
+        }
+    )
+
+    pageItem P3_EARLIEST_SHIP_DATE (
+        type: datePicker
+        label {
+            label: Earliest Ship Date
+            alignment: left
+        }
+        layout {
+            sequence: 250
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            formatMask: YYYY-MM-DD
+        }
+        source {
+            formRegion: @draft
+            column: EARLIEST_SHIP_DATE
+            dataType: date
+        }
+    )
+
+    pageItem P3_LATEST_SHIP_DATE (
+        type: datePicker
+        label {
+            label: Latest Ship Date
+            alignment: left
+        }
+        layout {
+            sequence: 260
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            formatMask: YYYY-MM-DD
+        }
+        source {
+            formRegion: @draft
+            column: LATEST_SHIP_DATE
+            dataType: date
+        }
+    )
+
+    pageItem P3_HTTP_STATUS (
+        type: displayOnly
+        label {
+            label: HTTP Status
+            alignment: left
+        }
+        layout {
+            sequence: 270
+            region: @draft
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: HTTP_STATUS
+            dataType: number
+        }
+    )
+
+    button cancel (
+        buttonName: CANCEL
+        label: Cancel
+        layout {
+            sequence: 10
+            region: @draft
+            slot: close
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 5
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button delete (
+        buttonName: DELETE
+        label: Delete
+        layout {
+            sequence: 20
+            region: @draft
+            slot: delete
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectUrl
+            targetUrl: javascript:apex.confirm(htmldb_delete_message,'DELETE');
+            executeValidations: false
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: delete
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P3_DRAFT_ID
+        }
+    )
+
+    button save (
+        buttonName: SAVE
+        label: Apply Changes
+        layout {
+            sequence: 30
+            region: @draft
+            slot: change
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: update
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P3_DRAFT_ID
+        }
+    )
+
+    button create (
+        buttonName: CREATE
+        label: Create
+        layout {
+            sequence: 40
+            region: @draft
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: insert
+        }
+        serverSideCondition {
+            type: itemIsNull
+            item: P3_DRAFT_ID
+        }
+    )
+
+    button preview (
+        buttonName: PREVIEW
+        label: Preview
+        layout {
+            sequence: 50
+            region: @draft
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P3_DRAFT_ID
+        }
+    )
+
+    button validate (
+        buttonName: VALIDATE
+        label: Validate
+        layout {
+            sequence: 60
+            region: @draft
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P3_DRAFT_ID
+        }
+    )
+
+    button submit (
+        buttonName: SUBMIT
+        label: Submit
+        layout {
+            sequence: 70
+            region: @draft
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P3_DRAFT_ID
+        }
+    )
+
+    process initialize-form-draft (
+        name: Initialize form Draft
+        type: formInitialization
+        formRegion: @draft
+        execution {
+            sequence: 10
+            point: beforeHeader
+        }
+    )
+
+    process process-form-draft (
+        name: Process form Draft
+        type: formAutoRowProcessing
+        formRegion: @draft
+        execution {
+            sequence: 10
+        }
+    )
+
+    process save-skus (
+        name: Save SKUS
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @skus
+        target {
+            returnPksAfterInsert: false
+        }
+        execution {
+            sequence: 20
+        }
+    )
+
+    process preview-draft (
+        name: Preview draft
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                declare
+                    l_status number;
+                    l_response clob;
+                begin
+                    ui_pkg.preview_draft(:P3_DRAFT_ID, l_status, l_response);
+                end;
+                ```
+        }
+        execution {
+            sequence: 30
+        }
+        successMessage {
+            successMessage: Payload preview refreshed.
+        }
+        serverSideCondition {
+            whenButtonPressed: @preview
+        }
+    )
+
+    process validate-draft (
+        name: Validate draft
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                declare
+                    l_status number;
+                    l_response clob;
+                begin
+                    ui_pkg.validate_draft(:P3_DRAFT_ID, l_status, l_response);
+                end;
+                ```
+        }
+        execution {
+            sequence: 40
+        }
+        successMessage {
+            successMessage: MFCS validation completed.
+        }
+        serverSideCondition {
+            whenButtonPressed: @validate
+        }
+    )
+
+    process submit-draft (
+        name: Submit draft
+        type: executeCode
+        source {
+            plsqlCode: ui_pkg.enqueue_submit(:P3_DRAFT_ID);
+        }
+        execution {
+            sequence: 50
+        }
+        successMessage {
+            successMessage: Draft submitted to the MFCS integration pipeline.
+        }
+        serverSideCondition {
+            whenButtonPressed: @submit
+        }
+    )
+
+    branch (
+        name: Back to Browse after delete
+        execution {
+            sequence: 10
+        }
+        behavior {
+            target: {
+                page: 5
+            }
+        }
+        serverSideCondition {
+            whenButtonPressed: @delete
+        }
+    )
+
+)

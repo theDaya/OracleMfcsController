@@ -1,0 +1,339 @@
+page 8 (
+    name: Edit UDA`s
+    title: Edit UDA`s
+    appearance {
+        pageMode: modalDialog
+        dialogTemplate: @modal-dialog
+        templateOptions: #DEFAULT#
+    }
+    dialog {
+        resizable: false
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+
+    region edit-uda-s (
+        name: Edit UDA`s
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select WORKSHEET_UDA_ID,
+                       WORKSHEET_ID,
+                       UDA_ID,
+                       UDA_VALUE
+                  from WORKSHEET_UDA
+                where worksheet_id=:P8_WORKSHEET_ID
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        toolbar {
+            controls: [
+                searchCol
+                searchField
+                actionsMenu
+                resetButton
+                saveButton
+            ]
+        }
+        download {
+            formats: [
+                csv
+                html
+            ]
+        }
+        heading {
+            fixedTo: region
+            fixedReportHeight: 300
+        }
+        advanced {
+            savedReportMappingIdentifier: 43053562602337388
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @WORKSHEET_UDA_ID
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @WORKSHEET_ID
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @UDA_ID
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @UDA_VALUE
+                layout {
+                    sequence: 4
+                }
+            )
+
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 20
+            }
+        )
+
+        column APEX$ROW_SELECTOR (
+            type: rowSelector
+            layout {
+                sequence: 10
+            }
+        )
+
+        column UDA_ID (
+            type: selectList
+            heading {
+                heading: Uda Id
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    SELECT uda_id ||' - '||uda_desc , uda_id FROM uda@dasprd ORDER BY uda_desc asc
+                    
+                    ```
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                databaseColumn: UDA_ID
+                dataType: number
+            }
+            columnFilter {
+                performanceImpactingOperators: [
+                    contains
+                    startsWith
+                    caseInsensitive
+                    regexp
+                ]
+                lovType: useLov
+            }
+        )
+
+        column UDA_VALUE (
+            type: selectList
+            heading {
+                heading: Uda Value
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery: SELECT uda_value ||' - '||uda_value_desc, uda_value FROM UDA_values@dasprd where uda_id = :uda_id ORDER BY uda_value_desc asc
+            }
+            cascadingLov {
+                parentColumns: UDA_ID
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                databaseColumn: UDA_VALUE
+                dataType: number
+            }
+        )
+
+        column WORKSHEET_ID (
+            type: numberField
+            heading {
+                heading: Worksheet Id
+                alignment: end
+            }
+            settings {
+                numberAlignment: end
+                virtualKeyboard: text
+            }
+            layout {
+                sequence: 50
+                columnAlignment: end
+            }
+            source {
+                databaseColumn: WORKSHEET_ID
+                dataType: number
+            }
+            default {
+                type: item
+                item: P8_WORKSHEET_ID
+            }
+            columnFilter {
+                lovType: none
+            }
+        )
+
+        column WORKSHEET_UDA_ID (
+            type: hidden
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: WORKSHEET_UDA_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+            exportPrinting {
+                includeInExportPrint: false
+            }
+        )
+
+    )
+
+    pageItem P8_WORKSHEET_ID (
+        type: hidden
+        settings {
+            valueProtected: false
+        }
+        layout {
+            sequence: 10
+            region: @edit-uda-s
+            slot: regionBody
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    button done (
+        buttonName: Done
+        label: Done
+        layout {
+            sequence: 10
+            region: @edit-uda-s
+            slot: delete
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 3
+                items: {
+                    P3_WORKSHEET_ID: &P8_WORKSHEET_ID.
+                }
+                action: resetPagination
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    process close-dialog (
+        name: Close Dialog
+        type: closeDialog
+        settings {
+            itemsToReturn: P8_WORKSHEET_ID
+            showSuccessMessages: false
+        }
+        execution {
+            sequence: 30
+        }
+        advanced {
+            executionMappingIdentifier: 23743529095999721
+        }
+    )
+
+    process edit-uda-s-save-interactive-grid-data (
+        name: Edit UDA`s - Save Interactive Grid Data
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @edit-uda-s
+        target {
+            returnPksAfterInsert: false
+        }
+        execution {
+            sequence: 10
+        }
+        advanced {
+            executionMappingIdentifier: 43057750277337397
+        }
+    )
+
+    process submit (
+        name: Submit
+        type: executeCode
+        source {
+            plsqlCode: null;
+        }
+        execution {
+            sequence: 20
+        }
+        advanced {
+            executionMappingIdentifier: 23743481441999720
+        }
+    )
+
+    branch (
+        name: branch to page 3
+        execution {
+            sequence: 10
+        }
+        behavior {
+            target: {
+                page: 3
+                items: {
+                    P3_WORKSHEET_ID: &P8_WORKSHEET_ID.
+                }
+                action: resetPagination
+            }
+        }
+    )
+
+)
+

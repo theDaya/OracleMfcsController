@@ -1,0 +1,20 @@
+authentication ad-auth (
+    name: AD Auth
+    type: ldapDirectory
+    settings {
+        host: CPTDC01.truworths.co.za
+        port: 389
+        dnString: truworths.co.za\%LDAP_USER%
+        usernameEscaping: onlySpecialChars
+    }
+    sessionSharing {
+        type: custom
+        cookieName: MIH_APEX_COOKIE
+    }
+)
+
+authentication application-express-authentication (
+    name: Application Express Authentication
+    type: oracleApexAccounts
+)
+

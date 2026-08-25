@@ -1,6 +1,6 @@
 # Status and next steps
 
-Written so work can stop and resume without losing the thread. Current as of 2026-08-22.
+Written so work can stop and resume without losing the thread. Current as of 2026-08-24.
 
 ## Where things stand
 
@@ -16,6 +16,7 @@ the `MFCS_CLIENT_MODE` switch were removed — if you find a reference to them, 
 | Missing-SKU generation | **Proven live 2026-08-22**: created two children under an existing style, verified by read-back |
 | Failure / resume paths | 20 of 20 passing, fault-injected against the real tenant (re-verified 2026-08-22 after the batch window closed) |
 | Console (`ui/`) | Build, Activity, Styles & orders, Master data, MFCS spec, **How it works** (clickable end-to-end flows) |
+| APEX console | App 102 `MFCS Controller` installed in workspace `TW_TEST`, parsing schema `MFCS_INTEGRATION` |
 | Item ranging | On, using virtual warehouse 19271 |
 | Non-merchandise costs | `NON_MERCH_COSTS` → order `expenses`, validated and previewing; not yet sent live |
 
@@ -150,3 +151,13 @@ cd ui && npm install && npm run dev      # http://localhost:5173
 
 `deploy/adb-free/` also holds the schema/ACL setup, a connectivity probe, endpoint sweeps and
 `set_token.sql` for loading a Postman-issued bearer token.
+
+```bash
+# Seed APEX LOV foundation data after setting/updating the token
+@deploy/adb-free/09_refresh_master_data.sql
+```
+
+APEX source lives in `apexlang/mfcs-controller`. `apex validate` and `apex import` work with the
+installed SQLcl, but `apex export` / `apex generate` currently throw a SQLcl Java
+`Path.of(null)` error in this Windows shell. Upgrading SQLcl is convenience work, not a blocker for
+deploying the checked-in APEXlang source.

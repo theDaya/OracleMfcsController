@@ -1,0 +1,314 @@
+.palv2_popupOuterContainer .ui-icon-closethick {
+  padding: 0px;
+}
+
+.palv2_divShowSelected {
+  float: left;
+  padding: 6px 0px 0px 9px;
+}
+
+.searchboxDiv {
+  padding: 6px 0px 6px 0px;
+}
+
+.palv2_tableHeaderContainer {
+  padding: 6px 0px 6px 13px;
+  border-bottom: 1px solid #aaa;
+}
+
+.palv2_popupOuterContainer *{
+    font-size: 12px;
+
+}
+
+
+i.palv2_iconLoader {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+}
+
+i.palv2_iconPasted {
+  display: inline-block;
+  width: 17px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.palv2_iconTrigger {
+  width: 16px;
+  height: 16px;
+  background-repeat: repeat-y;
+  background-position: 0px 0px;
+  display: inline-block;
+  cursor: pointer;
+}
+
+
+.palv2_iconHidden,
+.palv2_iconTrigger.palv2_iconHidden,
+i.palv2_iconLoader.palv2_iconHidden,
+i.palv2_iconPasted.palv2_iconHidden {
+  display: none;
+}
+
+#palv2_promptAjaxContainer {
+  position: absolute;
+  z-index: 99999;
+  background: white;
+  border: 1px solid silver;
+  overflow-y: scroll;
+  
+}
+#palv2_promptAjaxContainer span.no-data-found {
+  padding: 5px;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+#palv2_promptAjaxContainer div {
+  margin: 0;
+  background: white;
+}
+#palv2_promptAjaxContainer table {
+  border-right: 1px solid silver;
+}
+
+#palv2_promptAjaxContainer th{
+  font-size: 10px;
+  line-height: 14px;
+}
+#palv2_promptAjaxContainer td {
+  font-size: 12px;
+  line-height: 14px;
+}
+
+#palv2_promptAjaxContainer td,
+#palv2_promptAjaxContainer th{
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+#palv2_promptAjaxContainer tr {
+  cursor: pointer;
+  
+}
+
+#palv2_promptAjaxContainer tr td{
+  border-bottom: 1px solid silver;
+}
+
+#palv2_promptAjaxContainer tr:nth-child(odd){
+  background: #F4F4F4;
+}
+
+
+#palv2_promptAjaxContainer tr.palv2_promptItemSelected,
+#palv2_promptAjaxContainer tr.hover {
+
+  background: #FFFFC7;
+}
+
+
+
+
+
+.palv2_iconTrigger.palv2_iconSingle  {
+  background-position: 0px -16px;
+}
+
+.palv2_iconTrigger.palv2_iconSingle.red  {
+  background-position: 0px -48px;
+}
+
+.palv2_iconTrigger.palv2_iconSingle.green  {
+  background-position: 0px -80px;
+}
+
+
+.palv2_iconTrigger.palv2_iconMultiple  {
+  background-position: 0px -32px;
+}
+
+.palv2_iconTrigger.palv2_iconMultiple.red  {
+  background-position: 0px -64px;
+}
+
+.palv2_iconTrigger.palv2_iconMultiple.green  {
+  background-position: 0px -96px;
+}
+
+
+.palv2_popupAjaxContainer {
+  max-height: 500px;
+}
+
+.palv2_popupAjaxContainer table {
+  width: 100%;
+  text-align: left;
+}
+
+.palv2_popupAjaxContainer tr:nth-child(odd) {
+  background: #F4F4F4;
+}
+
+.palv2_popupAjaxContainer tr.hover {
+  background: #FFFFC7;
+}
+
+
+.palv2_popupAjaxContainer td{
+  padding: 5px;
+}
+
+.palv2_popupAjaxContainer label {
+  cursor: pointer;
+  display: block;
+  line-height: 14px;
+  font-size:12px;
+  font-weight: normal;
+  
+}
+
+
+
+.palv2_popupAjaxContainer input {
+  margin:0px;
+  padding:0px;
+  height: auto;
+}
+
+.palv2_popupSearchContainer {
+  background: white;
+}
+
+.palv2_popupSearchContainer input {
+  padding: 2px;
+}
+
+.palv2_popupSearchResults {
+  text-align: center;
+}
+
+
+.palv2_popupSearchBox,
+.palv2_popupSearchResults {
+  display: inline-block;
+  padding: 10px;
+}
+
+.palv2_popupSearchResults a {
+  cursor: pointer;
+  color: blue;
+  margin-left: 10px;
+  text-decoration: none;
+}
+
+.palv2_popupSearchResults a:hover  {
+  color: black;
+}
+
+/*
+.ui-dialog .ui-dialog-titlebar-close span{
+  margin:-8px 0px 0px -8px;
+}
+
+.ui-icon, .ui-widget-content .ui-icon {
+  display: inline-block;
+  top: 3px;
+  position: relative;  
+  margin-right: 5px;
+}
+*/
+
+.searchboxDiv .ui-icon, .searchboxDiv .ui-widget-content .ui-icon {
+  display: inline-block;
+  top: 3px;
+  position: relative;  
+  margin-right: 5px;
+}
+
+.palv2_pluginContainer {
+  position:relative;
+  white-space:nowrap;
+}
+
+.palv2_pluginContainer .popover {
+}
+
+.palv2_pluginContainer .popover h3{
+  font-size: 10px;
+  line-height:14px;
+}
+
+
+.palv2_pluginContainer .popover-content {
+  overflow: auto;
+  max-height: 300px;
+  
+  min-width: 150px;
+  max-width: 400px;
+  
+}
+
+.palv2_pluginContainer .popover td {
+  font-size: 12px;
+  white-space: nowrap;
+  padding: 3px;
+}
+
+
+.palv2_pluginContainer .popover tr.palv2_trEven {
+  background: #F4F4F4;
+}
+
+.palv2_pluginContainer .popover tr.palv2_trOdd {
+
+}
+
+.palv2_pastedNotFound {
+  background-color: #f2dede;
+  padding: 15px;
+  margin: 15px;
+  overflow: auto;
+  max-height: 60px;
+}
+
+.palv2_pastedNotFound p {
+  margin: 0px;
+}
+
+
+.error_func_name {
+  text-transform:uppercase;
+  font-weight: bold;
+}
+
+.palv2_error table {
+  white-space: nowrap;
+}
+
+.palv2_error pre {
+  margin: 0px;
+  padding: 0px;
+  
+}
+
+.palv2_error table td {
+  vertical-align: top;
+}
+
+.palv2_popupOuterContainer button {
+  padding: 3px;
+}
+
+.palv2_popupOuterContainer label {
+  font-weight: normal;
+}
+
+.palv2_popupAjaxContainer table,
+#palv2_promptAjaxContainer table,
+.palv2_error table,
+.palv2_pluginContainer .popover table {
+  margin: 0px;
+  width: 100%;
+}

@@ -1,0 +1,738 @@
+page 2 (
+    name: Create Style from Copy
+    title: Create Style from Copy
+    appearance {
+        pageMode: modalDialog
+        dialogTemplate: @modal-dialog
+        templateOptions: #DEFAULT#
+    }
+    dialog {
+        resizable: false
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+
+    region details (
+        name: Details
+        type: interactiveReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                SELECT i.item, diff_1 colour_group, diff_2 size_group, dept, class, subclass, short_desc, 
+                       isc.supplier, iss.vpn, isc.origin_country_id origin_country, isc.unit_cost,i.original_retail, 
+                        ismc.manu_country_id manuf_country,
+                        isc.supp_pack_size,
+                        isc.inner_pack_size,
+                        (SELECT Max(season_id)
+                            FROM  nb_v_item_seasons@dasprd ise
+                            WHERE ise.item = i.item) season_id,
+                        (SELECT Max(phase_id)
+                            FROM  nb_v_item_seasons@dasprd ise
+                            WHERE ise.item = i.item
+                            AND season_id IN (        (SELECT Max(season_id)
+                            FROM  nb_v_item_seasons@dasprd ise
+                            WHERE ise.item = i.item))) phase_id  ,
+                        (SELECT Max(diff_1)
+                            FROM  nb_v_item_master@dasprd im1
+                            WHERE im1.item_parent = i.item) colour_id
+                FROM item_master@dasprd i , item_supplier@dasprd iss, item_supp_country@dasprd isc, item_supp_manu_country@dasprd ismc
+                WHERE i.item = to_char(:P2_STYLE)
+                AND isc.item = iss.item     
+                AND iss.item = i.item
+                AND iss.primary_supp_ind = 'Y' 
+                AND isc.primary_supp_ind = 'Y'
+                AND isc.primary_country_ind = 'Y'
+                AND ismc.primary_manu_ctry_ind = 'Y'
+                AND ismc.item = isc.item
+                AND ismc.supplier = isc.supplier;
+                
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @interactive-report
+            templateOptions: #DEFAULT#
+        }
+        advanced {
+            regionDisplaySelector: true
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        pagination {
+            type: rowRangesXToY
+        }
+        performance {
+            maxRowsToProcess: 1000000
+        }
+        searchBar {
+            includeSearchBar: false
+        }
+        detailView {
+            show: true
+        }
+        advanced {
+            savedReportMappingIdentifier: 23743907267999725
+        }
+
+        column CLASS (
+            type: plainText
+            heading {
+                heading: Class
+                alignment: center
+            }
+            layout {
+                sequence: 50
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: E
+            }
+        )
+
+        column COLOUR_GROUP (
+            type: plainText
+            heading {
+                heading: Colour Group
+                alignment: center
+            }
+            layout {
+                sequence: 20
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: B
+            }
+        )
+
+        column COLOUR_ID (
+            type: plainText
+            heading {
+                heading: Colour Id
+                alignment: center
+            }
+            layout {
+                sequence: 180
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: R
+            }
+        )
+
+        column DEPT (
+            type: plainText
+            heading {
+                heading: Dept
+                alignment: center
+            }
+            layout {
+                sequence: 40
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: D
+            }
+        )
+
+        column INNER_PACK_SIZE (
+            type: plainText
+            heading {
+                heading: Inner Pack Size
+                alignment: center
+            }
+            layout {
+                sequence: 150
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: O
+            }
+        )
+
+        column ITEM (
+            type: plainText
+            heading {
+                heading: Item
+                alignment: center
+            }
+            layout {
+                sequence: 10
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: A
+            }
+        )
+
+        column MANUF_COUNTRY (
+            type: plainText
+            heading {
+                heading: Manuf Country
+                alignment: center
+            }
+            layout {
+                sequence: 130
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: M
+            }
+        )
+
+        column ORIGINAL_RETAIL (
+            type: plainText
+            heading {
+                heading: Original Retail
+                alignment: center
+            }
+            layout {
+                sequence: 120
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: L
+            }
+        )
+
+        column ORIGIN_COUNTRY (
+            type: plainText
+            heading {
+                heading: Origin Country
+                alignment: center
+            }
+            layout {
+                sequence: 100
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: J
+            }
+        )
+
+        column PHASE_ID (
+            type: plainText
+            heading {
+                heading: Phase Id
+                alignment: center
+            }
+            layout {
+                sequence: 170
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: Q
+            }
+        )
+
+        column SEASON_ID (
+            type: plainText
+            heading {
+                heading: Season Id
+                alignment: center
+            }
+            layout {
+                sequence: 160
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: P
+            }
+        )
+
+        column SHORT_DESC (
+            type: plainText
+            heading {
+                heading: Short Desc
+                alignment: center
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: G
+            }
+        )
+
+        column SIZE_GROUP (
+            type: plainText
+            heading {
+                heading: Size Group
+                alignment: center
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: C
+            }
+        )
+
+        column SUBCLASS (
+            type: plainText
+            heading {
+                heading: Subclass
+                alignment: center
+            }
+            layout {
+                sequence: 60
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: F
+            }
+        )
+
+        column SUPPLIER (
+            type: plainText
+            heading {
+                heading: Supplier
+                alignment: center
+            }
+            layout {
+                sequence: 80
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: H
+            }
+        )
+
+        column SUPP_PACK_SIZE (
+            type: plainText
+            heading {
+                heading: Supp Pack Size
+                alignment: center
+            }
+            layout {
+                sequence: 140
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: N
+            }
+        )
+
+        column UNIT_COST (
+            type: plainText
+            heading {
+                heading: Unit Cost
+                alignment: center
+            }
+            layout {
+                sequence: 110
+                columnAlignment: end
+            }
+            source {
+                dataType: NUMBER
+            }
+            advanced {
+                endUserAlias: K
+            }
+        )
+
+        column VPN (
+            type: plainText
+            heading {
+                heading: Vpn
+                alignment: center
+            }
+            layout {
+                sequence: 90
+            }
+            source {
+                dataType: STRING
+            }
+            advanced {
+                endUserAlias: I
+            }
+        )
+
+        savedReport 263342 (
+            visibility: primaryDefault
+            view {
+                rowsPerPage: 50
+            }
+
+            displayColumn CLASS (
+                sequence: 5
+            )
+
+            displayColumn COLOUR_GROUP (
+                sequence: 2
+            )
+
+            displayColumn COLOUR_ID (
+                sequence: 18
+            )
+
+            displayColumn DEPT (
+                sequence: 4
+            )
+
+            displayColumn INNER_PACK_SIZE (
+                sequence: 15
+            )
+
+            displayColumn ITEM (
+                sequence: 1
+            )
+
+            displayColumn MANUF_COUNTRY (
+                sequence: 13
+            )
+
+            displayColumn ORIGINAL_RETAIL (
+                sequence: 12
+            )
+
+            displayColumn ORIGIN_COUNTRY (
+                sequence: 10
+            )
+
+            displayColumn PHASE_ID (
+                sequence: 17
+            )
+
+            displayColumn SEASON_ID (
+                sequence: 16
+            )
+
+            displayColumn SHORT_DESC (
+                sequence: 7
+            )
+
+            displayColumn SIZE_GROUP (
+                sequence: 3
+            )
+
+            displayColumn SUBCLASS (
+                sequence: 6
+            )
+
+            displayColumn SUPPLIER (
+                sequence: 8
+            )
+
+            displayColumn SUPP_PACK_SIZE (
+                sequence: 14
+            )
+
+            displayColumn UNIT_COST (
+                sequence: 11
+            )
+
+            displayColumn VPN (
+                sequence: 9
+            )
+
+        )
+
+    )
+
+    region search (
+        name: Search
+        type: staticContent
+        layout {
+            sequence: 10
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        advanced {
+            regionDisplaySelector: true
+        }
+    )
+
+    pageItem P2_NEW_WORKSHEET_ID (
+        type: hidden
+        settings {
+            valueProtected: false
+        }
+        layout {
+            sequence: 10
+            region: @details
+            slot: regionBody
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P2_STYLE (
+        type: textField
+        label {
+            label: Style
+            alignment: left
+        }
+        layout {
+            sequence: 10
+            region: @search
+            slot: regionBody
+            alignment: left
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            width: 30
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    button copy (
+        buttonName: Copy
+        label: Copy
+        layout {
+            sequence: 10
+            region: @details
+            slot: bottom
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P2_STYLE
+        }
+    )
+
+    button search (
+        buttonName: Search
+        label: Search
+        layout {
+            sequence: 10
+            region: @search
+            slot: belowBox
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    process copy-style (
+        name: Copy style
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                declare
+                l_worksheet_id number;
+                
+                
+                cursor c_style_rec is 
+                
+                SELECT i.item, 
+                       diff_1 colour_group,
+                       diff_2 size_group,
+                       dept,
+                       class,
+                       subclass,
+                       short_desc, 
+                       isc.supplier, 
+                       iss.vpn, 
+                       isc.origin_country_id origin_country,
+                       isc.unit_cost,
+                       i.original_retail, 
+                        ismc.manu_country_id manuf_country,
+                        isc.supp_pack_size,
+                        isc.inner_pack_size,
+                        (SELECT Max(season_id)
+                            FROM  nb_v_item_seasons@dasprd ise
+                            WHERE ise.item = i.item) season_id,
+                        (SELECT Max(phase_id)
+                            FROM  nb_v_item_seasons@dasprd ise
+                            WHERE ise.item = i.item
+                            AND season_id IN (        (SELECT Max(season_id)
+                            FROM  nb_v_item_seasons@dasprd ise
+                            WHERE ise.item = i.item))) phase_id  ,
+                        (SELECT Max(diff_1)
+                            FROM  nb_v_item_master@dasprd im1
+                            WHERE im1.item_parent = i.item) colour_id
+                FROM item_master@dasprd i , item_supplier@dasprd iss, item_supp_country@dasprd isc, item_supp_manu_country@dasprd ismc
+                WHERE i.item = To_Char(:P2_STYLE)
+                AND isc.item = iss.item     
+                AND iss.item = i.item
+                AND iss.primary_supp_ind = 'Y' 
+                AND isc.primary_supp_ind = 'Y'
+                AND isc.primary_country_ind = 'Y'
+                AND ismc.primary_manu_ctry_ind = 'Y'
+                AND ismc.item = isc.item
+                AND ismc.supplier = isc.supplier;
+                
+                
+                CURSOR c_sku_recs IS 
+                SELECT item, diff_2 FROM item_master@dasprd WHERE item_parent =   To_Char(:P2_STYLE);
+                
+                
+                CURSOR c_uda_recs IS 
+                SELECT uda_id, uda_value FROM uda_item_lov@dasprd WHERE item = To_Char(:P2_STYLE);
+                
+                begin
+                for r_recs in c_style_rec loop
+                
+                INSERT INTO rms_ext.worksheet_style (
+                     worksheet_status, 
+                     dept, 
+                     class,
+                     subclass, 
+                     style_desc, 
+                     style_short_desc, 
+                     supplier,
+                     origin_country, 
+                     cost_price, 
+                     pack_size_case, 
+                     pack_size_inner,
+                     manufacture_ctry,
+                     rsp, 
+                     season, 
+                     phase, 
+                     delivery_loc, 
+                     vpn,
+                     colour_group, 
+                     colour_id, 
+                     size_group)
+                  VALUES (
+                     'W',
+                     r_recs.dept,
+                     r_recs.class,
+                     r_recs.subclass,
+                     r_recs.short_desc,
+                     r_recs.short_desc,
+                     r_recs.supplier,
+                     r_recs.origin_country,
+                     r_recs.unit_cost,
+                     r_recs.inner_pack_size, --should be the same as inner_pack_size
+                     r_recs.inner_pack_size,
+                    r_recs.manuf_country,
+                     r_recs.original_retail,
+                     r_recs.season_id,
+                     r_recs.phase_id,
+                     NULL, --delivery_loc,
+                     r_recs.vpn,
+                     r_recs.colour_group,
+                     r_recs.colour_id,
+                     r_recs.size_group) returning worksheet_id INTO l_worksheet_id;
+                
+                  Dbms_Output.put_line('Created worksheet_id '||l_worksheet_id);
+                
+                  FOR r_sku_recs IN c_sku_recs LOOP
+                   INSERT INTO rms_ext.worksheet_sku (worksheet_id, sku_size) VALUES (l_worksheet_id,r_sku_recs.diff_2 ); 
+                  END LOOP;
+                
+                  FOR r_uda_recs IN c_uda_recs LOOP
+                   INSERT INTO rms_ext.worksheet_uda (worksheet_id, uda_id, uda_value) VALUES (l_worksheet_id,r_uda_recs.uda_id, r_uda_recs.uda_value ); 
+                  END LOOP;
+                
+                
+                
+                end loop;
+                :P2_NEW_WORKSHEET_ID:=l_worksheet_id;
+                
+                end;
+                
+                
+                ```
+        }
+        execution {
+            sequence: 10
+        }
+        successMessage {
+            successMessage: Style Copied!
+        }
+        advanced {
+            executionMappingIdentifier: 23746167045999747
+        }
+        serverSideCondition {
+            whenButtonPressed: @copy
+        }
+    )
+
+    branch (
+        name: Go to worksheet style detail
+        execution {
+            sequence: 10
+        }
+        behavior {
+            target: {
+                page: 3
+                items: {
+                    P3_WORKSHEET_ID: &P2_NEW_WORKSHEET_ID.
+                }
+                action: resetPagination
+            }
+        }
+        serverSideCondition {
+            whenButtonPressed: @copy
+        }
+    )
+
+)
+

@@ -24,6 +24,8 @@ grant create session to mfcs_integration;
 grant create table to mfcs_integration;
 grant create sequence to mfcs_integration;
 grant create procedure to mfcs_integration;
+grant create trigger to mfcs_integration;
+grant create job to mfcs_integration;
 grant create view to mfcs_integration;
 grant create type to mfcs_integration;
 grant unlimited tablespace to mfcs_integration;

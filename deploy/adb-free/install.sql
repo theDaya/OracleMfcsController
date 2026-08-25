@@ -22,6 +22,7 @@ prompt -- Tables and seed data
 @@../../database/10_tables/03_config_seed.sql
 @@../../database/10_tables/04_event_log.sql
 @@../../database/10_tables/05_master_data.sql
+@@../../database/10_tables/06_ui_tables.sql
 
 prompt
 prompt -- Packages
@@ -40,6 +41,7 @@ prompt -- Packages
 @@../../database/20_packages/14_sku_pkg.sql
 @@../../database/20_packages/15_api_pkg.sql
 @@../../database/20_packages/16_ords_util_pkg.sql
+@@../../database/20_packages/17_ui_pkg.sql
 
 prompt
 prompt -- ORDS

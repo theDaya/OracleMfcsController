@@ -1,0 +1,675 @@
+customAttribute attribute_01 (
+    apexlangName: autocompleteAvailable
+    attribute: 1
+    name: Autocomplete available
+    type: yesNo
+    appearance {
+        sequence: 10
+    }
+    help {
+        helpText: <p>If set to <strong>Yes</strong>, the plugin instance supports displaying <span style="color: rgb(0,0,0);">autocomplete</span> results while typing</p>
+    }
+)
+
+customAttribute attribute_02 (
+    apexlangName: popupDialogAvailable
+    attribute: 2
+    name: POPUP DIALOG available
+    type: yesNo
+    appearance {
+        sequence: 20
+    }
+    help {
+        helpText: <p><span style="color: rgb(0,0,0);">If set to <strong>Yes</strong>, <span> the plugin instance </span>supports displaying all values from collection in popup dialog.</span></p>
+    }
+)
+
+customAttribute attribute_03 (
+    apexlangName: popupDialogMultipleSelection
+    attribute: 3
+    name: POPUP DIALOG Multiple selection
+    type: yesNo
+    appearance {
+        sequence: 30
+    }
+    dependingOn {
+        attribute: @attribute_02/component
+        conditionType: =
+        value: Y
+    }
+    help {
+        helpText: <p><span style="color: rgb(0,0,0);">If set to <strong>Yes</strong>, the plugin instance supports selecting multiple values in popup dialog.</span></p>
+    }
+)
+
+customAttribute attribute_04 (
+    apexlangName: autocompleteSearchCases
+    attribute: 4
+    name: Autocomplete search cases
+    type: selectList
+    validation {
+        required: true
+    }
+    appearance {
+        sequence: 12
+    }
+    default {
+        value: 2
+    }
+    dependingOn {
+        attribute: @attribute_01/component
+        conditionType: =
+        value: Y
+    }
+    help {
+        helpText:
+            ```
+            <p>
+              This attribute Defines the method of filtering data in a autocomplete. Table below describes available values.
+            </p>
+            
+            <table cellpadding="2" cellspacing="10">
+            <tbody>
+              <tr>
+                <th>
+                  Option
+                </th>
+                <th colspan="1">
+                  Description
+                </th>
+                <th colspan="1">
+                  <p>
+                    Special characters
+                  </p>
+                  <p style="text-align: center;">
+                    "%", "_"
+                  </p>
+                </th>
+              </tr>
+              <tr>
+                <td valign="top">
+                  %search_string
+                </td>
+                <td valign="top" colspan="1">
+                  Left side LIKE
+                </td>
+                <td valign="top" colspan="1">
+                  Works
+                </td>
+              </tr>
+              <tr>
+                <td valign="top">
+                  search_string%
+                </td>
+                <td valign="top" colspan="1">
+                  Right side LIKE
+                </td>
+                <td valign="top" colspan="1">
+                  Works
+                </td>
+              </tr>
+              <tr>
+                <td valign="top">
+                  %search_string%
+                </td>
+                <td valign="top" colspan="1">
+                  Both sides LIKE
+                </td>
+                <td valign="top" colspan="1">
+                  Works
+                </td>
+              </tr>
+              <tr>
+                <td valign="top" colspan="1">
+                  %search_string [%]
+                </td>
+                <td valign="top" colspan="1">
+                  Left side LIKE
+                </td>
+                <td valign="top" colspan="1">
+                  No effect
+                </td>
+              </tr>
+              <tr>
+                <td valign="top" colspan="1">
+                  search_string% [%]
+                </td>
+                <td valign="top" colspan="1">
+                  Right side LIKE
+                </td>
+                <td valign="top" colspan="1">
+                  No effect
+                </td>
+              </tr>
+              <tr>
+                <td valign="top" colspan="1">
+                  %search_string% [%]
+                </td>
+                <td valign="top" colspan="1">
+                  Both sides LIKE
+                </td>
+                <td valign="top" colspan="1">
+                  No effect
+                </td>
+              </tr>
+            </tbody>
+            </table>
+            
+            ```
+    }
+
+    entry searchString (
+        sequence: 1
+        display: Search string
+        return: 7
+    )
+
+    entry searchString2 (
+        sequence: 10
+        display: %search_string
+        return: 1
+    )
+
+    entry searchString3 (
+        sequence: 20
+        display: search_string%
+        return: 2
+    )
+
+    entry searchString4 (
+        sequence: 30
+        display: %search_string%
+        return: 3
+    )
+
+    entry searchString5 (
+        sequence: 35
+        display: "search string [%]"
+        return: 8
+    )
+
+    entry searchString6 (
+        sequence: 40
+        display: "%search_string [%]"
+        return: 4
+    )
+
+    entry searchString7 (
+        sequence: 50
+        display: "search_string% [%]"
+        return: 5
+    )
+
+    entry searchString8 (
+        sequence: 60
+        display: "%search_string% [%]"
+        return: 6
+    )
+
+)
+
+customAttribute attribute_05 (
+    apexlangName: valuesSeparator
+    attribute: 5
+    name: Values separator
+    validation {
+        required: true
+        maxLength: 1
+    }
+    appearance {
+        sequence: 50
+    }
+    builder {
+        displayWidth: 5
+    }
+    default {
+        value: :
+    }
+    help {
+        helpText:
+            ```
+            <p>
+              This attribute specify what character will be used to delimit multiple values.
+            </p>
+            ```
+    }
+)
+
+customAttribute attribute_06 (
+    apexlangName: debounceTimeInMs
+    attribute: 6
+    name: Debounce time in ms
+    validation {
+        required: true
+        maxLength: 4
+    }
+    appearance {
+        sequence: 60
+    }
+    builder {
+        displayWidth: 10
+    }
+    default {
+        value: 300
+    }
+    help {
+        helpText:
+            ```
+            <p>
+            Time in milliseconds after which autocomplete be triggered.
+            </p>
+            ```
+    }
+)
+
+customAttribute attribute_08 (
+    apexlangName: enablePasteEvent
+    attribute: 8
+    name: Enable paste event
+    type: yesNo
+    appearance {
+        sequence: 35
+    }
+    help {
+        helpText:
+            ```
+            <p>
+              If set to <strong>YES</strong>, the plugin instance</span> supports paste event.
+            </p>
+            <p>    
+              <strong>Important note</strong></br>
+              After paste event, values are not being matched automatically with collection data! Values being pasted are setted as the plugin instance value. Only after opening dialog mode and confirming matched values the proper values are being set to item.
+            </p>  
+            ```
+    }
+)
+
+customAttribute attribute_09 (
+    apexlangName: autocompleteFilterByColumn
+    attribute: 9
+    name: Autocomplete filter by column
+    type: selectList
+    validation {
+        required: true
+    }
+    appearance {
+        sequence: 11
+    }
+    default {
+        value: 1
+    }
+    dependingOn {
+        attribute: @attribute_01/component
+        conditionType: =
+        value: Y
+    }
+    help {
+        helpText:
+            ```
+            <p>
+               This attrubute defines how data will be filtered. The condition to match is defined in "autocomplete search cases" attribute.
+            </p>
+            <table cellspacing="2" cellpadding="10">
+            <tbody>
+            <tr>
+              <td valign="top" colspan="1">
+                Value
+              </td>
+              <td valign="top" colspan="1">
+                Description
+              </td>
+            </tr>
+            <tr>
+              <td valign="top" colspan="1">
+                <strong>Column_1</strong>
+              </td>
+              <td valign="top" colspan="1">
+                By first column in plugin data source. If APEX LOV used as data source it will be "return" column from LOV.
+              </td>
+            </tr>
+            <tr>
+              <td valign="top">
+                <strong>Column_2&nbsp;</strong>
+              </td>
+              <td valign="top">
+                By second column in plugin data source. If APEX LOV used as data source it will be "display" column from LOV.
+              </td>
+            </tr>
+            <tr>
+              <td valign="top" colspan="1">
+                <strong>Both</strong>
+              </td>
+              <td valign="top" colspan="1">
+                By borh columns in plugin data source or APEX LOV. 
+              </td>
+            </tr>
+            </tbody>
+            </table>
+            ```
+    }
+
+    entry both (
+        sequence: 30
+        display: Both
+        return: 3
+    )
+
+    entry column1 (
+        sequence: 10
+        display: Column_1
+        return: 1
+    )
+
+    entry column2 (
+        sequence: 20
+        display: Column_2
+        return: 2
+    )
+
+)
+
+customAttribute attribute_10 (
+    apexlangName: columnSequence
+    attribute: 10
+    name: Column sequence
+    type: selectList
+    validation {
+        required: true
+    }
+    appearance {
+        sequence: 100
+    }
+    default {
+        value: 1
+    }
+    help {
+        helpText:
+            ```
+            <p>
+              This attribute defines which column is treated as return and which as display column in data source. </br>
+            </p>
+            <p>
+              Example SQL (might be source of APEX LOV):
+              <pre style="background-color: #F2F2F2;padding:5px;">
+                select d, r from emp</pre>
+              Column <b>d</b> is represented by <b>Column_1</b> string in this attribute.</br>
+              Column <b>r</b> is represented by <b>Column_2</b> string in this attribute.</br>
+            </p>
+            <p>
+              <ul>
+                <li style="padding: 5px;">
+                  <b>Column_1, Column_2</b></br>
+                  The return value will be value from column <b>d</b></br>
+                  The label will be value from column <b>r</b> 
+                </li>
+                <li style="padding: 5px;">
+                  <b>Column_2, Column_1</b></br>
+                  The return value will be value from column <b>r</b></br>
+                  The label will be value from column <b>d</b> 
+                  
+                </li>
+                <li style="padding: 5px;">
+                  <b>Column_1, Column_1</b></br>
+                  The return value will be value from column <b>d</b></br>
+                  The label will be value from column <b>d</b> 
+                </li>
+                <li style="padding: 5px;">
+                  <b>Column_2, Column_2</b></br>
+                  The return value will be value from column <b>r</b></br>
+                  The label will be value from column <b>r</b> 
+                </li>    
+                
+              </ul>
+            </p>
+            ```
+    }
+
+    entry column1Column1Column1Asc (
+        sequence: 200
+        display: Column_1, Column_1 | Column_1 asc
+        return: 3
+    )
+
+    entry column1Column1Column1AscNumber (
+        sequence: 220
+        display: Column_1, Column_1 | Column_1 asc (number)
+        return: 25
+    )
+
+    entry column1Column1Column1Desc (
+        sequence: 210
+        display: Column_1, Column_1 | Column_1 desc
+        return: 14
+    )
+
+    entry column1Column1Column1DescNumber (
+        sequence: 230
+        display: Column_1, Column_1 | Column_1 desc (number)
+        return: 26
+    )
+
+    entry column1Column2Column1Asc (
+        sequence: 280
+        display: Column_1, Column_2 | Column_1 asc
+        return: 7
+    )
+
+    entry column1Column2Column1AscNumber (
+        sequence: 300
+        display: Column_1, Column_2 | Column_1 asc (number)
+        return: 17
+    )
+
+    entry column1Column2Column1Desc (
+        sequence: 290
+        display: Column_1, Column_2 | Column_1 desc
+        return: 8
+    )
+
+    entry column1Column2Column1DescNumber (
+        sequence: 310
+        display: Column_1, Column_2 | Column_1 desc (number)
+        return: 18
+    )
+
+    entry column1Column2Column2Asc (
+        sequence: 320
+        display: "Column_1, Column_2 | Column_2 asc "
+        return: 1
+    )
+
+    entry column1Column2Column2AscNumber (
+        sequence: 340
+        display: Column_1, Column_2 | Column_2 asc (number)
+        return: 19
+    )
+
+    entry column1Column2Column2Desc (
+        sequence: 330
+        display: Column_1, Column_2 | Column_2 desc
+        return: 6
+    )
+
+    entry column1Column2Column2DescNumber (
+        sequence: 350
+        display: Column_1, Column_2 | Column_2 desc (number)
+        return: 20
+    )
+
+    entry column2Column1Column1Asc (
+        sequence: 360
+        display: Column_2, Column_1 | Column_1 asc
+        return: 2
+    )
+
+    entry column2Column1Column1AscNumber (
+        sequence: 380
+        display: Column_2, Column_1 | Column_1 asc (number)
+        return: 21
+    )
+
+    entry column2Column1Column1Desc (
+        sequence: 370
+        display: Column_2, Column_1 | Column_1 desc
+        return: 10
+    )
+
+    entry column2Column1Column1DescNumber (
+        sequence: 390
+        display: Column_2, Column_1 | Column_1 desc (number)
+        return: 22
+    )
+
+    entry column2Column1Column2Asc (
+        sequence: 400
+        display: Column_2, Column_1 | Column_2 asc
+        return: 11
+    )
+
+    entry column2Column1Column2AscNumber (
+        sequence: 420
+        display: Column_2, Column_1 | Column_2 asc (number)
+        return: 23
+    )
+
+    entry column2Column1Column2Desc (
+        sequence: 410
+        display: Column_2, Column_1 | Column_2 desc
+        return: 12
+    )
+
+    entry column2Column1Column2DescNumber (
+        sequence: 430
+        display: Column_2, Column_1 | Column_2 desc (number)
+        return: 24
+    )
+
+    entry column2Column2Column2Asc (
+        sequence: 240
+        display: Column_2, Column_2 | Column_2 asc
+        return: 4
+    )
+
+    entry column2Column2Column2AscNumber (
+        sequence: 260
+        display: Column_2, Column_2 | Column_2 asc (number)
+        return: 27
+    )
+
+    entry column2Column2Column2Desc (
+        sequence: 250
+        display: Column_2, Column_2 | Column_2 desc
+        return: 16
+    )
+
+    entry column2Column2Column2DescNumber (
+        sequence: 270
+        display: "Column_2, Column_2 | Column_2 desc (number) "
+        return: 28
+    )
+
+)
+
+customAttribute attribute_11 (
+    apexlangName: maxLengthForMultipleValues
+    attribute: 11
+    name: Max length for multiple values
+    validation {
+        required: true
+        maxLength: 5
+    }
+    appearance {
+        sequence: 110
+    }
+    builder {
+        displayWidth: 5
+    }
+    default {
+        value: 32000
+    }
+    help {
+        helpText:
+            ```
+            <p>
+              Specify how many characters can be passed to the plugin instance. If computed length of selected or pasted values exceeds limit, plugin will display confirm dialog box to choose what action should be applied.
+            </p>
+            <p>
+            <strong>Important note: </strong></br>
+            The length of pasted value might be different from computed length of returned string in popup mode. It is because of possible difference in length of return and display value - depends on whether they were pasted values of return or display column.
+            </p>
+            ```
+    }
+)
+
+customAttribute attribute_12 (
+    apexlangName: showReturnColumn
+    attribute: 12
+    name: Show return column
+    type: yesNo
+    appearance {
+        sequence: 120
+    }
+    help {
+        helpText:
+            ```
+            <p>
+              If set to <strong >YES</strong>, the plugin instance supports displaying "return value" in autocomplete and popup dialog.
+            </p>
+            ```
+    }
+)
+
+customAttribute attribute_13 (
+    apexlangName: submitWhenEnterPressed
+    attribute: 13
+    name: Submit when enter pressed
+    type: yesNo
+    appearance {
+        sequence: 130
+    }
+    help {
+        helpText:
+            ```
+            <p>
+              If set to <strong >YES, </strong>APEX form is submitted after pressing Enter key within the plugin instance.
+            </p>
+            ```
+    }
+)
+
+customAttribute attribute_14 (
+    apexlangName: showApexProcessing
+    attribute: 14
+    name: Show APEX processing
+    type: yesNo
+    appearance {
+        sequence: 140
+    }
+    dependingOn {
+        attribute: @attribute_13/component
+        conditionType: =
+        value: Y
+    }
+    help {
+        helpText: <p>If set to YES then after submitting APEX form (with Enter key) the APEX submit indicator is visible.</p>
+    }
+)
+
+customAttribute attribute_15 (
+    apexlangName: recreateCollectionOnPageLoad
+    attribute: 15
+    name: Recreate collection on page load
+    type: yesNo
+    appearance {
+        sequence: 150
+    }
+    help {
+        helpText:
+            ```
+            <p>
+              If set to <strong>YES</strong> data source will be reloaded into collection each time page ends loading.
+            </p>
+            ```
+    }
+)
+

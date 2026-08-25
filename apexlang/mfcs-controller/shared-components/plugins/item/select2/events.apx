@@ -1,0 +1,36 @@
+event slctchange (
+    name: Change
+)
+
+event slctclose (
+    name: Close
+)
+
+event slctclosing (
+    name: Closing
+)
+
+event slctopen (
+    name: Open
+)
+
+event slctopening (
+    name: Opening
+)
+
+event slctselect (
+    name: Select
+)
+
+event slctselecting (
+    name: Selecting
+)
+
+event slctunselect (
+    name: Unselect
+)
+
+event slctunselecting (
+    name: Unselecting
+)
+

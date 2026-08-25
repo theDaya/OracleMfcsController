@@ -1,0 +1,948 @@
+page 4 (
+    name: Activity
+    title: Activity
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+
+    region controls (
+        name: Controls
+        type: staticContent
+        layout {
+            sequence: 10
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region drafts (
+        name: Drafts
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select d.draft_id,
+                       d.draft_status ui_status,
+                       r.request_status pipeline_status,
+                       d.operation_name,
+                       d.action_request_id,
+                       coalesce(
+                           d.style,
+                           r.style_no,
+                           json_value(d.response_payload, '$.STYLE'),
+                           json_value(r.response_payload, '$.STYLE')
+                       ) style,
+                       coalesce(
+                           d.order_no,
+                           r.order_no,
+                           json_value(d.response_payload, '$.ORDER_NO'),
+                           json_value(r.response_payload, '$.ORDER_NO')
+                       ) order_no,
+                       d.description,
+                       d.http_status ui_http_status,
+                       d.created_at,
+                       d.submitted_at,
+                       d.updated_at
+                  from ui_draft d
+                  left join request r
+                    on r.action_request_id = d.action_request_id
+                 where :P4_DRAFT_ID is null
+                    or d.draft_id = :P4_DRAFT_ID
+                 order by d.updated_at desc
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column ACTION_REQUEST_ID (
+            type: plainText
+            heading {
+                heading: Action Request ID
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column CREATED_AT (
+            type: plainText
+            heading {
+                heading: Created
+            }
+            layout {
+                sequence: 100
+            }
+        )
+
+        column DESCRIPTION (
+            type: plainText
+            heading {
+                heading: Description
+            }
+            layout {
+                sequence: 80
+            }
+        )
+
+        column DRAFT_ID (
+            type: plainText
+            heading {
+                heading: Draft ID
+                alignment: end
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column OPERATION_NAME (
+            type: plainText
+            heading {
+                heading: Operation
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column ORDER_NO (
+            type: plainText
+            heading {
+                heading: Order
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column PIPELINE_STATUS (
+            type: plainText
+            heading {
+                heading: Pipeline Status
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column STYLE (
+            type: plainText
+            heading {
+                heading: Style
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column SUBMITTED_AT (
+            type: plainText
+            heading {
+                heading: Submitted
+            }
+            layout {
+                sequence: 110
+            }
+        )
+
+        column UI_HTTP_STATUS (
+            type: plainText
+            heading {
+                heading: UI HTTP
+            }
+            layout {
+                sequence: 90
+            }
+        )
+
+        column UI_STATUS (
+            type: plainText
+            heading {
+                heading: Draft Status
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column UPDATED_AT (
+            type: plainText
+            heading {
+                heading: Updated
+            }
+            layout {
+                sequence: 120
+            }
+        )
+    )
+
+    region created-entities (
+        name: Created Entities
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select d.draft_id,
+                       m.source_style_ref,
+                       m.mfcs_style_no,
+                       m.source_variant_ref,
+                       m.sku_size,
+                       m.sku_width,
+                       m.mfcs_sku_no,
+                       m.source_order_ref,
+                       m.mfcs_order_no
+                  from ui_draft d
+                  join entity_map m
+                    on m.source_system = d.source_system
+                   and (
+                        nvl(m.source_style_ref, '-') = nvl(d.source_style_ref, '-')
+                        or nvl(m.source_order_ref, '-') = nvl(d.source_order_ref, '-')
+                   )
+                 where :P4_DRAFT_ID is null
+                    or d.draft_id = :P4_DRAFT_ID
+                 order by d.draft_id desc,
+                          m.source_variant_ref nulls first,
+                          m.source_order_ref nulls first
+                ```
+        }
+        layout {
+            sequence: 30
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column DRAFT_ID (
+            type: plainText
+            heading {
+                heading: Draft ID
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column MFCS_ORDER_NO (
+            type: plainText
+            heading {
+                heading: MFCS Order
+            }
+            layout {
+                sequence: 90
+            }
+        )
+
+        column MFCS_SKU_NO (
+            type: plainText
+            heading {
+                heading: MFCS SKU
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column MFCS_STYLE_NO (
+            type: plainText
+            heading {
+                heading: MFCS Style
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column SKU_SIZE (
+            type: plainText
+            heading {
+                heading: Size
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column SKU_WIDTH (
+            type: plainText
+            heading {
+                heading: Width
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column SOURCE_ORDER_REF (
+            type: plainText
+            heading {
+                heading: Source Order Ref
+            }
+            layout {
+                sequence: 80
+            }
+        )
+
+        column SOURCE_STYLE_REF (
+            type: plainText
+            heading {
+                heading: Source Style Ref
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column SOURCE_VARIANT_REF (
+            type: plainText
+            heading {
+                heading: Source Variant Ref
+            }
+            layout {
+                sequence: 40
+            }
+        )
+    )
+
+    region generated-payloads (
+        name: Generated Payloads
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_id,
+                       dbms_lob.substr(request_payload, 4000, 1) generated_payload,
+                       dbms_lob.substr(preview_payload, 4000, 1) preview_result,
+                       dbms_lob.substr(response_payload, 4000, 1) final_response
+                  from ui_draft
+                 where :P4_DRAFT_ID is null
+                    or draft_id = :P4_DRAFT_ID
+                 order by updated_at desc
+                ```
+        }
+        layout {
+            sequence: 40
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column DRAFT_ID (
+            type: plainText
+            heading {
+                heading: Draft ID
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column FINAL_RESPONSE (
+            type: plainText
+            heading {
+                heading: Final Response
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column GENERATED_PAYLOAD (
+            type: plainText
+            heading {
+                heading: Generated Payload
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column PREVIEW_RESULT (
+            type: plainText
+            heading {
+                heading: Preview Result
+            }
+            layout {
+                sequence: 30
+            }
+        )
+    )
+
+    region endpoint-call-path (
+        name: Endpoint Call Path
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select d.draft_id,
+                       s.step_sequence,
+                       s.step_code,
+                       s.step_status,
+                       a.attempt_number,
+                       a.http_method,
+                       a.endpoint,
+                       a.http_status,
+                       a.attempt_status,
+                       a.started_at,
+                       a.completed_at,
+                       dbms_lob.substr(a.request_payload, 4000, 1) endpoint_request,
+                       dbms_lob.substr(a.response_payload, 4000, 1) endpoint_response,
+                       s.last_error_message
+                  from ui_draft d
+                  join step s
+                    on s.action_request_id = d.action_request_id
+                  left join attempt a
+                    on a.action_request_id = s.action_request_id
+                   and a.step_code = s.step_code
+                 where :P4_DRAFT_ID is null
+                    or d.draft_id = :P4_DRAFT_ID
+                 order by d.draft_id desc,
+                          s.step_sequence,
+                          nvl(a.attempt_number, 0)
+                ```
+        }
+        layout {
+            sequence: 50
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column ATTEMPT_NUMBER (
+            type: plainText
+            heading {
+                heading: Attempt
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column ATTEMPT_STATUS (
+            type: plainText
+            heading {
+                heading: Attempt Status
+            }
+            layout {
+                sequence: 90
+            }
+        )
+
+        column COMPLETED_AT (
+            type: plainText
+            heading {
+                heading: Completed
+            }
+            layout {
+                sequence: 110
+            }
+        )
+
+        column DRAFT_ID (
+            type: plainText
+            heading {
+                heading: Draft ID
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column ENDPOINT (
+            type: plainText
+            heading {
+                heading: Endpoint
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column ENDPOINT_REQUEST (
+            type: plainText
+            heading {
+                heading: Endpoint Request
+            }
+            layout {
+                sequence: 120
+            }
+        )
+
+        column ENDPOINT_RESPONSE (
+            type: plainText
+            heading {
+                heading: Endpoint Response
+            }
+            layout {
+                sequence: 130
+            }
+        )
+
+        column HTTP_METHOD (
+            type: plainText
+            heading {
+                heading: Method
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column HTTP_STATUS (
+            type: plainText
+            heading {
+                heading: HTTP
+            }
+            layout {
+                sequence: 80
+            }
+        )
+
+        column LAST_ERROR_MESSAGE (
+            type: plainText
+            heading {
+                heading: Last Error
+            }
+            layout {
+                sequence: 140
+            }
+        )
+
+        column STARTED_AT (
+            type: plainText
+            heading {
+                heading: Started
+            }
+            layout {
+                sequence: 100
+            }
+        )
+
+        column STEP_CODE (
+            type: plainText
+            heading {
+                heading: Step
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column STEP_SEQUENCE (
+            type: plainText
+            heading {
+                heading: Seq
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column STEP_STATUS (
+            type: plainText
+            heading {
+                heading: Step Status
+            }
+            layout {
+                sequence: 40
+            }
+        )
+    )
+
+    region event-log (
+        name: Event Log
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select log_id,
+                       action_request_id,
+                       step_code,
+                       event_level,
+                       event_phase,
+                       message,
+                       created_at
+                  from event_log
+                 where :P4_DRAFT_ID is null
+                    or action_request_id in (
+                           select action_request_id
+                             from ui_draft
+                            where draft_id = :P4_DRAFT_ID
+                       )
+                 order by created_at desc
+                 fetch first 100 rows only
+                ```
+        }
+        layout {
+            sequence: 60
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column ACTION_REQUEST_ID (
+            type: plainText
+            heading {
+                heading: Action Request ID
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column CREATED_AT (
+            type: plainText
+            heading {
+                heading: Created
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column EVENT_LEVEL (
+            type: plainText
+            heading {
+                heading: Level
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column EVENT_PHASE (
+            type: plainText
+            heading {
+                heading: Phase
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column LOG_ID (
+            type: plainText
+            heading {
+                heading: Log ID
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column MESSAGE (
+            type: plainText
+            heading {
+                heading: Message
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column STEP_CODE (
+            type: plainText
+            heading {
+                heading: Step
+            }
+            layout {
+                sequence: 30
+            }
+        )
+    )
+
+    region master-refresh (
+        name: Master Data Refresh
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select data_type,
+                       source,
+                       http_status,
+                       row_count,
+                       message,
+                       completed_at
+                  from master_refresh
+                 order by data_type
+                ```
+        }
+        layout {
+            sequence: 70
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column COMPLETED_AT (
+            type: plainText
+            heading {
+                heading: Completed
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column DATA_TYPE (
+            type: plainText
+            heading {
+                heading: Data Type
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column HTTP_STATUS (
+            type: plainText
+            heading {
+                heading: HTTP
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column MESSAGE (
+            type: plainText
+            heading {
+                heading: Message
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column ROW_COUNT (
+            type: plainText
+            heading {
+                heading: Rows
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column SOURCE (
+            type: plainText
+            heading {
+                heading: Source
+            }
+            layout {
+                sequence: 20
+            }
+        )
+    )
+
+    pageItem P4_DRAFT_ID (
+        type: selectList
+        label {
+            label: Draft
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_id || ' - ' || nvl(description, action_request_id)
+                       || ' - ' || draft_status,
+                       draft_id
+                  from ui_draft
+                 order by updated_at desc
+                ```
+            displayExtraValues: true
+        }
+        layout {
+            sequence: 10
+            region: @controls
+            slot: regionBody
+            columnSpan: 4
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P4_REFRESH_SUMMARY (
+        type: hidden
+        settings {
+            valueProtected: false
+        }
+        layout {
+            sequence: 20
+            region: @controls
+            slot: regionBody
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    button apply (
+        buttonName: APPLY
+        label: Apply
+        layout {
+            sequence: 10
+            region: @controls
+            slot: change
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button edit-draft (
+        buttonName: EDIT_DRAFT
+        label: Edit Selected Draft
+        layout {
+            sequence: 20
+            region: @controls
+            slot: change
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 3
+                items: {
+                    P3_DRAFT_ID: &P4_DRAFT_ID.
+                }
+                action: resetPagination
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P4_DRAFT_ID
+        }
+    )
+
+    button refresh-master (
+        buttonName: REFRESH_MASTER
+        label: Refresh Master Data
+        layout {
+            sequence: 30
+            region: @controls
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    process refresh-master-data (
+        name: Refresh Master Data
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                declare
+                    l_summary clob;
+                begin
+                    master_pkg.refresh_all(l_summary);
+                    :P4_REFRESH_SUMMARY := dbms_lob.substr(l_summary, 4000, 1);
+                end;
+                ```
+        }
+        execution {
+            sequence: 10
+        }
+        successMessage {
+            successMessage: Master data refresh completed.
+        }
+        serverSideCondition {
+            whenButtonPressed: @refresh-master
+        }
+    )
+
+)

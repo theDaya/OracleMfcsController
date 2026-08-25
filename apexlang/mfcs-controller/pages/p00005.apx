@@ -1,0 +1,355 @@
+page 5 (
+    name: Browse MFCS
+    title: Browse MFCS
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+
+    region filters (
+        name: Filters
+        type: staticContent
+        layout {
+            sequence: 10
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region local-drafts (
+        name: Local Drafts
+        type: interactiveReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_id,
+                       draft_status,
+                       operation_name,
+                       action_request_id,
+                       style,
+                       order_no,
+                       source_style_ref,
+                       source_order_ref,
+                       description,
+                       http_status,
+                       created_at,
+                       updated_at,
+                       submitted_at
+                  from ui_draft
+                 order by updated_at desc
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @interactive-report
+            templateOptions: #DEFAULT#
+        }
+        link {
+            linkColumn: customTarget
+            target: {
+                page: 3
+                items: {
+                    P3_DRAFT_ID: #DRAFT_ID#
+                }
+                action: resetPagination
+            }
+            linkIcon: <img src="#IMAGE_PREFIX#app_ui/img/icons/apex-edit-pencil.png" class="apex-edit-pencil" alt="">
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        pagination {
+            type: rowRangesXToY
+        }
+        actionsMenu {
+            subscription: false
+        }
+    )
+
+    region mfcs-styles (
+        name: MFCS Styles
+        type: interactiveReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select item,
+                       item_desc,
+                       short_desc,
+                       dept,
+                       class_no,
+                       subclass_no,
+                       diff1,
+                       diff2,
+                       status,
+                       item_level,
+                       tran_level
+                  from json_table(
+                           browse_pkg.list_styles(:P5_STYLE_LIMIT, :P5_DEPT, '1'),
+                           '$.items[*]'
+                           columns
+                               item         varchar2(30)  path '$.item',
+                               item_desc    varchar2(250) path '$.itemDescription',
+                               short_desc   varchar2(250) path '$.shortDescription',
+                               dept         number        path '$.dept',
+                               class_no     number        path '$.class',
+                               subclass_no  number        path '$.subclass',
+                               diff1        varchar2(60)  path '$.diff1',
+                               diff2        varchar2(60)  path '$.diff2',
+                               status       varchar2(30)  path '$.status',
+                               item_level   number        path '$.itemLevel',
+                               tran_level   number        path '$.tranLevel'
+                       )
+                ```
+        }
+        layout {
+            sequence: 30
+            slot: contentBody
+        }
+        appearance {
+            template: @interactive-report
+            templateOptions: #DEFAULT#
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        pagination {
+            type: rowRangesXToY
+        }
+        actionsMenu {
+            subscription: false
+        }
+    )
+
+    region mfcs-orders (
+        name: MFCS Orders
+        type: interactiveReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select order_no,
+                       supplier,
+                       status,
+                       currency_code,
+                       not_before_date,
+                       not_after_date,
+                       written_date,
+                       total_qty
+                  from json_table(
+                           browse_pkg.list_orders(:P5_ORDER_LIMIT, :P5_SUPPLIER),
+                           '$.items[*]'
+                           columns
+                               order_no        varchar2(30) path '$.orderNo',
+                               supplier        number       path '$.supplier',
+                               status          varchar2(30) path '$.status',
+                               currency_code   varchar2(3)  path '$.currencyCode',
+                               not_before_date varchar2(30) path '$.notBeforeDate',
+                               not_after_date  varchar2(30) path '$.notAfterDate',
+                               written_date    varchar2(30) path '$.writtenDate',
+                               total_qty       number       path '$.totalQuantity'
+                       )
+                ```
+        }
+        layout {
+            sequence: 40
+            slot: contentBody
+        }
+        appearance {
+            template: @interactive-report
+            templateOptions: #DEFAULT#
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        pagination {
+            type: rowRangesXToY
+        }
+        actionsMenu {
+            subscription: false
+        }
+    )
+
+    pageItem P5_DEPT (
+        type: selectList
+        label {
+            label: Department
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select data_code || ' - ' || nvl(description, data_code), data_code
+                  from master_data
+                 where data_type in ('DEPARTMENT', 'DEPARTMENT_SVC')
+                 order by data_code
+                ```
+            displayExtraValues: true
+        }
+        layout {
+            sequence: 10
+            region: @filters
+            slot: regionBody
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P5_SUPPLIER (
+        type: selectList
+        label {
+            label: Supplier
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select data_code || ' - ' || nvl(description, data_code), data_code
+                  from master_data
+                 where data_type in ('SUPPLIER', 'SUPPLIER_SVC')
+                 order by data_code
+                ```
+            displayExtraValues: true
+        }
+        layout {
+            sequence: 20
+            region: @filters
+            slot: regionBody
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P5_STYLE_LIMIT (
+        type: numberField
+        label {
+            label: Style Limit
+            alignment: left
+        }
+        settings {
+            numberAlignment: end
+            virtualKeyboard: text
+        }
+        layout {
+            sequence: 30
+            region: @filters
+            slot: regionBody
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        default {
+            type: static
+            staticValue: 50
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P5_ORDER_LIMIT (
+        type: numberField
+        label {
+            label: Order Limit
+            alignment: left
+        }
+        settings {
+            numberAlignment: end
+            virtualKeyboard: text
+        }
+        layout {
+            sequence: 40
+            region: @filters
+            slot: regionBody
+            startNewRow: false
+            columnSpan: 2
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        default {
+            type: static
+            staticValue: 50
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    button apply (
+        buttonName: APPLY
+        label: Apply
+        layout {
+            sequence: 10
+            region: @filters
+            slot: change
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button create-draft (
+        buttonName: CREATE_DRAFT
+        label: New Draft
+        layout {
+            sequence: 20
+            region: @filters
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 3
+                clearCache: 3
+                action: resetPagination
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+)

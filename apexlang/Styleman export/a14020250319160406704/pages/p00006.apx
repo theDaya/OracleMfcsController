@@ -1,0 +1,333 @@
+page 6 (
+    name: Create Sku
+    title: Create Sku
+    appearance {
+        pageMode: modalDialog
+        dialogTemplate: @modal-dialog
+        templateOptions: #DEFAULT#
+    }
+    dialog {
+        resizable: false
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    javaScript {
+        functionAndGlobalVariableDeclaration: var htmldb_delete_message='"DELETE_CONFIRM_MSG"';
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+        formAutoComplete: false
+    }
+
+    region buttons (
+        name: Buttons
+        type: staticContent
+        layout {
+            sequence: 20
+            slot: dialogFooter
+        }
+        appearance {
+            template: @buttons-container
+            templateOptions: #DEFAULT#
+        }
+        settings {
+            outputAs: text
+        }
+    )
+
+    region create-form (
+        name: Create Form
+        type: form
+        source {
+            location: localDatabase
+            tableName: WORKSHEET_SKU
+        }
+        layout {
+            sequence: 10
+            slot: contentBody
+        }
+        appearance {
+            template: @blank-with-attributes
+            templateOptions: #DEFAULT#
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+    )
+
+    pageItem P6_SIZE_GROUP (
+        type: hidden
+        layout {
+            sequence: 30
+            region: @create-form
+            slot: regionBody
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P6_SKU_QTY (
+        type: displayOnly
+        label {
+            label: Sku Qty
+            alignment: left
+        }
+        layout {
+            sequence: 50
+            region: @create-form
+            slot: regionBody
+            alignment: left
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @create-form
+            column: SKU_QTY
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P6_SKU_SIZE (
+        type: selectList
+        label {
+            label: Sku Size
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery: SELECT  diff_id ||' - '||diff_desc, diff_id FROM nb_v_diff_ids@dasprd WHERE diff_id IN ( SELECT diff_id FROM diff_group_detail@dasprd WHERE diff_group_id = '1020')
+        }
+        layout {
+            sequence: 40
+            region: @create-form
+            slot: regionBody
+            alignment: left
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+            height: 1
+        }
+        source {
+            formRegion: @create-form
+            column: SKU_SIZE
+            dataType: varchar2
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P6_WORKSHEET_ID (
+        type: displayOnly
+        label {
+            label: Worksheet Id
+            alignment: left
+        }
+        layout {
+            sequence: 20
+            region: @create-form
+            slot: regionBody
+            alignment: left
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @create-form
+            column: WORKSHEET_ID
+            dataType: number
+        }
+        security {
+            encryptSessionState: false
+        }
+    )
+
+    pageItem P6_WORKSHEET_SKU_ID (
+        type: hidden
+        layout {
+            sequence: 10
+            region: @create-form
+            slot: regionBody
+        }
+        source {
+            formRegion: @create-form
+            column: WORKSHEET_SKU_ID
+            dataType: number
+            queryOnly: true
+            primaryKey: true
+        }
+        security {
+            sessionStateProtection: checksumRequiredSessionLevel
+            encryptSessionState: false
+        }
+    )
+
+    button cancel (
+        buttonName: CANCEL
+        label: Cancel
+        layout {
+            sequence: 10
+            region: @buttons
+            slot: close
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: definedByDynamicAction
+        }
+    )
+
+    button create (
+        buttonName: CREATE
+        label: Create
+        layout {
+            sequence: 40
+            region: @buttons
+            slot: next
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: insert
+        }
+        serverSideCondition {
+            type: itemIsNull
+            item: P6_WORKSHEET_SKU_ID
+        }
+    )
+
+    button delete (
+        buttonName: DELETE
+        label: Delete
+        layout {
+            sequence: 20
+            region: @buttons
+            slot: delete
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectUrl
+            targetUrl: javascript:apex.confirm(htmldb_delete_message,'DELETE');
+            executeValidations: false
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: delete
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P6_WORKSHEET_SKU_ID
+        }
+    )
+
+    button save (
+        buttonName: SAVE
+        label: Apply Changes
+        layout {
+            sequence: 30
+            region: @buttons
+            slot: next
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: update
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P6_WORKSHEET_SKU_ID
+        }
+    )
+
+    dynamicAction cancel-dialog (
+        name: Cancel Dialog
+        execution {
+            sequence: 10
+        }
+        when {
+            event: click
+            selectionType: button
+            button: @cancel
+        }
+
+        action native-dialog-cancel (
+            action: cancelDialog
+            execution {
+                sequence: 10
+                fireOnInit: false
+            }
+        )
+
+    )
+
+    process initialize-form-create-form (
+        name: Initialize form Create Form
+        type: formInitialization
+        formRegion: @create-form
+        execution {
+            sequence: 10
+            point: beforeHeader
+        }
+        advanced {
+            executionMappingIdentifier: 43023045758178810
+        }
+    )
+
+    process process-form-create-form (
+        name: Process form Create Form
+        type: formAutoRowProcessing
+        formRegion: @create-form
+        execution {
+            sequence: 10
+        }
+        successMessage {
+            successMessage: Sku Created
+        }
+        advanced {
+            executionMappingIdentifier: 43023424525178810
+        }
+    )
+
+    branch (
+        name: brach to page 3
+        execution {
+            sequence: 10
+        }
+        behavior {
+            target: {
+                page: 3
+                items: {
+                    P3_WORKSHEET_ID: &P6_WORKSHEET_ID.
+                }
+                action: resetPagination
+            }
+        }
+    )
+
+)
+

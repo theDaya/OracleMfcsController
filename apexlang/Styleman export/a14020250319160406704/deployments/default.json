@@ -1,0 +1,11 @@
+{
+  "app" : {
+    "id" : 101,
+    "databaseSession" : {
+      "parsingSchema" : "TW_TEST"
+    },
+    "runtime" : {
+      "debugging" : true
+    }
+  }
+}

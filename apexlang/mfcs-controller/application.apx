@@ -1,0 +1,83 @@
+app A14020250319160406704 (
+    name: MFCS Controller
+    logo {
+        type: text
+        text: MFCS Controller
+    }
+    navigation {
+        homeUrl: {
+            page: 1
+        }
+        loginUrl: {
+            page: LOGIN_DESKTOP
+        }
+    }
+    navigationMenu {
+        listTemplate: @side-navigation-menu
+        templateOptions: [
+            #DEFAULT#
+            t-TreeNav--styleA
+        ]
+        list: @desktop-navigation-menu
+    }
+    navigationBar {
+        list: @desktop-navigation-bar
+        listTemplate: @navigation-bar
+        templateOptions: #DEFAULT#
+    }
+    userInterface {
+        currentTheme: @universal-theme
+        globalPage: 0
+        addBuiltWithApexToFooter: false
+    }
+    css {
+        fileUrls: #APP_IMAGES#app-icon.css?version=#APP_VERSION#
+    }
+    authentication {
+        scheme: @application-express-authentication
+        publicUser: APEX_PUBLIC_USER
+    }
+    security {
+        referrerPolicy: strictOriginWhenCrossOrigin
+    }
+    sessionStateProtection {
+        checksumSalt: 38523E6F8A7E4336A7D0DA1BAAA7BC57A56AD0AA1089CD64E940466304BCDD9F
+        acceptPre202UrlChecksums: false
+    }
+    sessionManagement {
+        sessionStateCommits: immediate
+    }
+    globalization {
+        documentDirection: leftToRight
+    }
+    progressiveWebApp {
+        enable: false
+    }
+    rowSearch {
+        tokenize: false
+    }
+    reportPrinting {
+        type: useInstanceSettings
+    }
+    runtime {
+        friendlyUrls: false
+        allowFeedback: true
+        compatibilityMode: 19.1
+        accessibleReadOnlyItems: false
+    }
+    advanced {
+        passEcid: false
+        modernizeApp: true
+        appBuilderIconName: app-icon.svg
+    }
+    comments {
+        comments: Application created from create application wizard 2022.10.27.
+    }
+
+    substitution APP_NAME (
+        value {
+            staticValue: MFCS Controller
+        }
+    )
+
+)

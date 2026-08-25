@@ -1,0 +1,107 @@
+listTemplate side-navigation-menu (
+    name: Side Navigation Menu
+    templateClass: verticalSidebarList
+    templateOptions {
+        preset: t-TreeNav--styleA
+    }
+    list {
+        beforeEntries:
+            ```html
+            <div class="t-Body-nav" id="t_Body_nav" role="navigation" aria-label="&APP_TITLE!ATTR.">
+            <div class="t-TreeNav #COMPONENT_CSS_CLASSES#" id="t_TreeNav" data-id="#PARENT_STATIC_ID#_tree" aria-label="&APP_TITLE!ATTR."><ul style="display:none">
+            ```
+        afterEntries: </ul></div></div>
+    }
+    entry {
+        current: <li data-current="true" data-id="#A01#" data-disabled="#A02#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a></li>
+        currentWithSublist: <li data-current="true" data-id="#A01#" data-disabled="#A02#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a>
+        noncurrent: <li data-id="#A01#" data-disabled="#A02#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a></li>
+        noncurrentWithSublist: <li data-id="#A01#" data-disabled="#A02#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a>
+    }
+    sublist {
+        beforeEntries: <ul>
+        afterEntries: </ul></li>
+    }
+    sublistEntry {
+        current: <li data-current="true" data-id="#A01#" data-disabled="#A02#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a></li>
+        currentWithSublist: <li data-current="true" data-id="#A01#" data-disabled="#A02#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a>
+        noncurrent: <li data-id="#A01#" data-disabled="#A02#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a></li>
+        noncurrentWithSublist: <li data-id="#A01#" data-disabled="#A02#" data-icon="#ICON_CSS_CLASSES#"><a href="#LINK#" title="#A04#">#TEXT_ESC_SC#</a>
+    }
+    javaScript {
+        fileUrls: #IMAGE_PREFIX#libraries/apex/#MIN_DIRECTORY#widget.treeView#MIN#.js?v=#APEX_VERSION#
+        executeWhenPageLoads: apex.jQuery('body').addClass('t-PageBody--leftNav');
+    }
+    attributeDescriptions {
+        a01: ID Attribute
+        a02: Disabled True/False
+        a04: Title
+    }
+    advanced {
+        identifier: SIDE_NAVIGATION_MENU
+    }
+    subscription {
+        master: @side-navigation-menu
+    }
+
+    templateOption collapsed-default (
+        name: Collapsed by Default
+        sequence: 10
+        appearance {
+            cssClasses: js-defaultCollapsed
+        }
+        help {
+            helpText: This option will load the side navigation menu in a collapsed state by default.
+        }
+        advanced {
+            identifier: COLLAPSED_DEFAULT
+        }
+    )
+
+    templateOption style-a (
+        name: Style A
+        group: @list/style
+        sequence: 20
+        appearance {
+            cssClasses: t-TreeNav--styleA
+        }
+        help {
+            helpText: Style Variation A
+        }
+        advanced {
+            identifier: STYLE_A
+        }
+    )
+
+    templateOption style-b (
+        name: Style B
+        group: @list/style
+        sequence: 30
+        appearance {
+            cssClasses: t-TreeNav--styleB
+        }
+        help {
+            helpText: Style Variation B
+        }
+        advanced {
+            identifier: STYLE_B
+        }
+    )
+
+    templateOption style-c (
+        name: Classic
+        group: @list/style
+        sequence: 10
+        appearance {
+            cssClasses: t-TreeNav--classic
+        }
+        help {
+            helpText: Classic Style
+        }
+        advanced {
+            identifier: STYLE_C
+        }
+    )
+
+)
+

@@ -1,0 +1,12 @@
+/*apex 4*/
+i.palv2_iconLoader {
+  background-image: url(ajax-loader.gif);
+}
+
+i.palv2_iconPasted {
+  background-image: url(pasted-icon.gif);
+}
+
+.palv2_iconTrigger {
+  background-image: url(pal_status.gif);
+}
