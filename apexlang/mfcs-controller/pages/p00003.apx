@@ -285,14 +285,11 @@ page 3 (
                 type: sqlQuery
                 sqlQuery:
                     ```sql
-                    select substr(config_key, length('MAP.SIZE.') + 1)
-                           || ' - ' || dbms_lob.substr(config_value, 200, 1),
-                           substr(config_key, length('MAP.SIZE.') + 1)
-                      from config
-                     where environment = 'DEFAULT'
-                       and enabled_ind = 'Y'
-                       and config_key like 'MAP.SIZE.%'
-                     order by 1
+                    select description || ' - ' || data_code d, data_code r
+                      from master_data
+                     where data_type = 'DIFF_S'
+                       and description is not null
+                     order by to_number(nullif(regexp_replace(description, '[^0-9.]', ''), '')), description
                     ```
             }
             layout {
@@ -1199,19 +1196,10 @@ page 3 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select dept_code || ' - ' || nvl(md.description, mapped_dept), dept_code
-                  from (
-                        select substr(config_key, length('MAP.DEPARTMENT.') + 1) dept_code,
-                               dbms_lob.substr(config_value, 200, 1) mapped_dept
-                          from config
-                         where environment = 'DEFAULT'
-                           and enabled_ind = 'Y'
-                           and config_key like 'MAP.DEPARTMENT.%'
-                       ) c
-                  left join master_data md
-                    on md.data_type = 'DEPARTMENT'
-                   and md.data_code = c.mapped_dept
-                 order by to_number(nullif(regexp_replace(dept_code, '[^0-9]', ''), '')), dept_code
+                select data_code || ' - ' || description d, data_code r
+                  from master_data
+                 where data_type = 'DEPARTMENT'
+                 order by to_number(nullif(regexp_replace(data_code, '[^0-9]', ''), '')), data_code
                 ```
         }
         layout {
@@ -1244,20 +1232,11 @@ page 3 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select class_code || ' - ' || nvl(md.description, mapped_class), class_code
-                  from (
-                        select regexp_substr(config_key, '[^.]+', 1, 4) class_code,
-                               dbms_lob.substr(config_value, 200, 1) mapped_class
-                          from config
-                         where environment = 'DEFAULT'
-                           and enabled_ind = 'Y'
-                           and config_key like 'MAP.CLASS.' || :P3_DEPARTMENT || '.%'
-                       ) c
-                  left join master_data md
-                    on md.data_type = 'CLASS'
-                   and md.parent_code = to_char(:P3_DEPARTMENT)
-                   and md.data_code = c.mapped_class
-                 order by class_code
+                select data_code || ' - ' || description d, data_code r
+                  from master_data
+                 where data_type = 'CLASS'
+                   and parent_code = :P3_DEPARTMENT
+                 order by to_number(nullif(regexp_replace(data_code, '[^0-9]', ''), '')), data_code
                 ```
         }
         cascadingLov {
@@ -1295,20 +1274,11 @@ page 3 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select subclass_code || ' - ' || nvl(md.description, mapped_subclass), subclass_code
-                  from (
-                        select regexp_substr(config_key, '[^.]+', 1, 5) subclass_code,
-                               dbms_lob.substr(config_value, 200, 1) mapped_subclass
-                          from config
-                         where environment = 'DEFAULT'
-                           and enabled_ind = 'Y'
-                           and config_key like 'MAP.SUBCLASS.' || :P3_DEPARTMENT || '.' || :P3_CLASS || '.%'
-                       ) c
-                  left join master_data md
-                    on md.data_type = 'SUBCLASS'
-                   and md.parent_code = to_char(:P3_DEPARTMENT) || '.' || to_char(:P3_CLASS)
-                   and md.data_code = c.mapped_subclass
-                 order by subclass_code
+                select data_code || ' - ' || description d, data_code r
+                  from master_data
+                 where data_type = 'SUBCLASS'
+                   and parent_code = :P3_DEPARTMENT || '.' || :P3_CLASS
+                 order by to_number(nullif(regexp_replace(data_code, '[^0-9]', ''), '')), data_code
                 ```
         }
         cascadingLov {
@@ -1352,20 +1322,10 @@ page 3 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select supplier_code || ' - ' || nvl(md.description, mapped_supplier), supplier_code
-                  from (
-                        select substr(config_key, length('MAP.SUPPLIER.') + 1) supplier_code,
-                               dbms_lob.substr(config_value, 200, 1) mapped_supplier
-                          from config
-                         where environment = 'DEFAULT'
-                           and enabled_ind = 'Y'
-                           and config_key like 'MAP.SUPPLIER.%'
-                       ) c
-                  left join master_data md
-                    on md.data_type = 'SUPPLIER'
-                   and md.data_code = c.mapped_supplier
-                 where md.data_code is not null
-                 order by supplier_code
+                select data_code || ' - ' || description d, data_code r
+                  from master_data
+                 where data_type = 'SUPPLIER_SVC'
+                 order by description
                 ```
         }
         layout {
@@ -1400,16 +1360,10 @@ page 3 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select colour_code || ' - ' || mapped_colour, colour_code
-                  from (
-                        select substr(config_key, length('MAP.COLOUR.') + 1) colour_code,
-                               dbms_lob.substr(config_value, 200, 1) mapped_colour
-                          from config
-                         where environment = 'DEFAULT'
-                           and enabled_ind = 'Y'
-                           and config_key like 'MAP.COLOUR.%'
-                       )
-                 order by colour_code
+                select data_code || ' - ' || nvl(description, data_code) d, data_code r
+                  from master_data
+                 where data_type = 'DIFF_C'
+                 order by nvl(description, data_code)
                 ```
         }
         layout {
@@ -1443,14 +1397,10 @@ page 3 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select substr(config_key, length('MAP.COUNTRY.') + 1)
-                       || ' - ' || dbms_lob.substr(config_value, 200, 1),
-                       substr(config_key, length('MAP.COUNTRY.') + 1)
-                  from config
-                 where environment = 'DEFAULT'
-                   and enabled_ind = 'Y'
-                   and config_key like 'MAP.COUNTRY.%'
-                 order by 1
+                select data_code || ' - ' || description d, data_code r
+                  from master_data
+                 where data_type = 'COUNTRY'
+                 order by description
                 ```
         }
         layout {
@@ -1485,14 +1435,10 @@ page 3 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select substr(config_key, length('MAP.COUNTRY.') + 1)
-                       || ' - ' || dbms_lob.substr(config_value, 200, 1),
-                       substr(config_key, length('MAP.COUNTRY.') + 1)
-                  from config
-                 where environment = 'DEFAULT'
-                   and enabled_ind = 'Y'
-                   and config_key like 'MAP.COUNTRY.%'
-                 order by 1
+                select data_code || ' - ' || description d, data_code r
+                  from master_data
+                 where data_type = 'COUNTRY'
+                 order by description
                 ```
         }
         layout {
@@ -1524,14 +1470,12 @@ page 3 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select substr(config_key, length('MAP.CURRENCY.') + 1)
-                       || ' - ' || dbms_lob.substr(config_value, 200, 1),
-                       substr(config_key, length('MAP.CURRENCY.') + 1)
-                  from config
-                 where environment = 'DEFAULT'
-                   and enabled_ind = 'Y'
-                   and config_key like 'MAP.CURRENCY.%'
-                 order by 1
+                select data_code || case when description is null then null
+                                        else ' - ' || description end d,
+                       data_code r
+                  from master_data
+                 where data_type = 'CURRENCY'
+                 order by data_code
                 ```
         }
         layout {
@@ -1631,16 +1575,12 @@ page 3 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select location_code || ' - virtual ' || mapped_location, location_code
-                  from (
-                        select substr(config_key, length('MAP.ORDER_LOCATION.') + 1) location_code,
-                               dbms_lob.substr(config_value, 200, 1) mapped_location
-                          from config
-                         where environment = 'DEFAULT'
-                           and enabled_ind = 'Y'
-                           and config_key like 'MAP.ORDER_LOCATION.%'
-                       )
-                 order by location_code
+                select data_code || ' - ' || description d, data_code r
+                  from master_data
+                 where data_type = 'WAREHOUSE_SVC'
+                   and json_value(attributes, '$.physicalWarehouse') is not null
+                   and json_value(attributes, '$.primaryVirtualWarehouse') is null
+                 order by to_number(nullif(regexp_replace(data_code, '[^0-9]', ''), '')), data_code
                 ```
         }
         layout {

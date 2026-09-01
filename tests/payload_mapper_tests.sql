@@ -57,7 +57,7 @@ begin
       "COLOUR": "08610", "UNIT_COST": 48.49, "RETAIL_PRICE": 100,
       "STYLE_UDAS": [
         { "UDA_ID": 239, "UDA_VALUE": "3" },
-        { "UDA_ID": 56038, "UDA_TEXT": "Leather upper" }
+        { "UDA_ID": 51040, "UDA_TYPE": "FF", "UDA_TEXT": "Leather upper" }
       ],
       "SIZE_CURVE_DETAIL": [
         { "SOURCE_VARIANT_REF": "mapper test style-7", "SKU_SIZE": "070",
@@ -171,7 +171,7 @@ begin
     check_it('legacy key is gone',
         '0', to_char(case when json_exists(l_out, '$.PLMSizeCurveDtl') then 1 else 0 end));
     check_it('size curve survives the rename',
-        '7', json_value(l_out, '$.SIZE_CURVE_DETAIL[0].SKU_SIZE'));
+        '070', json_value(l_out, '$.SIZE_CURVE_DETAIL[0].SKU_SIZE'));
     -- Asserted against the serialised text. json_value would coerce "1517" to
     -- 1517 and report a pass whether or not normalisation did anything.
     check_it('DEPARTMENT serialises unquoted',
@@ -182,7 +182,7 @@ begin
     l_out := request_pkg.normalise_payload(
         '{"SIZE_CURVE_DETAIL":[{"SKU_SIZE":"090"}],"PLMSizeCurveDtl":[{"SKU_SIZE":"070"}]}');
     check_it('canonical wins when both are sent',
-        '9', json_value(l_out, '$.SIZE_CURVE_DETAIL[0].SKU_SIZE'));
+        '090', json_value(l_out, '$.SIZE_CURVE_DETAIL[0].SKU_SIZE'));
     check_it('legacy dropped when both are sent',
         '0', to_char(case when json_exists(l_out, '$.PLMSizeCurveDtl') then 1 else 0 end));
 

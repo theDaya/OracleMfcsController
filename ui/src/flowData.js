@@ -57,7 +57,7 @@ export const PIPELINE = [
     pkg: 'validation_pkg',
     blurb: 'Every problem found, not just the first - before anything is stored or sent',
     detail:
-      'Field-level checks on the raw document: required fields per operation, types, dates, MAP.* ' +
+      'Field-level checks on the raw document: required fields per operation, types, dates, master-data ' +
       'translations. Rules MFCS only enforces late are checked here early: OTB_EOW_DATE must fall ' +
       'on a Sunday, and MFCS would only tell you at order create - by which point a style exists ' +
       'and an order number is burned. A failed validation returns HTTP 422 with a JSON array of ' +
@@ -113,7 +113,7 @@ export const PIPELINE = [
     pkg: 'payload_pkg',
     blurb: 'Every request body MFCS receives is built here, statically wired',
     detail:
-      'One mapper per call shape, reading the stored document plus CONFIG defaults and MAP.* ' +
+      'One mapper per call shape, reading the stored document plus CONFIG defaults and master-data ' +
       'translations. orchestrator_pkg calls build_request statically, so a missing mapper is a ' +
       'compile error rather than a runtime surprise. The size-curve projection is defined once ' +
       '(c_size_curve) and every reader loops it. Mappers speak MFCS’s write vocabulary only - the ' +

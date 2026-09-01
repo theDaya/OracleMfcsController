@@ -20,18 +20,6 @@ create or replace package master_pkg authid definer as
     -- rather than aborting the run.
     procedure refresh_all(o_summary out clob);
 
-    -- Derives the MAP.* config rows the APEX console's lists of values read from,
-    -- out of whatever master data has been loaded.
-    --
-    -- The console does not select from MASTER_DATA directly. Its LOVs are CONFIG
-    -- backed - MAP.DEPARTMENT.*, MAP.COLOUR.* and so on - joined to MASTER_DATA
-    -- only for a description, which is deliberate: validation checks MAP.* config,
-    -- so offering the user anything else would be offering a choice the backend
-    -- then rejects.
-    --
-    -- Existing rows are never touched. A hand-tuned or deliberately disabled
-    -- mapping (MAP.SUPPLIER.70001 is set to N on purpose) survives a re-run.
-    procedure seed_map_config(o_summary out clob);
 end master_pkg;
 /
 
@@ -387,87 +375,6 @@ create or replace package body master_pkg as
     exception
         when others then
             log_refresh('CODE_DETAIL', l_source, l_status, l_count, substr(sqlerrm, 1, 1000), l_started);
-    end;
-
-    procedure seed_map_config(o_summary out clob) is
-        l_root json_object_t := json_object_t();
-        l_added number := 0;
-        l_before number := 0;
-
-        procedure add_map(p_key in varchar2, p_value in varchar2) is
-        begin
-            if p_key is null or p_value is null then
-                return;
-            end if;
-            insert into config (config_key, config_value, environment, enabled_ind)
-            select p_key, p_value, 'DEFAULT', 'Y' from dual
-             where not exists (
-                 select 1 from config
-                  where config_key = p_key
-                    and environment = 'DEFAULT'
-             );
-            l_added := l_added + sql%rowcount;
-        end;
-
-        procedure note(p_name in varchar2, p_count in number) is
-        begin
-            l_root.put(p_name, p_count);
-        end;
-    begin
-        -- Merchandise hierarchy. The console cascades department -> class ->
-        -- subclass, and each level's key embeds its parents, which is what makes
-        -- the cascade a plain LIKE against config.
-        l_before := l_added;
-        for r in (select data_code from master_data
-                   where data_type = 'DEPARTMENT' and parent_code = '~') loop
-            add_map('MAP.DEPARTMENT.' || r.data_code, r.data_code);
-        end loop;
-        note('departments', l_added - l_before);
-
-        l_before := l_added;
-        for r in (select data_code, parent_code from master_data
-                   where data_type = 'CLASS' and parent_code <> '~') loop
-            add_map('MAP.CLASS.' || r.parent_code || '.' || r.data_code, r.data_code);
-        end loop;
-        note('classes', l_added - l_before);
-
-        l_before := l_added;
-        for r in (select data_code, parent_code from master_data
-                   where data_type = 'SUBCLASS' and parent_code <> '~') loop
-            -- parent_code is already 'dept.class' for a subclass.
-            add_map('MAP.SUBCLASS.' || r.parent_code || '.' || r.data_code, r.data_code);
-        end loop;
-        note('subclasses', l_added - l_before);
-
-        l_before := l_added;
-        for r in (select data_code from master_data where data_type = 'SUPPLIER_SVC') loop
-            add_map('MAP.SUPPLIER.' || r.data_code, r.data_code);
-        end loop;
-        note('suppliers', l_added - l_before);
-
-        -- Colours are identity-mapped: the document carries the tenant's own diff
-        -- ID, so there is nothing to translate.
-        l_before := l_added;
-        for r in (select data_code from master_data where data_type = 'DIFF_C') loop
-            add_map('MAP.COLOUR.' || r.data_code, r.data_code);
-        end loop;
-        note('colours', l_added - l_before);
-
-        -- Sizes are not identity-mapped. The document carries a display size and
-        -- the tenant wants a diff ID, so the key is the description ("7") and the
-        -- value is the code ("070"). A size whose description never arrived is
-        -- skipped rather than keyed on its own code, which would map 070 to 070
-        -- and quietly accept a document nobody meant to send.
-        l_before := l_added;
-        for r in (select data_code, description from master_data
-                   where data_type = 'DIFF_S' and description is not null) loop
-            add_map('MAP.SIZE.' || upper(r.description), r.data_code);
-        end loop;
-        note('sizes', l_added - l_before);
-
-        commit;
-        l_root.put('rowsAdded', l_added);
-        o_summary := l_root.to_clob;
     end;
 
     procedure refresh_all(o_summary out clob) is

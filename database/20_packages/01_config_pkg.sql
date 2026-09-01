@@ -2,7 +2,7 @@ set define off
 
 -- Environment configuration lookup: one row per key in CONFIG.
 --
--- Everything tunable lives here - endpoints, MFCS defaults, MAP.* value
+-- Everything tunable lives here - endpoints, MFCS defaults and feature
 -- translations, feature flags - so behaviour changes are an update statement,
 -- not a redeploy. Seeded by database/10_tables/03_config_seed.sql.
 

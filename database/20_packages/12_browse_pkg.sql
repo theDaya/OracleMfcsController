@@ -90,14 +90,15 @@ create or replace package body browse_pkg as
         if p_diff is null then
             return null;
         end if;
-        select substr(config_key, length('MAP.SIZE.') + 1)
+        -- The differentiator's own description, which is what a buyer calls it.
+        -- This used to scan MAP.SIZE.* config backwards for a row whose value was
+        -- this diff; master data holds the same answer as a primary key hit.
+        select description
           into l_code
-          from config
-         where config_key like 'MAP.SIZE.%'
-           and environment = 'DEFAULT'
-           and enabled_ind = 'Y'
-           and dbms_lob.substr(config_value, 400, 1) = p_diff
-           and rownum = 1;
+          from master_data
+         where data_type = 'DIFF_S'
+           and data_code = p_diff
+           and parent_code = '~';
         return l_code;
     exception
         when no_data_found then return null;

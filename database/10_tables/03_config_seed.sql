@@ -88,35 +88,7 @@ using (
     select 'DEFAULT', 'ENDPOINT.PO_DETAILS_CREATE', '/MerchIntegrations/services/purchaseOrder/details/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.PO_DETAILS_UPDATE', '/MerchIntegrations/services/purchaseOrder/details/update', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.PURCHASE_ORDER_GET', '/MerchIntegrations/services/procurement/order/{orderNo}', 'Y' from dual union all
-    select 'DEFAULT', 'ENDPOINT.REST_SERVICE_STATUS', '/MerchIntegrations/services/administration/operations/restService/status', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.DEPARTMENT.100', '100', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.CLASS.100.10', '10', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.SUBCLASS.100.10.1', '1', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.DEPARTMENT.1517', '1517', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.CLASS.1517.6892', '6892', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.SUBCLASS.1517.6892.1128', '1128', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.SUPPLIER.70001', '70001', 'N' from dual union all
-    select 'DEFAULT', 'MAP.SUPPLIER.700087', '700087', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.COUNTRY.ZA', 'ZA', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.COUNTRY.CN', 'CN', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.COUNTRY.GB', 'GB', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.CURRENCY.ZAR', 'ZAR', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.CURRENCY.USD', 'USD', 'Y' from dual union all
-    -- Disabled: neither is a real differentiator ID on this tenant, checked against
-    -- the 48,837 in the foundation export. A document sending COLOUR "BLACK" would
-    -- map to the literal string and be rejected at items/create - after a reserved
-    -- item number had already been burned.
-    select 'DEFAULT', 'MAP.COLOUR.BLACK', 'BLACK', 'N' from dual union all
-    select 'DEFAULT', 'MAP.COLOUR.WHITE', 'WHITE', 'N' from dual union all
-    select 'DEFAULT', 'MAP.COLOUR.RMS_ALL_C', 'RMS_ALL_C', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.COLOUR.08610', '08610', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.COLOUR.08621', '08621', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.SIZE.7', '070', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.SIZE.8', '080', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.SIZE.9', '090', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.ORDER_LOCATION.1927', '19271', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.WIDTH.ALL', 'ALL', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.WIDTH.STANDARD', 'STANDARD', 'Y' from dual
+    select 'DEFAULT', 'ENDPOINT.REST_SERVICE_STATUS', '/MerchIntegrations/services/administration/operations/restService/status', 'Y' from dual
 ) s
 on (c.environment = s.environment and c.config_key = s.config_key)
 when matched then update set

@@ -3,7 +3,7 @@ set define off
 -- Field-level validation of the inbound Office document.
 --
 -- Runs before anything is registered or sent, so a rejected request has no
--- side effects anywhere. Checks presence, types, dates and the MAP.* config
+-- side effects anywhere. Checks presence, types, dates and reference values
 -- translations; rules MFCS only enforces late (OTB_EOW_DATE falling on a
 -- Sunday, for one) are checked here so they fail before a style exists and an
 -- order number is burned.
