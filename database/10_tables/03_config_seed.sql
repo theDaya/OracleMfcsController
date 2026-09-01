@@ -76,6 +76,7 @@ using (
     select 'DEFAULT', 'ENDPOINT.ITEM_SOURCING_UPDATE', '/MerchIntegrations/services/item/suppliers/update', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE', '/MerchIntegrations/services/item/supplier/countriesOfManufacture/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_UPDATE', '/MerchIntegrations/services/item/supplier/countriesOfManufacture/update', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_UPC_ITEM_NUMBER_TYPE', 'EAN13', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_UDAS_CREATE', '/MerchIntegrations/services/item/uda/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_UDAS_UPDATE', '/MerchIntegrations/services/item/uda/update', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_LOCATIONS_UPDATE', '/MerchIntegrations/services/item/locations/update', 'Y' from dual union all

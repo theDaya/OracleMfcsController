@@ -370,6 +370,17 @@ create or replace package body orchestrator_pkg as
                 else
                     def('ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE', 'POST', 'build_item_country_of_manufacture_request');
                 end if;
+            when 'CREATE_REFERENCE_ITEMS' then
+                -- Same endpoint as everything else at item level: a barcode is an
+                -- item, not a separate resource. Update on an existing style for
+                -- the same reason country of manufacture uses it - the write set
+                -- is resent whole, and re-creating a row that exists is an error
+                -- rather than a no-op. The update path here is not yet proven live.
+                if l_existing then
+                    def('ENDPOINT.ITEMS_UPDATE', 'PUT', 'build_reference_item_request');
+                else
+                    def('ENDPOINT.ITEMS_CREATE', 'POST', 'build_reference_item_request');
+                end if;
             when 'CREATE_ITEM_UDAS' then
                 if l_existing then
                     def('ENDPOINT.ITEM_UDAS_UPDATE', 'PUT', 'build_item_uda_request');

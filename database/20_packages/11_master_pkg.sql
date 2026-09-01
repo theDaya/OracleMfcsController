@@ -112,6 +112,82 @@ create or replace package body master_pkg as
             log_refresh(p_type, l_source, l_status, l_count, substr(sqlerrm, 1, 1000), l_started);
     end;
 
+    -- UDAs need more than a code and a description, so they do not go through
+    -- load_direct.
+    --
+    -- Two things depend on this. item/uda/create rejects a row without displayType,
+    -- and displayType decides which of udaValue / udaText / udaDate carries the
+    -- value - so the mapper has to know a UDA's type before it can send it.
+    -- Validation then needs the list of values, to reject a code the tenant will not
+    -- accept before a request burns an item number finding out.
+    --
+    -- Definitions land as UDA; their list-of-values rows land as UDA_VALUE keyed by
+    -- parent_code = the udaId, which is what makes the lookup a primary key hit.
+    procedure load_udas(p_limit in number default 500) is
+        l_status number;
+        l_body clob;
+        l_items json_array_t;
+        l_row json_object_t;
+        l_values json_array_t;
+        l_value json_object_t;
+        l_uda_id varchar2(120);
+        l_count number := 0;
+        l_values_count number := 0;
+        l_started timestamp with time zone := systimestamp;
+        l_path varchar2(200) := '/MerchIntegrations/services/foundation/uda';
+        l_source varchar2(200) := 'ENDPOINT:' || l_path;
+    begin
+        l_body := client_pkg.get_json(l_path || '?limit=' || p_limit, l_status);
+        if l_status not between 200 and 299 then
+            log_refresh('UDA', l_source, l_status, 0, 'HTTP ' || l_status, l_started);
+            return;
+        end if;
+
+        l_items := json_object_t.parse(l_body).get_array('items');
+        for i in 0 .. l_items.get_size - 1 loop
+            l_row := treat(l_items.get(i) as json_object_t);
+            l_uda_id := to_char(l_row.get_number('udaId'));
+
+            upsert(
+                p_type   => 'UDA',
+                p_code   => l_uda_id,
+                p_parent => null,
+                -- udaDescription, not udaDesc. The earlier load_direct call asked for
+                -- the wrong name and stored a null description for every row.
+                p_desc   => l_row.get_string('udaDescription'),
+                p_attrs  => l_row.to_clob,
+                p_source => l_source
+            );
+            l_count := l_count + 1;
+
+            if l_row.has('udaListOfValues') then
+                l_values := l_row.get_array('udaListOfValues');
+                for j in 0 .. nvl(l_values.get_size, 0) - 1 loop
+                    l_value := treat(l_values.get(j) as json_object_t);
+                    upsert(
+                        p_type   => 'UDA_VALUE',
+                        p_code   => to_char(l_value.get_number('udaValue')),
+                        p_parent => l_uda_id,
+                        p_desc   => l_value.get_string('udaValueDescription'),
+                        p_attrs  => l_value.to_clob,
+                        p_source => l_source
+                    );
+                    l_values_count := l_values_count + 1;
+                end loop;
+            end if;
+        end loop;
+
+        log_refresh('UDA', l_source, l_status, l_count,
+            case when l_count = 0
+                 then 'Service returned no rows (empty publish queue).'
+                 else 'Loaded ' || l_values_count || ' list-of-values rows as UDA_VALUE.'
+            end,
+            l_started);
+    exception
+        when others then
+            log_refresh('UDA', l_source, l_status, l_count, substr(sqlerrm, 1, 1000), l_started);
+    end;
+
     procedure harvest_from_items(p_pages in number default 10, p_limit in number default 200) is
         l_status number;
         l_body clob;
@@ -312,13 +388,13 @@ create or replace package body master_pkg as
         load_direct('BANNER', '/MerchIntegrations/services/foundation/banners', 'bannerId', 'bannerName');
         load_direct('CHANNEL', '/MerchIntegrations/services/foundation/channels', 'channelId', 'channelName');
         load_code_details;
+        load_udas;
 
         -- Attempted anyway, so the refresh log records that they are still empty
         -- rather than leaving it a mystery.
         load_direct('DEPARTMENT_SVC', '/MerchIntegrations/services/foundation/merchhier/deps', 'dept', 'deptName');
         load_direct('DIFF_SVC', '/MerchIntegrations/services/foundation/diffid', 'diffId', 'diffDesc');
         load_direct('SUPPLIER_SVC', '/MerchIntegrations/services/foundation/supplier', 'supplier', 'supplierName');
-        load_direct('UDA_SVC', '/MerchIntegrations/services/foundation/uda', 'udaId', 'udaDesc');
         load_direct('WAREHOUSE_SVC', '/MerchIntegrations/services/foundation/warehouse', 'wh', 'whName');
         load_direct('STORE_SVC', '/MerchIntegrations/services/foundation/store', 'store', 'storeName');
 

@@ -24,6 +24,26 @@ end validation_pkg;
 show errors
 
 create or replace package body validation_pkg as
+    -- Whether a barcode is a well-formed EAN-13.
+    --
+    -- Worth checking here because MFCS will not: it validates the length of the
+    -- number but not its check digit, so a transposed pair of digits is accepted
+    -- and creates a barcode that no scanner will ever match. Catching it costs
+    -- nothing; finding it later means the item exists and cannot be unmade.
+    function is_valid_ean13(p_upc in varchar2) return boolean is
+        l_sum pls_integer := 0;
+        l_digit pls_integer;
+    begin
+        if p_upc is null or length(p_upc) <> 13 or not regexp_like(p_upc, '^[0-9]{13}$') then
+            return false;
+        end if;
+        for i in 1 .. 12 loop
+            l_digit := to_number(substr(p_upc, i, 1));
+            l_sum := l_sum + l_digit * case when mod(i, 2) = 0 then 3 else 1 end;
+        end loop;
+        return to_number(substr(p_upc, 13, 1)) = mod(10 - mod(l_sum, 10), 10);
+    end;
+
     procedure add_error(
         p_errors in out nocopy json_array_t,
         p_field  in varchar2,
@@ -243,6 +263,130 @@ create or replace package body validation_pkg as
 
         if l_count > 0 then
             add_error(l_errors, 'PLMSizeCurveDtl.SKU_QTY', 'POSITIVE_WHOLE_NUMBER_REQUIRED', 'Quantities must be positive whole numbers.');
+        end if;
+
+        -- Barcodes. Optional by design: a document with no SKU_UPCS produces no
+        -- rows here and no errors, which is what lets Office adopt them per style
+        -- rather than all at once.
+        for u in (
+            select source_variant_ref, upc, upc_type, primary_yn
+              from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
+                  columns
+                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF' null on error,
+                      nested path '$.SKU_UPCS[*]'
+                          columns (
+                              upc        varchar2(30) path '$.UPC' null on error,
+                              upc_type   varchar2(10) path '$.UPC_TYPE' null on error,
+                              primary_yn varchar2(1)  path '$.PRIMARY_YN' null on error
+                          )
+              )
+             where upc is not null or primary_yn is not null
+        ) loop
+            if trim(u.upc) is null then
+                add_error(l_errors, 'PLMSizeCurveDtl.SKU_UPCS.UPC', 'REQUIRED',
+                    'UPC is required on every SKU_UPCS entry.');
+            elsif nvl(upper(u.upc_type), 'EAN13') = 'EAN13'
+                  and not is_valid_ean13(trim(u.upc)) then
+                -- Only EAN13 is checked. MANL barcodes are free-form by definition,
+                -- and a real Office SKU carries one of each.
+                add_error(l_errors, 'PLMSizeCurveDtl.SKU_UPCS.UPC', 'INVALID_EAN13',
+                    'UPC ' || u.upc || ' is not a valid 13-digit EAN with a correct check digit.');
+            end if;
+        end loop;
+
+        -- Exactly one primary barcode per SKU, for the SKUs that have any.
+        --
+        -- MFCS does not appear to enforce this and a second primary would be a
+        -- silent contradiction in the tenant, which is the failure mode this layer
+        -- exists to prevent.
+        for v in (
+            select source_variant_ref,
+                   count(*) upc_count,
+                   count(case when upper(primary_yn) = 'Y' then 1 end) primary_count
+              from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
+                  columns
+                      source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF' null on error,
+                      nested path '$.SKU_UPCS[*]'
+                          columns (
+                              upc        varchar2(30) path '$.UPC' null on error,
+                              primary_yn varchar2(1)  path '$.PRIMARY_YN' null on error
+                          )
+              )
+             where upc is not null
+             group by source_variant_ref
+        ) loop
+            if v.primary_count <> 1 then
+                add_error(l_errors, 'PLMSizeCurveDtl.SKU_UPCS.PRIMARY_YN', 'ONE_PRIMARY_UPC_REQUIRED',
+                    'SKU ' || v.source_variant_ref || ' has ' || v.primary_count
+                    || ' primary barcodes across ' || v.upc_count || '; exactly one must be PRIMARY_YN Y.');
+            end if;
+        end loop;
+
+        -- UDAs, checked against the tenant's own definitions.
+        --
+        -- Skipped entirely when master data holds no UDA definitions. On a tenant
+        -- whose uda feed has never been refreshed - or has gone empty again, which
+        -- is how this one behaved until recently - validating would reject every
+        -- document carrying a UDA rather than reject the ones that are wrong.
+        select count(*)
+          into l_count
+          from master_data
+         where data_type = 'UDA';
+
+        if l_count > 0 then
+            for u in (
+                select uda_id, uda_value, uda_text, uda_date
+                  from json_table(p_payload, '$.STYLE_UDAS[*]'
+                      columns
+                          uda_id    number        path '$.UDA_ID' null on error,
+                          uda_value varchar2(30)  path '$.UDA_VALUE' null on error,
+                          uda_text  varchar2(250) path '$.UDA_TEXT' null on error,
+                          uda_date  varchar2(30)  path '$.UDA_DATE' null on error
+                  )
+            ) loop
+                if u.uda_id is null then
+                    add_error(l_errors, 'STYLE_UDAS.UDA_ID', 'REQUIRED',
+                        'UDA_ID is required on every STYLE_UDAS entry.');
+                else
+                    select count(*)
+                      into l_distinct_count
+                      from master_data
+                     where data_type = 'UDA'
+                       and data_code = to_char(u.uda_id)
+                       and parent_code = '~';
+
+                    if l_distinct_count = 0 then
+                        add_error(l_errors, 'STYLE_UDAS.UDA_ID', 'UNKNOWN_UDA',
+                            'UDA ' || u.uda_id || ' is not defined on this tenant.');
+                    elsif u.uda_value is not null then
+                        -- Only list-of-values UDAs have a value set to check
+                        -- against; freeform and date carry whatever they carry.
+                        select count(*)
+                          into l_distinct_count
+                          from master_data
+                         where data_type = 'UDA_VALUE'
+                           and parent_code = to_char(u.uda_id)
+                           and data_code = u.uda_value;
+
+                        if l_distinct_count = 0 then
+                            select count(*)
+                              into l_distinct_count
+                              from master_data
+                             where data_type = 'UDA_VALUE'
+                               and parent_code = to_char(u.uda_id);
+
+                            -- A UDA with no values loaded is not evidence the value
+                            -- is wrong, so only complain when there is a list to
+                            -- have failed against.
+                            if l_distinct_count > 0 then
+                                add_error(l_errors, 'STYLE_UDAS.UDA_VALUE', 'UNKNOWN_UDA_VALUE',
+                                    'Value ' || u.uda_value || ' is not in the list of values for UDA '
+                                    || u.uda_id || '.');
+                            end if;
+                        end if;
+                    end if;
+                end if;
+            end loop;
         end if;
 
         -- Only when the integration has no way to work the SKU out for itself.

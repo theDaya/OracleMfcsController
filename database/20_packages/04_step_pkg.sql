@@ -108,6 +108,10 @@ create or replace package body step_pkg as
             add_step(p_action_request_id, 'CREATE_PARENT_ITEM_HIERARCHY', 30);
             add_step(p_action_request_id, 'CREATE_PARENT_ITEM_SOURCING', 35);
             add_step(p_action_request_id, 'CREATE_CHILD_ITEM_HIERARCHY', 40);
+            -- Barcodes are level-3 items under the SKUs, so they can only be
+            -- created once the SKUs exist. No-op when the document carries no
+            -- SKU_UPCS, which is how a style without barcodes stays legal.
+            add_step(p_action_request_id, 'CREATE_REFERENCE_ITEMS', 45);
             add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 50);
             add_step(p_action_request_id, 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE', 55);
             add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 60);
@@ -139,6 +143,7 @@ create or replace package body step_pkg as
             -- reference it.
             add_step(p_action_request_id, 'ENSURE_STYLE_SKUS', 25);
             add_step(p_action_request_id, 'CREATE_ITEM_HIERARCHY', 30);
+            add_step(p_action_request_id, 'CREATE_REFERENCE_ITEMS', 35);
             add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 40);
             add_step(p_action_request_id, 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE', 45);
             add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 50);

@@ -63,6 +63,54 @@ create or replace package payload_pkg authid definer as
                   sku_qty            number        path '$.SKU_QTY'
           );
 
+    -- Barcodes hang off a size-curve row, so they cannot ride in c_size_curve
+    -- without multiplying it: a SKU with two barcodes would become two SKUs.
+    -- They get their own projection, carrying the parent row's identity down so
+    -- the reference-item builder can resolve which SKU each barcode belongs to.
+    --
+    -- The where clause is not a nicety. json_table's nested path is an outer
+    -- join: a size-curve row with no SKU_UPCS still produces one row, with every
+    -- nested column null. Without the filter a SKU without barcodes would build a
+    -- level-3 item whose item number is null and send it to the tenant.
+    cursor c_sku_upcs(cp_payload clob) is
+        select rn, source_variant_ref, sku_id, sku_size, sku_width,
+               upc_rn, upc, upc_type, primary_yn
+          from json_table(cp_payload, '$.PLMSizeCurveDtl[*]'
+              columns
+                  rn                 for ordinality,
+                  source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
+                  sku_id             varchar2(30)  path '$.SKU_ID',
+                  sku_size           varchar2(60)  path '$.SKU_SIZE',
+                  sku_width          varchar2(60)  path '$.SKU_WIDTH',
+                  nested path '$.SKU_UPCS[*]'
+                      columns (
+                          upc_rn     for ordinality,
+                          upc        varchar2(30) path '$.UPC',
+                          upc_type   varchar2(10) path '$.UPC_TYPE',
+                          primary_yn varchar2(1)  path '$.PRIMARY_YN'
+                      )
+          )
+         where upc is not null;
+
+    -- UDAs are style-level. SKUs inherit them from the style, so there is
+    -- deliberately no SKU-level slot in the document; the mapper writes the same
+    -- set to the parent and to every child.
+    --
+    -- The document puts its value in whichever of the three fields suits the UDA.
+    -- Which one MFCS actually reads is decided by displayType, which comes from
+    -- master data rather than from the document.
+    cursor c_style_udas(cp_payload clob) is
+        select rn, uda_id, uda_type, uda_value, uda_text, uda_date
+          from json_table(cp_payload, '$.STYLE_UDAS[*]'
+              columns
+                  rn        for ordinality,
+                  uda_id    number        path '$.UDA_ID',
+                  uda_type  varchar2(2)   path '$.UDA_TYPE',
+                  uda_value varchar2(30)  path '$.UDA_VALUE',
+                  uda_text  varchar2(250) path '$.UDA_TEXT',
+                  uda_date  varchar2(30)  path '$.UDA_DATE'
+          );
+
 
     -- The size curve of any document carrying PLMSizeCurveDtl - the stored
     -- request, or an MFCS response echoing the same shape back.
@@ -705,21 +753,180 @@ create or replace package body payload_pkg as
         return l_root.to_clob;
     end;
 
+    -- A UDA's displayType, from master data.
+    --
+    -- MFCS rejects a uda row without displayType, and displayType decides which of
+    -- udaValue / udaText / udaDate is read. Asking Office to send it would be
+    -- asking them to restate something the tenant already publishes, so it is
+    -- looked up from the definitions master_pkg.load_udas stores.
+    --
+    -- The fallbacks matter on a tenant whose UDA feed has not been refreshed. An
+    -- explicit UDA_TYPE in the document wins, then master data, then the shape of
+    -- the document row itself. Guessing beats sending nothing: a null displayType
+    -- is a certain rejection, where a wrong guess is at least diagnosable.
+    function uda_display_type(
+        p_uda_id   in number,
+        p_uda_type in varchar2,
+        p_uda_text in varchar2,
+        p_uda_date in varchar2
+    ) return varchar2 is
+        l_type varchar2(2);
+    begin
+        if p_uda_type is not null then
+            return upper(p_uda_type);
+        end if;
+
+        begin
+            select json_value(attributes, '$.displayType' returning varchar2(2))
+              into l_type
+              from master_data
+             where data_type = 'UDA'
+               and data_code = to_char(p_uda_id)
+               and parent_code = '~';
+        exception
+            when no_data_found then
+                l_type := null;
+        end;
+
+        if l_type is not null then
+            return l_type;
+        elsif p_uda_date is not null then
+            return 'DT';
+        elsif p_uda_text is not null then
+            return 'FF';
+        else
+            return 'LV';
+        end if;
+    end;
+
+    -- The style's UDA rows. Built fresh per caller rather than shared, because
+    -- json_array_t is a reference type: attaching one instance to several items
+    -- would alias the same rows across the payload.
+    function style_uda_array(p_payload in clob) return json_array_t is
+        l_udas json_array_t := json_array_t();
+        l_uda json_object_t;
+        l_type varchar2(2);
+    begin
+        for u in c_style_udas(p_payload) loop
+            l_type := uda_display_type(u.uda_id, u.uda_type, u.uda_text, u.uda_date);
+            l_uda := json_object_t();
+            l_uda.put('udaId', u.uda_id);
+            l_uda.put('displayType', l_type);
+            case l_type
+                when 'FF' then l_uda.put('udaText', nvl(u.uda_text, u.uda_value));
+                when 'DT' then l_uda.put('udaDate', nvl(u.uda_date, u.uda_value));
+                else l_uda.put('udaValue', u.uda_value);
+            end case;
+            l_udas.append(l_uda);
+        end loop;
+        return l_udas;
+    end;
+
     function item_uda_request(p_action_request_id in varchar2) return clob is
         l_payload clob := payload(p_action_request_id);
+        l_style varchar2(30) := request_style(p_action_request_id);
         l_root json_object_t := json_object_t();
         l_items json_array_t := json_array_t();
         l_item json_object_t;
         l_sku varchar2(30);
     begin
+        -- The parent carries the style's UDAs as well as the children, since SKUs
+        -- inherit them and the tenant is not known to cascade. Skipped only when
+        -- the style number is not resolvable yet.
+        if l_style is not null then
+            l_item := json_object_t();
+            l_item.put('item', l_style);
+            l_item.put('dataLoadingDestination', 'RMS');
+            l_item.put('uda', style_uda_array(l_payload));
+            l_items.append(l_item);
+        end if;
+
         for v in c_size_curve(l_payload) loop
             l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
             l_item.put('dataLoadingDestination', 'RMS');
-            l_item.put('uda', json_array_t());
+            -- An empty array when the document carries no STYLE_UDAS. MFCS accepts
+            -- it and does nothing, which keeps the step explicitly logged and keeps
+            -- documents written before STYLE_UDAS behaving exactly as they did.
+            l_item.put('uda', style_uda_array(l_payload));
             l_items.append(l_item);
         end loop;
+
+        l_root.put('collectionSize', l_items.get_size);
+        l_root.put('items', l_items);
+        return l_root.to_clob;
+    end;
+
+    -- Barcodes, as level-3 items under their SKU.
+    --
+    -- There is no reference-item service on this tenant - none in 323 spec paths -
+    -- so a UPC is an item like any other, created through items/create. Three
+    -- things are load-bearing and were each found the hard way, live:
+    --
+    --   itemNumberType must be EAN13. ITEM and an absent type both demand a
+    --   9-character number, and UPC-A demands 12.
+    --
+    --   costZoneGroupId must be sent and must equal the parent's, or MFCS answers
+    --   "Field cannot be modified. Field: COST_ZONE_GROUP_ID" - an error naming a
+    --   field the request never contained.
+    --
+    --   status and itemSupplier are inherited from the parent, so they are not
+    --   sent. The created record comes back approved with the parent's supplier
+    --   already attached.
+    function reference_item_request(p_action_request_id in varchar2) return clob is
+        l_payload clob := payload(p_action_request_id);
+        l_style varchar2(30) := request_style(p_action_request_id);
+        l_department number;
+        l_class number;
+        l_subclass number;
+        l_source_ref varchar2(120);
+        l_color varchar2(10);
+        l_cost_zone_group_id number :=
+            to_number(config_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000'));
+        l_default_type varchar2(10) :=
+            config_pkg.get_config('MFCS_UPC_ITEM_NUMBER_TYPE', 'EAN13');
+        l_root json_object_t := json_object_t();
+        l_items json_array_t := json_array_t();
+        l_item json_object_t;
+        l_sku varchar2(30);
+    begin
+        select json_value(l_payload, '$.DEPARTMENT' returning number),
+               json_value(l_payload, '$.CLASS' returning number),
+               json_value(l_payload, '$.SUBCLASS' returning number),
+               json_value(l_payload, '$.SOURCE_STYLE_REF' returning varchar2(120)),
+               json_value(l_payload, '$.COLOUR' returning varchar2(10))
+          into l_department, l_class, l_subclass, l_source_ref, l_color
+          from dual;
+
+        for u in c_sku_upcs(l_payload) loop
+            l_sku := resolve_sku(l_payload, u.source_variant_ref, u.sku_id);
+            l_item := json_object_t();
+            l_item.put('item', u.upc);
+            l_item.put('itemParent', l_sku);
+            l_item.put('itemGrandparent', l_style);
+            l_item.put('itemLevel', 3);
+            l_item.put('tranLevel', 2);
+            l_item.put('itemNumberType', nvl(u.upc_type, l_default_type));
+            l_item.put('primaryReferenceItemInd', nvl(upper(u.primary_yn), 'N'));
+            l_item.put('dataLoadingDestination', 'RMS');
+            l_item.put('itemDescription',
+                substr(l_source_ref || ' ' || u.sku_size || ' ' || u.sku_width, 1, 250));
+            l_item.put('shortDescription', substr(l_source_ref, 1, 120));
+            l_item.put('dept', l_department);
+            l_item.put('class', l_class);
+            l_item.put('subclass', l_subclass);
+            l_item.put('diff1', mapped_config_value('MAP.COLOUR.', l_color));
+            l_item.put('diff2', mapped_config_value('MAP.SIZE.', u.sku_size));
+            l_item.put('sellableInd', 'Y');
+            l_item.put('orderableInd', 'Y');
+            l_item.put('merchandiseInd', 'Y');
+            l_item.put('inventoryInd', 'Y');
+            l_item.put('standardUom', 'EA');
+            l_item.put('costZoneGroupId', l_cost_zone_group_id);
+            l_items.append(l_item);
+        end loop;
+
         l_root.put('collectionSize', l_items.get_size);
         l_root.put('items', l_items);
         return l_root.to_clob;
@@ -1318,6 +1525,7 @@ create or replace package body payload_pkg as
             when 'build_item_sourcing_request' then return item_sourcing_request(p_action_request_id);
             when 'build_item_country_of_manufacture_request' then return item_country_of_manufacture_request(p_action_request_id);
             when 'build_item_uda_request' then return item_uda_request(p_action_request_id);
+            when 'build_reference_item_request' then return reference_item_request(p_action_request_id);
             when 'build_item_location_request' then return item_location_request(p_action_request_id);
             when 'build_item_approval_request' then return item_approval_request(p_action_request_id);
             when 'build_initial_retail_request' then return initial_retail_request(p_action_request_id);
