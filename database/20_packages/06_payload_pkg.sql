@@ -903,7 +903,12 @@ create or replace package body payload_pkg as
     function attribute_request(
         p_action_request_id in varchar2,
         p_property          in varchar2,
-        p_values            in json_array_t
+        p_values            in json_array_t,
+        -- Whether the children get their own copy. UDAs and seasons do; images do
+        -- not, because MFCS cascades an image from the parent and then refuses the
+        -- child's copy as a duplicate: "Same file name already exists for this
+        -- item". Proven live 2026-09-01.
+        p_include_children  in boolean default true
     ) return clob is
         l_payload clob := payload(p_action_request_id);
         l_style varchar2(30) := request_style(p_action_request_id);
@@ -935,10 +940,12 @@ create or replace package body payload_pkg as
 
         l_values_clob := p_values.to_clob;
         add(l_style);
-        for v in c_size_curve(l_payload) loop
-            l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
-            add(l_sku);
-        end loop;
+        if p_include_children then
+            for v in c_size_curve(l_payload) loop
+                l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
+                add(l_sku);
+            end loop;
+        end if;
 
         l_root.put('collectionSize', l_items.get_size);
         l_root.put('items', l_items);
@@ -984,7 +991,8 @@ create or replace package body payload_pkg as
             end if;
             l_arr.append(l_row);
         end loop;
-        return attribute_request(p_action_request_id, 'image', l_arr);
+        -- Style only; see p_include_children.
+        return attribute_request(p_action_request_id, 'image', l_arr, false);
     end;
 
     function item_hts_request(p_action_request_id in varchar2) return clob is
@@ -996,7 +1004,15 @@ create or replace package body payload_pkg as
             l_row := json_object_t();
             l_row.put('hts', v.hts);
             l_row.put('importCountry', v.import_country);
-            l_row.put('originCountry', v.origin_country);
+            -- Must be a country the item already has as a country of manufacture,
+            -- or MFCS answers "This item does not have a Country Of Manufacture".
+            -- CREATE_ITEM_COUNTRIES_OF_MANUFACTURE runs earlier in the graph and
+            -- writes MFCS_MANUFACTURER_COUNTRY, so that is the default when the
+            -- document does not name one. A document that does name one is sent as
+            -- given: the tenant rejects a mismatch loudly, which is more useful
+            -- than us silently overriding what the caller asked for.
+            l_row.put('originCountry', nvl(v.origin_country,
+                config_pkg.get_config('MFCS_MANUFACTURER_COUNTRY', 'VN')));
             l_row.put('effectFrom', v.effect_from);
             l_row.put('effectTo', v.effect_to);
             l_row.put('status', config_pkg.get_config('MFCS_HTS_STATUS', 'A'));

@@ -163,6 +163,16 @@ All verified live. Most are silent failures, which is why they are worth memoris
   The same concept keeps being renamed. Item number type is `itemNumberType` on write, and `itemNoType`
   inside `referenceItem` on read. The primary-reference flag is `primaryReferenceItemInd` on write and
   `primaryRefItemInd` on read. Assume a rename until you have checked.
+- **An image is written to the style only, never to its SKUs.** MFCS cascades it down, and the child's
+  own copy then comes back as `Same file name already exists for this item`. UDAs and seasons are the
+  opposite - they are written to the parent and every child. There is no rule here to infer; each
+  service had to be tried.
+- **An HTS row's `originCountry` must be a country the item already holds as a country of
+  manufacture**, or MFCS answers `This item does not have a Country Of Manufacture. Field:
+  ORIGIN_COUNTRY_ID`. That makes `CREATE_ITEM_HTS` dependent on `CREATE_ITEM_COUNTRIES_OF_MANUFACTURE`
+  having run, which is why it sits after it in the graph and defaults to `MFCS_MANUFACTURER_COUNTRY`.
+- **`primaryImageUrl` is derived, not sent.** MFCS concatenates `imageAddress` and `imageName`, so the
+  address wants its trailing slash and the name is the file.
 - **UDA writes need `displayType`, and it selects the value field.** `item/uda/create` requires
   `udaId` and `displayType` per row; `LV` then uses `udaValue`, `FF` uses `udaText`, `DT` uses
   `udaDate`. Sending an empty `uda` array is accepted and does nothing. `item/uda/update` is not
