@@ -1,6 +1,6 @@
 # Status and next steps
 
-Written so work can stop and resume without losing the thread. Current as of 2026-08-24.
+Written so work can stop and resume without losing the thread. Current as of **2026-09-01**.
 
 ## Where things stand
 
@@ -20,8 +20,14 @@ the `MFCS_CLIENT_MODE` switch were removed — if you find a reference to them, 
 | Item ranging | On, using virtual warehouse 19271 |
 | Non-merchandise costs | `NON_MERCH_COSTS` → order `expenses`, validated and previewing; not yet sent live |
 
-Environment: MFCS `https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs`,
-IDCS token host is different. Local install in `MFCS_INTEGRATION` on the `adb-free` container.
+| UDAs | **Proven live 2026-09-01.** Captured in the console, sent, read back |
+| Barcodes (level-3 UPCs) | **Proven live 2026-09-01.** Captured in the console, sent, read back |
+| `BRAND` | Sent and silently dropped by the tenant. **Does not work** |
+
+Environment: MFCS STG `https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs`
+and UAT `.../rgbu-rex-truw-uat3-mfcs`; the IDCS token host is different again. The database is
+**mdutilstst01**, Oracle 23.26.2.0.0, PDB `FREEPDB1`, schema `MFCS_INTEGRATION` — *not* the `adb-free`
+container older notes describe. Connect with `deploy/mdutils/sql.sh`.
 
 **If the coverage suite is failing, check the token before suspecting the code.** A stale token makes
 every MFCS step fail with `-20950` and the suite reports roughly half its assertions failed. That is
@@ -30,7 +36,72 @@ not a regression. `GET /token-status` says so in one line.
 **Bearer tokens last one hour.** Most "nothing is working" moments are an expired token — the console
 header shows remaining validity, and `GET /token-status` decodes it.
 
-## Outstanding work, in the order I would take it
+## Session of 2026-09-01 — what changed
+
+Seven commits, all pushed. Ordered by how much they alter the picture.
+
+**The inbound contract changed shape.** `PLMSizeCurveDtl` is now `SIZE_CURVE_DETAIL`, and
+`request_pkg.normalise_payload` accepts either spelling at intake — before the payload is hashed,
+stored or validated, so resume replays a canonical document. `DEPARTMENT`, `CLASS` and `SUBCLASS` are
+settled as numbers. Two optional additions: `STYLE_UDAS` at the root and `SKU_UPCS` inside each
+size-curve row. `SKU_WIDTH` is no longer required — it reached no MFCS field. `BRAND` is accepted but
+does not work (below).
+
+**UDAs and barcodes are built, proven live, and capturable.** Request `LIVE-UPC-184508` created style
+`100150161` with two SKUs and three barcodes, all eleven steps, read back through `itemDetail`. The
+APEX console gained two grids for them.
+
+**Two claims in CLAUDE.md were wrong and both discouraged looking further.** UDAs do work — the empty
+`foundation/uda` was a publish queue, not an empty definition set. And parents do not have to carry
+diff *groups*; `diff1Level` / `diff2Level` says which you have.
+
+**Foundation feeds now publish, per tenant.** STG serves `uda`, `supplier`, `store`, `warehouse`;
+`diffid`, `diffgroup`, `difftype` and `merchhier/*` are still empty there. UAT serves everything.
+
+**Master data and the console's lists are populated.** `master_pkg.load_udas` loaded 23 definitions and
+750 values; `seed_map_config` derived 316 `MAP.*` rows (5 departments, 10 classes, 10 subclasses, 61
+suppliers, 217 colours, 29 sizes). Diff descriptions came from the front-end exports, so lists read
+"BLACK LEATHER" rather than "00078".
+
+## Outstanding, in the order I would take it
+
+### A. Drive a draft through the console end to end
+Everything below the console is proven, and the console can now capture UDAs and barcodes, but
+**nothing has gone from an APEX draft through to MFCS with them**. Capture a style with both, submit,
+confirm the read-back. This is the shortest path to knowing the whole chain holds.
+
+### B. `BRAND` silently fails
+`items/create` takes `brandName`, answers SUCCESS, and the item reads back with no brand — while UDAs
+written in the same call are present. The stored attempt payload proves it was sent, and the brand code
+was checked against the tenant's own 246 brands, so it is not a bad value. `items/update` as a second
+attempt hit post-approval record locking and settled nothing. Not exposed in the console on purpose:
+offering a field that does nothing is worse than not having it.
+
+### C. `unitRetail` is 0 on everything we create
+A real UAT item reads `unitRetail: 85`; ours read `0`. We send `originalRetail` and it does not reach
+the field the tenant treats as the price. Consistent with `ENDPOINT.INITIAL_RETAIL` being a
+placeholder. Confirm what Office expects before deciding whether it matters.
+
+### D. The APEX value list does not cascade
+The UDA value list labels every entry with its attribute ("Gender: Boy") rather than filtering on the
+chosen attribute, because a grid-column cascade has no syntax donor in this export. Wrong combinations
+are rejected by `validation_pkg` before any MFCS call, so it is safe — just more scrolling.
+
+### E. Seasons, HTS and images
+Still absent from what we create. Services exist for all three (`item/seasons/create`,
+`item/hts/create` plus assessments, `item/images/create`), and the front-end exports carry the
+reference data. HTS needs domain input on assessment components; the other two do not.
+
+### F. The `CREATE_REFERENCE_ITEMS` update path is unproven
+On `MODIFY_STYLE` and the order operations the step resolves to `items/update`. Whether that service
+accepts a level-3 item has never been tested.
+
+### G. Two directories are untracked pending a decision
+`docs/dataSamples/` (includes 60 real suppliers with addresses) and `docs/foundationExports/` (2.3MB,
+with exact duplicates: `Differentiators` twice, `HTS Definition` twice, `Phases` three times). Neither
+is in git.
+
+## Older outstanding work
 
 ### 1. Exercise the remaining edges of order-line sync
 
