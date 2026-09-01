@@ -89,28 +89,17 @@ page 3 (
 
     region associated-items (
         name: Associated Items
-        type: regionDisplaySelector
+        type: staticContent
         layout {
             sequence: 20
             slot: contentBody
         }
         appearance {
-            template: @standard
-            templateOptions: [
-                #DEFAULT#
-                t-Region--scrollBody
-            ]
-        }
-        advanced {
-            regionDisplaySelector: true
+            template: @tabs-container
         }
         serverSideCondition {
             type: itemIsNotNull
             item: P3_DRAFT_ID
-        }
-        settings {
-            includeShowAll: false
-            rememberSelection: bySession
         }
     )
 
@@ -806,9 +795,19 @@ page 3 (
         )
 
         column PRIMARY_YN (
-            type: switch
+            type: selectList
             heading {
                 heading: Primary
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select 'Yes' d, 'Y' r from dual
+                    union all
+                    select 'No' d, 'N' r from dual
+                    ```
+                displayNullValue: false
             }
             layout {
                 sequence: 80
@@ -819,7 +818,7 @@ page 3 (
             }
             default {
                 type: static
-                staticValue: N
+                staticValue: Y
             }
         )
     )
@@ -1232,9 +1231,19 @@ page 3 (
         )
 
         column PRIMARY_YN (
-            type: switch
+            type: selectList
             heading {
                 heading: Primary
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select 'Yes' d, 'Y' r from dual
+                    union all
+                    select 'No' d, 'N' r from dual
+                    ```
+                displayNullValue: false
             }
             layout {
                 sequence: 90
@@ -2602,7 +2611,7 @@ page 3 (
         type: interactiveGridAutoRowProcessing
         editableRegion: @skus
         target {
-            returnPksAfterInsert: false
+            returnPksAfterInsert: true
         }
         execution {
             sequence: 20
@@ -2614,7 +2623,7 @@ page 3 (
         type: interactiveGridAutoRowProcessing
         editableRegion: @style-udas
         target {
-            returnPksAfterInsert: false
+            returnPksAfterInsert: true
         }
         execution {
             sequence: 21
@@ -2626,7 +2635,7 @@ page 3 (
         type: interactiveGridAutoRowProcessing
         editableRegion: @sku-barcodes
         target {
-            returnPksAfterInsert: false
+            returnPksAfterInsert: true
         }
         execution {
             sequence: 22
@@ -2638,7 +2647,7 @@ page 3 (
         type: interactiveGridAutoRowProcessing
         editableRegion: @style-seasons
         target {
-            returnPksAfterInsert: false
+            returnPksAfterInsert: true
         }
         execution {
             sequence: 23
@@ -2650,7 +2659,7 @@ page 3 (
         type: interactiveGridAutoRowProcessing
         editableRegion: @style-images
         target {
-            returnPksAfterInsert: false
+            returnPksAfterInsert: true
         }
         execution {
             sequence: 24
@@ -2662,7 +2671,7 @@ page 3 (
         type: interactiveGridAutoRowProcessing
         editableRegion: @style-hts
         target {
-            returnPksAfterInsert: false
+            returnPksAfterInsert: true
         }
         execution {
             sequence: 25
