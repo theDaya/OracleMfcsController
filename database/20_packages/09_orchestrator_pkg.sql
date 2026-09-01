@@ -132,7 +132,7 @@ create or replace package body orchestrator_pkg as
                 );
             end loop;
         else
-            -- The response echoes the document's own PLMSizeCurveDtl shape,
+            -- The response echoes the document's own SIZE_CURVE_DETAIL shape,
             -- so the same cursor reads it.
             for v in payload_pkg.c_size_curve(p_response) loop
                 request_pkg.save_generated_identifier(

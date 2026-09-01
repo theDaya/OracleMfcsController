@@ -190,6 +190,37 @@ All verified live. Most are silent failures, which is why they are worth memoris
   "Batch Running Indicator is ON". `client_pkg` raises `-20951` for it, so it does not read as a bad
   payload. If the coverage suite fails on that message, wait, do not debug.
 
+## The inbound document
+
+The contract is upper snake case throughout, and names nothing after the system that happens to send
+it. `SIZE_CURVE_DETAIL` used to be `PLMSizeCurveDtl` - the one camelCase key, naming its source system
+in a document that already carries `SOURCE_SYSTEM` as a field.
+
+`request_pkg.normalise_payload` accepts either spelling and settles `DEPARTMENT`, `CLASS` and
+`SUBCLASS` as numbers. **It runs at intake, before the payload is hashed, stored or validated, and that
+ordering is the point.** Resume replays the *stored* payload, so a document normalised on the way in is
+canonical for the rest of its life. Normalising on the way out would leave both shapes in the system
+forever and every reader would have to know about both. Validation errors name the canonical field, so
+a caller sending the legacy key sees `SIZE_CURVE_DETAIL.SKU_QTY` in the response.
+
+Optional additions, absent from documents written earlier and behaving exactly as before when absent:
+
+- `STYLE_UDAS` at the root. Style-level only - **SKUs inherit their style's UDAs**, so there is
+  deliberately no SKU-level slot. The mapper writes the same set to the parent and to every child,
+  because MFCS is not known to cascade and a real item carries copies at both levels. Office sends the
+  tenant's own `UDA_ID` and value; `displayType` is not asked for, because `foundation/uda` already
+  publishes it.
+- `SKU_UPCS` inside each `SIZE_CURVE_DETAIL` row. Exactly one `PRIMARY_YN: "Y"` per SKU. `UPC_TYPE`
+  defaults to `EAN13`; a real Office SKU carries one `EAN13` and one `MANL`.
+- `BRAND`, sent as `brandName` - the tenant's brand *code*, which is what `master_pkg` stores.
+
+`SKU_WIDTH` is no longer required. It reached no MFCS field: it was validated against `MAP.WIDTH.*` and
+then used only to build a description string. It is still accepted and still recorded in `ENTITY_MAP`
+where a caller sends it, but nothing depends on it.
+
+One colourway per style, by design. `COLOUR` is style-level and singular, and a style needing two
+colourways is two requests.
+
 ## Conventions
 
 - Keep business logic in PL/SQL. The console builds only the inbound document; everything downstream —

@@ -13,6 +13,20 @@ prompt Creating request_pkg
 create or replace package request_pkg authid definer as
     -- SHA-256 of the payload, used to tell a replay from a conflicting reuse
     -- of the same ACTION_REQUEST_ID.
+    -- The inbound document, in canonical form.
+    --
+    -- Callers may send SIZE_CURVE_DETAIL or the older PLMSizeCurveDtl; everything
+    -- downstream sees only the former. The old name said two wrong things: it was
+    -- the single camelCase key in an upper-snake document, and it named its source
+    -- system in a contract that already carries SOURCE_SYSTEM as a field.
+    --
+    -- This runs at intake, before the payload is hashed, stored or validated, and
+    -- that ordering is the point. Resume replays the *stored* payload, so a
+    -- document normalised on the way in is canonical for the rest of its life; one
+    -- normalised on the way out would leave both shapes in the system forever, and
+    -- every reader would have to know about both.
+    function normalise_payload(p_payload in clob) return clob;
+
     function payload_hash(p_payload in clob) return varchar2;
 
     -- Registers a request, or recognises one already seen. o_result is one of
@@ -131,6 +145,59 @@ create or replace package body request_pkg as
         else
             return p_element.to_string;
         end if;
+    end;
+
+    function normalise_payload(p_payload in clob) return clob is
+        l_doc json_object_t;
+        l_curve json_array_t;
+
+        -- DEPARTMENT, CLASS and SUBCLASS have always been accepted as either a
+        -- string or a number, because json_value coerces on the way out. Settling
+        -- them as numbers here means the stored document says what it means, and a
+        -- reader that does not coerce cannot be surprised.
+        procedure numeric_key(p_key in varchar2) is
+            l_raw varchar2(120);
+        begin
+            if not l_doc.has(p_key) then
+                return;
+            end if;
+            l_raw := trim(l_doc.get_string(p_key));
+            if l_raw is null then
+                return;
+            end if;
+            l_doc.put(p_key, to_number(l_raw));
+        exception
+            -- A non-numeric department is a validation error, not a normalisation
+            -- one. Leaving it untouched lets validation report it properly instead
+            -- of this function failing the request with a conversion error.
+            when others then
+                null;
+        end;
+    begin
+        l_doc := json_object_t.parse(p_payload);
+
+        if l_doc.has('PLMSizeCurveDtl') then
+            -- Only when the caller did not also send the canonical key. If both are
+            -- present the canonical one wins and the legacy one is dropped, rather
+            -- than silently merging two size curves.
+            if not l_doc.has('SIZE_CURVE_DETAIL') then
+                l_curve := l_doc.get_array('PLMSizeCurveDtl');
+                l_doc.put('SIZE_CURVE_DETAIL', l_curve);
+            end if;
+            l_doc.remove('PLMSizeCurveDtl');
+        end if;
+
+        numeric_key('DEPARTMENT');
+        numeric_key('CLASS');
+        numeric_key('SUBCLASS');
+
+        return l_doc.to_clob;
+    exception
+        -- Malformed JSON is the caller's problem and api_pkg already reports it
+        -- properly. Returning the payload untouched keeps that the single place
+        -- that decides what an unparseable document means.
+        when others then
+            return p_payload;
     end;
 
     function payload_hash(p_payload in clob) return varchar2 is
@@ -377,7 +444,7 @@ create or replace package body request_pkg as
             || '"RETRYABLE":' || l_retryable || ','
             || '"STYLE":' || case when l_style is null then 'null' else '"' || event_pkg.escape_json(l_style) || '"' end || ','
             || '"ORDER_NO":' || case when l_order is null then 'null' else '"' || event_pkg.escape_json(l_order) || '"' end || ','
-            || '"PLMSizeCurveDtl":[';
+            || '"SIZE_CURVE_DETAIL":[';
 
         for r in (
             select source_variant_ref, sku_size, sku_width, mfcs_sku_no

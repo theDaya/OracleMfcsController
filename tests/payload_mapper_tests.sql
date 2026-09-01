@@ -59,7 +59,7 @@ begin
         { "UDA_ID": 239, "UDA_VALUE": "3" },
         { "UDA_ID": 56038, "UDA_TEXT": "Leather upper" }
       ],
-      "PLMSizeCurveDtl": [
+      "SIZE_CURVE_DETAIL": [
         { "SOURCE_VARIANT_REF": "mapper test style-7", "SKU_SIZE": "7",
           "SKU_WIDTH": "ALL", "SKU_QTY": 1, "SKU_ID": null,
           "SKU_UPCS": [
@@ -133,7 +133,7 @@ begin
       "SOURCE_SYSTEM": "OFFICE_DEV", "SOURCE_STYLE_REF": "bad", "SOURCE_VERSION": "1",
       "DEPARTMENT": "1517", "CLASS": "6892", "SUBCLASS": "1128",
       "SUPPLIER": "700087", "ORIGIN_COUNTRY": "GB", "COLOUR": "08610",
-      "PLMSizeCurveDtl": [
+      "SIZE_CURVE_DETAIL": [
         { "SOURCE_VARIANT_REF": "bad-7", "SKU_SIZE": "7", "SKU_WIDTH": "ALL", "SKU_QTY": 1,
           "SKU_UPCS": [
             { "UPC": "2930000003017", "PRIMARY_YN": "Y" },
@@ -146,5 +146,54 @@ begin
     for i in 0 .. trunc((nvl(length(l_errors), 1) - 1) / 300) loop
         dbms_output.put_line(substr(l_errors, i * 300 + 1, 300));
     end loop;
+end;
+/
+
+-- Intake normalisation. The old key has to keep working: resume replays the
+-- stored payload, so a document accepted before the rename must still run.
+declare
+    l_out clob;
+    procedure check_it(p_label in varchar2, p_expected in varchar2, p_actual in varchar2) is
+    begin
+        dbms_output.put_line(rpad(p_label, 46)
+            || case when nvl(p_actual, '<null>') = p_expected then 'PASS' else
+                    'FAIL (expected ' || p_expected || ', got ' || nvl(p_actual, '<null>') || ')' end);
+    end;
+begin
+    dbms_output.put_line('');
+    dbms_output.put_line('=== 6. INTAKE NORMALISATION ===');
+
+    l_out := request_pkg.normalise_payload(
+        '{"DEPARTMENT":"1517","CLASS":"6892","SUBCLASS":"1128",
+          "PLMSizeCurveDtl":[{"SKU_SIZE":"7","SKU_QTY":1}]}');
+    check_it('legacy key becomes canonical',
+        '1', to_char(case when json_exists(l_out, '$.SIZE_CURVE_DETAIL') then 1 else 0 end));
+    check_it('legacy key is gone',
+        '0', to_char(case when json_exists(l_out, '$.PLMSizeCurveDtl') then 1 else 0 end));
+    check_it('size curve survives the rename',
+        '7', json_value(l_out, '$.SIZE_CURVE_DETAIL[0].SKU_SIZE'));
+    -- Asserted against the serialised text. json_value would coerce "1517" to
+    -- 1517 and report a pass whether or not normalisation did anything.
+    check_it('DEPARTMENT serialises unquoted',
+        'Y', case when instr(l_out, '"DEPARTMENT":1517') > 0 then 'Y' else 'N' end);
+    check_it('DEPARTMENT is no longer a string',
+        'Y', case when instr(l_out, '"DEPARTMENT":"1517"') = 0 then 'Y' else 'N' end);
+
+    l_out := request_pkg.normalise_payload(
+        '{"SIZE_CURVE_DETAIL":[{"SKU_SIZE":"9"}],"PLMSizeCurveDtl":[{"SKU_SIZE":"7"}]}');
+    check_it('canonical wins when both are sent',
+        '9', json_value(l_out, '$.SIZE_CURVE_DETAIL[0].SKU_SIZE'));
+    check_it('legacy dropped when both are sent',
+        '0', to_char(case when json_exists(l_out, '$.PLMSizeCurveDtl') then 1 else 0 end));
+
+    -- A non-numeric department is validation's problem to report, not something
+    -- normalisation should fail the request over.
+    l_out := request_pkg.normalise_payload('{"DEPARTMENT":"not-a-number"}');
+    check_it('non-numeric DEPARTMENT is left alone',
+        'not-a-number', json_value(l_out, '$.DEPARTMENT'));
+
+    l_out := request_pkg.normalise_payload('{ this is not json');
+    check_it('unparseable payload passes through untouched',
+        '{ this is not json', l_out);
 end;
 /

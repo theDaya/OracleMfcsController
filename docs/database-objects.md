@@ -99,7 +99,7 @@ a compile error rather than a runtime surprise.
 **One projection, one resolver, one typed plan.** Three single-source rules worth knowing before
 editing:
 
-- `payload_pkg.c_size_curve` is the only definition of the `PLMSizeCurveDtl` projection. Ten readers
+- `payload_pkg.c_size_curve` is the only definition of the `SIZE_CURVE_DETAIL` projection. Ten readers
   across payload_pkg and orchestrator_pkg used to carry their own `json_table` of it; all of them now
   loop this one public cursor (validation_pkg keeps its own raw projections on purpose - it inspects
   the unparsed document for malformed values).

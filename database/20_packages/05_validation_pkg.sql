@@ -180,7 +180,7 @@ create or replace package body validation_pkg as
 
         select count(*)
           into l_count
-          from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
+          from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
               columns sku_id varchar2(60) path '$.SKU_ID' null on error
           )
          where sku_id is not null;
@@ -190,7 +190,7 @@ create or replace package body validation_pkg as
                 add_error(l_errors, 'STYLE', 'CREATE_IDENTIFIER_MUST_BE_NULL', 'STYLE must be null for CREATE_ALL.');
             end if;
             if l_count > 0 then
-                add_error(l_errors, 'PLMSizeCurveDtl.SKU_ID', 'CREATE_IDENTIFIER_MUST_BE_NULL', 'SKU_ID must be null for CREATE_ALL.');
+                add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_ID', 'CREATE_IDENTIFIER_MUST_BE_NULL', 'SKU_ID must be null for CREATE_ALL.');
             end if;
             if l_order_no is not null then
                 add_error(l_errors, 'ORDER_NO', 'CREATE_IDENTIFIER_MUST_BE_NULL', 'ORDER_NO must be null for CREATE_ALL.');
@@ -200,7 +200,7 @@ create or replace package body validation_pkg as
                 add_error(l_errors, 'STYLE', 'CREATE_IDENTIFIER_MUST_BE_NULL', 'STYLE must be null for CREATE_STYLE.');
             end if;
             if l_count > 0 then
-                add_error(l_errors, 'PLMSizeCurveDtl.SKU_ID', 'CREATE_IDENTIFIER_MUST_BE_NULL', 'SKU_ID must be null for CREATE_STYLE.');
+                add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_ID', 'CREATE_IDENTIFIER_MUST_BE_NULL', 'SKU_ID must be null for CREATE_STYLE.');
             end if;
         elsif l_operation = 'CREATE_ORDER' then
             if l_order_no is not null then
@@ -240,21 +240,21 @@ create or replace package body validation_pkg as
 
         select count(*), count(distinct sku_size || '|' || sku_width)
           into l_count, l_distinct_count
-          from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
+          from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
               columns
                   sku_size varchar2(60) path '$.SKU_SIZE' null on error,
                   sku_width varchar2(60) path '$.SKU_WIDTH' null on error
           );
 
         if l_count = 0 and l_operation in ('CREATE_STYLE', 'CREATE_ORDER', 'CREATE_ALL') then
-            add_error(l_errors, 'PLMSizeCurveDtl', 'REQUIRED', 'At least one size/width variant is required.');
+            add_error(l_errors, 'SIZE_CURVE_DETAIL', 'REQUIRED', 'At least one size/width variant is required.');
         elsif l_count <> l_distinct_count then
-            add_error(l_errors, 'PLMSizeCurveDtl', 'DUPLICATE_SIZE_WIDTH', 'Size and width combinations must be unique.');
+            add_error(l_errors, 'SIZE_CURVE_DETAIL', 'DUPLICATE_SIZE_WIDTH', 'Size and width combinations must be unique.');
         end if;
 
         select count(*)
           into l_count
-          from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
+          from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
               columns sku_qty number path '$.SKU_QTY' null on error
           )
          where sku_qty is null
@@ -262,7 +262,7 @@ create or replace package body validation_pkg as
             or sku_qty <> trunc(sku_qty);
 
         if l_count > 0 then
-            add_error(l_errors, 'PLMSizeCurveDtl.SKU_QTY', 'POSITIVE_WHOLE_NUMBER_REQUIRED', 'Quantities must be positive whole numbers.');
+            add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_QTY', 'POSITIVE_WHOLE_NUMBER_REQUIRED', 'Quantities must be positive whole numbers.');
         end if;
 
         -- Barcodes. Optional by design: a document with no SKU_UPCS produces no
@@ -270,7 +270,7 @@ create or replace package body validation_pkg as
         -- rather than all at once.
         for u in (
             select source_variant_ref, upc, upc_type, primary_yn
-              from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
+              from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
                   columns
                       source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF' null on error,
                       nested path '$.SKU_UPCS[*]'
@@ -283,13 +283,13 @@ create or replace package body validation_pkg as
              where upc is not null or primary_yn is not null
         ) loop
             if trim(u.upc) is null then
-                add_error(l_errors, 'PLMSizeCurveDtl.SKU_UPCS.UPC', 'REQUIRED',
+                add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_UPCS.UPC', 'REQUIRED',
                     'UPC is required on every SKU_UPCS entry.');
             elsif nvl(upper(u.upc_type), 'EAN13') = 'EAN13'
                   and not is_valid_ean13(trim(u.upc)) then
                 -- Only EAN13 is checked. MANL barcodes are free-form by definition,
                 -- and a real Office SKU carries one of each.
-                add_error(l_errors, 'PLMSizeCurveDtl.SKU_UPCS.UPC', 'INVALID_EAN13',
+                add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_UPCS.UPC', 'INVALID_EAN13',
                     'UPC ' || u.upc || ' is not a valid 13-digit EAN with a correct check digit.');
             end if;
         end loop;
@@ -303,7 +303,7 @@ create or replace package body validation_pkg as
             select source_variant_ref,
                    count(*) upc_count,
                    count(case when upper(primary_yn) = 'Y' then 1 end) primary_count
-              from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
+              from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
                   columns
                       source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF' null on error,
                       nested path '$.SKU_UPCS[*]'
@@ -316,7 +316,7 @@ create or replace package body validation_pkg as
              group by source_variant_ref
         ) loop
             if v.primary_count <> 1 then
-                add_error(l_errors, 'PLMSizeCurveDtl.SKU_UPCS.PRIMARY_YN', 'ONE_PRIMARY_UPC_REQUIRED',
+                add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_UPCS.PRIMARY_YN', 'ONE_PRIMARY_UPC_REQUIRED',
                     'SKU ' || v.source_variant_ref || ' has ' || v.primary_count
                     || ' primary barcodes across ' || v.upc_count || '; exactly one must be PRIMARY_YN Y.');
             end if;
@@ -401,7 +401,7 @@ create or replace package body validation_pkg as
            and config_pkg.get_config('FEATURE_GENERATE_MISSING_SKUS_YN', 'Y') <> 'Y' then
             for v in (
                 select source_variant_ref, sku_id
-                  from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
+                  from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
                       columns
                           source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF' null on error,
                           sku_id varchar2(60) path '$.SKU_ID' null on error
@@ -417,7 +417,7 @@ create or replace package body validation_pkg as
                        and mfcs_sku_no is not null;
 
                     if l_count = 0 then
-                        add_error(l_errors, 'PLMSizeCurveDtl.SKU_ID', 'SKU_REQUIRED_OR_RESOLVABLE', 'SKU_ID is required or must be resolvable for this operation.');
+                        add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_ID', 'SKU_REQUIRED_OR_RESOLVABLE', 'SKU_ID is required or must be resolvable for this operation.');
                     end if;
                 end if;
             end loop;
@@ -548,20 +548,37 @@ create or replace package body validation_pkg as
 
         for v in (
             select sku_size, sku_width
-              from json_table(p_payload, '$.PLMSizeCurveDtl[*]'
+              from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
                   columns
                       sku_size varchar2(60) path '$.SKU_SIZE' null on error,
                       sku_width varchar2(60) path '$.SKU_WIDTH' null on error
               )
         ) loop
             if v.sku_size is null or not has_config('MAP.SIZE.' || upper(v.sku_size)) then
-                add_error(l_errors, 'PLMSizeCurveDtl.SKU_SIZE', 'MAPPING_NOT_FOUND', 'Size mapping is not configured.');
+                add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_SIZE', 'MAPPING_NOT_FOUND', 'Size mapping is not configured.');
             end if;
 
-            if v.sku_width is null or not has_config('MAP.WIDTH.' || upper(v.sku_width)) then
-                add_error(l_errors, 'PLMSizeCurveDtl.SKU_WIDTH', 'MAPPING_NOT_FOUND', 'Width mapping is not configured.');
-            end if;
         end loop;
+
+        declare
+            l_brand varchar2(120) := json_value(p_payload, '$.BRAND' returning varchar2(120) null on error);
+            l_brands number;
+        begin
+            if trim(l_brand) is not null then
+                select count(*) into l_brands from master_data where data_type = 'BRAND';
+                if l_brands > 0 then
+                    select count(*)
+                      into l_count
+                      from master_data
+                     where data_type = 'BRAND'
+                       and data_code = l_brand;
+                    if l_count = 0 then
+                        add_error(l_errors, 'BRAND', 'UNKNOWN_BRAND',
+                            'Brand ' || l_brand || ' is not defined on this tenant.');
+                    end if;
+                end if;
+            end if;
+        end;
 
         if l_errors.get_size > 0 then
             o_errors := l_errors.to_clob;

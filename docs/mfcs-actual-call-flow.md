@@ -59,7 +59,7 @@ The integration layer receives the PLM/Office-style request through `api_pkg.sub
 
   "UNIT_COST": 48.49,
   "RETAIL_PRICE": 100,
-  "PLMSizeCurveDtl": [
+  "SIZE_CURVE_DETAIL": [
     {
       "SOURCE_VARIANT_REF": "Dayalan test 2026-08-17 16:43:37.108-7",
 
@@ -557,7 +557,7 @@ MFCS response:
   "COLOUR": "08610",
   "UNIT_COST": 48.49,
   "RETAIL_PRICE": 100,
-  "PLMSizeCurveDtl": [
+  "SIZE_CURVE_DETAIL": [
     {
       "SOURCE_VARIANT_REF": "Dayalan all 2026-08-21 12:06:47.643-7",
       "SKU_SIZE": "7",

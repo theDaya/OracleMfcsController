@@ -113,6 +113,7 @@ create or replace package body api_pkg as
         l_errors clob;
         l_valid boolean;
         l_parsed json_element_t;
+        l_payload clob;
     begin
         begin
             l_parsed := json_element_t.parse(p_payload);
@@ -123,8 +124,12 @@ create or replace package body api_pkg as
                 return;
         end;
 
-        select json_value(p_payload, '$.ACTION_REQUEST_ID' returning varchar2(80) null on error),
-               json_value(p_payload, '$.OPERATION_NAME' returning varchar2(30) null on error)
+        -- Everything below this line works on the canonical document, including
+        -- the hash and the row that gets stored. See request_pkg.normalise_payload.
+        l_payload := request_pkg.normalise_payload(p_payload);
+
+        select json_value(l_payload, '$.ACTION_REQUEST_ID' returning varchar2(80) null on error),
+               json_value(l_payload, '$.OPERATION_NAME' returning varchar2(30) null on error)
           into l_action_request_id, l_operation
           from dual;
 
@@ -144,12 +149,12 @@ create or replace package body api_pkg as
             return;
         end if;
 
-        l_hash := request_pkg.payload_hash(p_payload);
+        l_hash := request_pkg.payload_hash(l_payload);
         request_pkg.register_request(
             p_action_request_id => l_action_request_id,
             p_operation_name => l_operation,
             p_payload_hash => l_hash,
-            p_payload => p_payload,
+            p_payload => l_payload,
             o_result => l_result,
             o_status => l_status,
             o_response_payload => l_existing_response
@@ -169,7 +174,7 @@ create or replace package body api_pkg as
             return;
         end if;
 
-        l_valid := validation_pkg.validate_request(p_payload, l_errors);
+        l_valid := validation_pkg.validate_request(l_payload, l_errors);
 
         if not l_valid then
             o_response := '{"ACTION_REQUEST_ID":"' || replace(l_action_request_id, '"', '\"') || '","STATUS":"FAILED_NO_SIDE_EFFECT","RETRYABLE":false,"COMPLETED_STEPS":[],"FAILED_STEP":null,"GENERATED_IDENTIFIERS":{},"ERRORS":' || l_errors || '}';
@@ -208,12 +213,15 @@ create or replace package body api_pkg as
         l_action_request_id varchar2(80);
         l_errors clob;
         l_valid boolean;
+        l_payload clob;
     begin
-        select json_value(p_payload, '$.ACTION_REQUEST_ID' returning varchar2(80) null on error)
+        -- Validate the same document the submit path would store.
+        l_payload := request_pkg.normalise_payload(p_payload);
+        select json_value(l_payload, '$.ACTION_REQUEST_ID' returning varchar2(80) null on error)
           into l_action_request_id
           from dual;
 
-        l_valid := validation_pkg.validate_request(p_payload, l_errors);
+        l_valid := validation_pkg.validate_request(l_payload, l_errors);
 
         if l_valid then
             o_http_status := 200;

@@ -66,7 +66,7 @@ create or replace package body ui_pkg as
                    'COLOUR' value d.colour,
                    'UNIT_COST' value d.unit_cost,
                    'RETAIL_PRICE' value d.retail_price,
-                   'PLMSizeCurveDtl' value (
+                   'SIZE_CURVE_DETAIL' value (
                        select coalesce(
                                   json_arrayagg(
                                       json_object(

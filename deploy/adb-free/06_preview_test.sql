@@ -63,7 +63,7 @@ begin
       "COLOUR": "08610",
       "UNIT_COST": 48.49,
       "RETAIL_PRICE": 100,
-      "PLMSizeCurveDtl": [
+      "SIZE_CURVE_DETAIL": [
         {"SOURCE_VARIANT_REF": "pv-7", "SKU_SIZE": "7", "SKU_WIDTH": "ALL", "SKU_QTY": 1, "SKU_ID": null},
         {"SOURCE_VARIANT_REF": "pv-8", "SKU_SIZE": "8", "SKU_WIDTH": "ALL", "SKU_QTY": 1, "SKU_ID": null}
       ],
@@ -98,7 +98,7 @@ begin
       "COLOUR": "08610",
       "UNIT_COST": 50.00,
       "RETAIL_PRICE": 110,
-      "PLMSizeCurveDtl": [
+      "SIZE_CURVE_DETAIL": [
         {"SOURCE_VARIANT_REF": "pv-7", "SKU_SIZE": "7", "SKU_WIDTH": "ALL", "SKU_QTY": 5, "SKU_ID": "100050013"}
       ],
       "NOT_BEFORE_DATE": "2026-08-21",

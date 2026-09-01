@@ -18,7 +18,7 @@ export const PIPELINE = [
     detail:
       'PLM/Office sends a single document: identity (ACTION_REQUEST_ID, OPERATION_NAME, source ' +
       'references), the merchandise fields (department, class, colour, supplier, cost, retail), the ' +
-      'size curve (PLMSizeCurveDtl - one row per size/width), and order fields when an order is ' +
+      'size curve (SIZE_CURVE_DETAIL - one row per size/width), and order fields when an order is ' +
       'involved. It is a statement of desired state, not a diff: the layer assumes everything in it ' +
       'may have changed. The console’s Build tab constructs exactly this document and nothing more - ' +
       'all downstream logic lives in the database.',

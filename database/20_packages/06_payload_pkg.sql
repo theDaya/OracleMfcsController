@@ -33,7 +33,7 @@ create or replace package payload_pkg authid definer as
     -- JSON-reading implementation.
     function string_value(p_payload in clob, p_name in varchar2) return varchar2;
 
-    -- One row of the inbound document's PLMSizeCurveDtl array. Every reader of
+    -- One row of the inbound document's SIZE_CURVE_DETAIL array. Every reader of
     -- the size curve - here and in the orchestrator - sees this shape; the
     -- json_table projection behind it is defined once (c_size_curve, in the
     -- body), so a column added to the curve lands in exactly one place.
@@ -53,7 +53,7 @@ create or replace package payload_pkg authid definer as
     -- added to the curve is now added here and nowhere else.
     cursor c_size_curve(cp_payload clob) is
         select rn, source_variant_ref, sku_size, sku_width, sku_id, sku_qty
-          from json_table(cp_payload, '$.PLMSizeCurveDtl[*]'
+          from json_table(cp_payload, '$.SIZE_CURVE_DETAIL[*]'
               columns
                   rn                 for ordinality,
                   source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
@@ -75,7 +75,7 @@ create or replace package payload_pkg authid definer as
     cursor c_sku_upcs(cp_payload clob) is
         select rn, source_variant_ref, sku_id, sku_size, sku_width,
                upc_rn, upc, upc_type, primary_yn
-          from json_table(cp_payload, '$.PLMSizeCurveDtl[*]'
+          from json_table(cp_payload, '$.SIZE_CURVE_DETAIL[*]'
               columns
                   rn                 for ordinality,
                   source_variant_ref varchar2(120) path '$.SOURCE_VARIANT_REF',
@@ -112,7 +112,7 @@ create or replace package payload_pkg authid definer as
           );
 
 
-    -- The size curve of any document carrying PLMSizeCurveDtl - the stored
+    -- The size curve of any document carrying SIZE_CURVE_DETAIL - the stored
     -- request, or an MFCS response echoing the same shape back.
     function size_curve(p_payload in clob) return t_size_curve;
 
@@ -406,7 +406,9 @@ create or replace package body payload_pkg as
         p_subclass    in number,
         p_retail      in number,
         p_source_ref  in varchar2,
-        p_color       in varchar2
+        p_color       in varchar2,
+        -- Defaulted so a caller that has no brand to give does not have to say so.
+        p_brand       in varchar2 default null
     ) is
         l_cost_zone_group_id number :=
             to_number(config_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000'));
@@ -422,6 +424,11 @@ create or replace package body payload_pkg as
         l_item.put('itemDescription', substr(p_source_ref, 1, 250));
         l_item.put('shortDescription', substr(p_source_ref, 1, 120));
         l_item.put('dataLoadingDestination', 'RMS');
+        -- Omitted rather than sent null when the document carries no brand: the
+        -- update services treat a null as a value and would clear an existing one.
+        if p_brand is not null then
+            l_item.put('brandName', p_brand);
+        end if;
         -- storeOrderMultiple is not optional on an update, even one that only touches
         -- descriptions: items/update answers a payload without it with
         -- "Field must be entered.Field: STORE_ORD_MULT ... CORESVC_ITEM.PROCESS_IM".
@@ -474,7 +481,7 @@ create or replace package body payload_pkg as
             l_sku := resolve_sku(p_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
-            l_item.put('itemDescription', substr(p_source_ref || ' ' || v.sku_size || ' ' || v.sku_width, 1, 250));
+            l_item.put('itemDescription', substr(p_source_ref || ' ' || v.sku_size, 1, 250));
             l_item.put('shortDescription', substr(p_source_ref, 1, 120));
             l_item.put('dataLoadingDestination', 'RMS');
             -- Required on update as well as create; see append_parent_item.
@@ -545,7 +552,8 @@ create or replace package body payload_pkg as
         l_items json_array_t := json_array_t();
     begin
         item_create_context(p_action_request_id, l_payload, l_operation, l_style, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color);
-        append_parent_item(l_items, l_operation, l_style, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color);
+        append_parent_item(l_items, l_operation, l_style, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color,
+            json_value(l_payload, '$.BRAND' returning varchar2(120) null on error));
         l_root.put('collectionSize', l_items.get_size);
         l_root.put('items', l_items);
         return l_root.to_clob;
@@ -596,7 +604,8 @@ create or replace package body payload_pkg as
           into l_operation, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color
           from dual;
 
-        append_parent_item(l_items, l_operation, l_style, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color);
+        append_parent_item(l_items, l_operation, l_style, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color,
+            json_value(l_payload, '$.BRAND' returning varchar2(120) null on error));
         append_child_items(l_items, l_payload, l_operation, l_style, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color);
 
         l_root.put('collectionSize', l_items.get_size);
@@ -910,8 +919,7 @@ create or replace package body payload_pkg as
             l_item.put('itemNumberType', nvl(u.upc_type, l_default_type));
             l_item.put('primaryReferenceItemInd', nvl(upper(u.primary_yn), 'N'));
             l_item.put('dataLoadingDestination', 'RMS');
-            l_item.put('itemDescription',
-                substr(l_source_ref || ' ' || u.sku_size || ' ' || u.sku_width, 1, 250));
+            l_item.put('itemDescription', substr(l_source_ref || ' ' || u.sku_size, 1, 250));
             l_item.put('shortDescription', substr(l_source_ref, 1, 120));
             l_item.put('dept', l_department);
             l_item.put('class', l_class);

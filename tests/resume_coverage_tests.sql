@@ -73,7 +73,7 @@ declare
             || '"SUPPLIER":"700087","ORIGIN_COUNTRY":"GB","IMPORT_COUNTRY":"GB",'
             || '"CURRENCY_CODE":"ZAR","COLOUR":"08610",'
             || '"UNIT_COST":48.49,"RETAIL_PRICE":100,'
-            || '"PLMSizeCurveDtl":[{"SOURCE_VARIANT_REF":"' || l_ref || '-7","SKU_SIZE":"7","SKU_WIDTH":"ALL","SKU_QTY":1,"SKU_ID":null}],'
+            || '"SIZE_CURVE_DETAIL":[{"SOURCE_VARIANT_REF":"' || l_ref || '-7","SKU_SIZE":"7","SKU_WIDTH":"ALL","SKU_QTY":1,"SKU_ID":null}],'
             || '"NOT_BEFORE_DATE":"' || to_char(sysdate, 'YYYY-MM-DD') || '",'
             || '"NOT_AFTER_DATE":"' || to_char(sysdate, 'YYYY-MM-DD') || '",'
             -- OTB end-of-week must land on the retail week-ending day (Sunday on this

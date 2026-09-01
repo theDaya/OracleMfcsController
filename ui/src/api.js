@@ -81,7 +81,7 @@ export function buildInboundPayload(form) {
     COLOUR: form.colour,
     UNIT_COST: num(form.unitCost),
     RETAIL_PRICE: num(form.retailPrice),
-    PLMSizeCurveDtl: form.sizeCurve.map((r) => ({
+    SIZE_CURVE_DETAIL: form.sizeCurve.map((r) => ({
       SOURCE_VARIANT_REF: r.sourceVariantRef,
       SKU_SIZE: r.size,
       SKU_WIDTH: r.width,

@@ -18,7 +18,7 @@
   "COLOUR": "BLACK",
   "UNIT_COST": 22.75,
   "RETAIL_PRICE": 69.99,
-  "PLMSizeCurveDtl": [
+  "SIZE_CURVE_DETAIL": [
     {
       "SOURCE_VARIANT_REF": "OFF-STYLE-000742-UK7",
       "SKU_SIZE": "7",
