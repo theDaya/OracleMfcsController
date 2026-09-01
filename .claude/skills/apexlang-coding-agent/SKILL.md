@@ -37,9 +37,41 @@ of syntax that this repo's own export does not contain.
 What it does carry: `facetedSearch`, `chart`, `themeTemplateComponent` (cards, media lists),
 `classicReport`, drawer forms, dashboards, master-detail, and a `staticValues` donor.
 
-What it does **not** carry, so do not go looking: `popupLov`, `interactiveGrid`, `comboBox`, `shuttle`.
-For interactive grids the donor is this repo's own `apexlang/mfcs-controller/pages/p00003.apx`. There
-is still no donor anywhere for a grid-column cascading LOV.
+The same repo carries **`sample-interactive-grids`**, a second app of 49 pages that is the better donor
+for anything grid-shaped: `p00030-basic-editing`, `p00031-validation`, `p00034-form-with-grid`,
+`p00035-master-detail`, `p00036-other-column-types`, `p00054/55-editing-in-a-dialog`,
+`p00058-dynamic-actions`. 39 interactive grids and 18 auto-row-processing donors between them.
+
+**A grid-column cascading LOV has no donor in either app.** `cascadingLov` and `parentColumns` appear
+only on page items, never on a grid column. Do not spend time hunting for one; label the list so a
+value is unambiguous on its own, and let validation reject a bad pairing.
+
+**Popup LOV, for a list too long to be a select list** (a colour picker over 48,000 diffs, say). From
+`sample-interactive-grids/pages/p00036-other-column-types.apx`:
+
+```apex
+column MGR (
+    type: popupLov
+    heading { heading: Manager }
+    settings {
+        displayAs: modalDialog
+    }
+    lov {
+        type: sqlQuery
+        sqlQuery: select ENAME as d, EMPNO as r from EBA_DEMO_IG_EMP order by 1
+    }
+    source {
+        databaseColumn: MGR
+        dataType: number
+    }
+    columnFilter {
+        lovType: useLov
+    }
+)
+```
+
+`switch` is also available as a column type, which suits a Y/N flag better than a two-entry select
+list.
 
 ## Page And Component Pitfalls
 
