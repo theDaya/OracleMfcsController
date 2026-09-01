@@ -33,6 +33,11 @@ create or replace package payload_pkg authid definer as
     -- JSON-reading implementation.
     function string_value(p_payload in clob, p_name in varchar2) return varchar2;
 
+    -- A delivery location as the virtual warehouse MFCS wants, derived from the
+    -- tenant's warehouse feed. Public because the order-line planner needs the
+    -- same answer the order mapper gets.
+    function virtual_location(p_location in varchar2) return varchar2;
+
     -- One row of the inbound document's SIZE_CURVE_DETAIL array. Every reader of
     -- the size curve - here and in the orchestrator - sees this shape; the
     -- json_table projection behind it is defined once (c_size_curve, in the
@@ -320,15 +325,30 @@ create or replace package body payload_pkg as
         return json_object_t.parse(p_payload).get_number(p_name);
     end;
 
-    function mapped_config_value(
-        p_prefix  in varchar2,
-        p_value   in varchar2
-    ) return varchar2 is
+    -- A delivery location, as the virtual warehouse MFCS wants.
+    --
+    -- The one translation that survived MAP's retirement, because it is not a
+    -- naming difference: item ranging is refused against a physical warehouse at
+    -- hierarchy level W, and a caller may legitimately think in physical
+    -- locations. It now derives from the tenant's own warehouse feed - the row
+    -- for 1927 carries primaryVirtualWarehouse 19271 - rather than from a
+    -- hand-maintained MAP.ORDER_LOCATION entry.
+    --
+    -- Passes the value straight through when it is already virtual, or when the
+    -- warehouse is unknown to master data. A caller sending the virtual warehouse
+    -- directly, which is what the console does, is unaffected either way.
+    function virtual_location(p_location in varchar2) return varchar2 is
+        l_virtual varchar2(120);
     begin
-        if p_value is null then
+        if p_location is null then
             return null;
         end if;
-        return config_pkg.get_config(p_prefix || upper(p_value), p_value);
+        select max(json_value(attributes, '$.primaryVirtualWarehouse'))
+          into l_virtual
+          from master_data
+         where data_type = 'WAREHOUSE_SVC'
+           and data_code = p_location;
+        return nvl(l_virtual, p_location);
     end;
 
     -- The operations that write to a style MFCS already holds. Their item payloads
@@ -503,9 +523,9 @@ create or replace package body payload_pkg as
                 l_item.put('orderableInd', 'Y');
                 l_item.put('originalRetail', p_retail);
                 l_item.put('costZoneGroupId', l_cost_zone_group_id);
-                l_item.put('diff1', mapped_config_value('MAP.COLOUR.', p_color));
+                l_item.put('diff1', p_color);
                 l_item.put('diff1Type', 'C');
-                l_item.put('diff2', mapped_config_value('MAP.SIZE.', v.sku_size));
+                l_item.put('diff2', v.sku_size);
                 l_item.put('diff2Type', 'S');
             end if;
             p_items.append(l_item);
@@ -924,8 +944,8 @@ create or replace package body payload_pkg as
             l_item.put('dept', l_department);
             l_item.put('class', l_class);
             l_item.put('subclass', l_subclass);
-            l_item.put('diff1', mapped_config_value('MAP.COLOUR.', l_color));
-            l_item.put('diff2', mapped_config_value('MAP.SIZE.', u.sku_size));
+            l_item.put('diff1', l_color);
+            l_item.put('diff2', u.sku_size);
             l_item.put('sellableInd', 'Y');
             l_item.put('orderableInd', 'Y');
             l_item.put('merchandiseInd', 'Y');
@@ -966,7 +986,7 @@ create or replace package body payload_pkg as
         l_hierarchy_value := to_number(
             coalesce(
                 case when l_delivery is not null
-                     then config_pkg.get_config('MAP.ORDER_LOCATION.' || l_delivery)
+                     then virtual_location(l_delivery)
                 end,
                 to_char(l_delivery),
                 config_pkg.get_config('MFCS_LOCATION_HIERARCHY_VALUE', '19271')
@@ -1093,7 +1113,7 @@ create or replace package body payload_pkg as
     begin
         l_delivery := to_char(optional_number(p_payload, 'DELIVERY_LOC'));
         if l_delivery is not null then
-            l_location := config_pkg.get_config('MAP.ORDER_LOCATION.' || l_delivery, l_delivery);
+            l_location := virtual_location(l_delivery);
         else
             l_location := config_pkg.get_config('MFCS_ORDER_DEFAULT_LOCATION', null);
         end if;

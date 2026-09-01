@@ -30,9 +30,9 @@ begin
         || '"RETAIL_PRICE":100,'
         || '"SIZE_CURVE_DETAIL":['
         || '{"SOURCE_VARIANT_REF":"' || l_source_ref || '-7",'
-        || '"SKU_SIZE":"7","SKU_WIDTH":"ALL","SKU_QTY":1,"SKU_ID":null},'
+        || '"SKU_SIZE":"070","SKU_WIDTH":"ALL","SKU_QTY":1,"SKU_ID":null},'
         || '{"SOURCE_VARIANT_REF":"' || l_source_ref || '-8",'
-        || '"SKU_SIZE":"8","SKU_WIDTH":"ALL","SKU_QTY":1,"SKU_ID":null}'
+        || '"SKU_SIZE":"080","SKU_WIDTH":"ALL","SKU_QTY":1,"SKU_ID":null}'
         || ']}';
 
     api_pkg.submit_transaction(l_payload, l_http, l_response);

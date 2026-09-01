@@ -42,9 +42,26 @@ for anything grid-shaped: `p00030-basic-editing`, `p00031-validation`, `p00034-f
 `p00035-master-detail`, `p00036-other-column-types`, `p00054/55-editing-in-a-dialog`,
 `p00058-dynamic-actions`. 39 interactive grids and 18 auto-row-processing donors between them.
 
-**A grid-column cascading LOV has no donor in either app.** `cascadingLov` and `parentColumns` appear
-only on page items, never on a grid column. Do not spend time hunting for one; label the list so a
-value is unambiguous on its own, and let validation reject a bad pairing.
+**A grid column CAN cascade on another column**, even though neither donor app contains an example -
+searching them for one is a dead end, which is what makes this worth writing down. `parentColumns`
+takes the parent *column* name, and the child's LOV binds it like a page item:
+
+```apex
+column MGR (
+    type: popupLov
+    settings { displayAs: modalDialog }
+    lov {
+        type: sqlQuery
+        sqlQuery: select ENAME as d, EMPNO as r from EBA_DEMO_IG_EMP where JOB = :JOB order by 1
+    }
+    cascadingLov {
+        parentColumns: JOB
+    }
+    source { databaseColumn: MGR dataType: number }
+)
+```
+
+The parent column can be an ordinary `selectList`; nothing special is needed on it.
 
 **Popup LOV, for a list too long to be a select list** (a colour picker over 48,000 diffs, say). From
 `sample-interactive-grids/pages/p00036-other-column-types.apx`:

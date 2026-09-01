@@ -70,14 +70,21 @@ show errors
 
 create or replace package body sku_pkg as
 
+    -- Identity. Every front end that talks to this controller sends the tenant's
+    -- own differentiator ID, so there is nothing to translate. This used to read
+    -- MAP.SIZE.* config, which meant a display size like "7" had to be mapped to
+    -- "070" - and left eight size descriptions ambiguous, because the tenant has
+    -- three differentiators described "16".
     function size_diff(p_display in varchar2) return varchar2 is
     begin
-        return config_pkg.get_config('MAP.SIZE.' || p_display);
+        return p_display;
     end;
 
+    -- Identity, for the same reason as size_diff. This was already effectively
+    -- identity: every MAP.COLOUR.* row mapped a code to itself.
     function colour_diff(p_colour in varchar2) return varchar2 is
     begin
-        return nvl(config_pkg.get_config('MAP.COLOUR.' || p_colour), p_colour);
+        return p_colour;
     end;
 
     function existing_skus(p_style in varchar2) return clob is

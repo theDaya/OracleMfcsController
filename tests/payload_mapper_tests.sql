@@ -60,13 +60,13 @@ begin
         { "UDA_ID": 56038, "UDA_TEXT": "Leather upper" }
       ],
       "SIZE_CURVE_DETAIL": [
-        { "SOURCE_VARIANT_REF": "mapper test style-7", "SKU_SIZE": "7",
+        { "SOURCE_VARIANT_REF": "mapper test style-7", "SKU_SIZE": "070",
           "SKU_WIDTH": "ALL", "SKU_QTY": 1, "SKU_ID": null,
           "SKU_UPCS": [
             { "UPC": "2930000003016", "PRIMARY_YN": "Y" },
             { "UPC": "4013871023272", "PRIMARY_YN": "N", "UPC_TYPE": "MANL" }
           ] },
-        { "SOURCE_VARIANT_REF": "mapper test style-8", "SKU_SIZE": "8",
+        { "SOURCE_VARIANT_REF": "mapper test style-8", "SKU_SIZE": "080",
           "SKU_WIDTH": "ALL", "SKU_QTY": 1, "SKU_ID": null }
       ]
     }';
@@ -134,7 +134,7 @@ begin
       "DEPARTMENT": "1517", "CLASS": "6892", "SUBCLASS": "1128",
       "SUPPLIER": "700087", "ORIGIN_COUNTRY": "GB", "COLOUR": "08610",
       "SIZE_CURVE_DETAIL": [
-        { "SOURCE_VARIANT_REF": "bad-7", "SKU_SIZE": "7", "SKU_WIDTH": "ALL", "SKU_QTY": 1,
+        { "SOURCE_VARIANT_REF": "bad-7", "SKU_SIZE": "070", "SKU_WIDTH": "ALL", "SKU_QTY": 1,
           "SKU_UPCS": [
             { "UPC": "2930000003017", "PRIMARY_YN": "Y" },
             { "UPC": "2930000003016", "PRIMARY_YN": "Y" }
@@ -165,7 +165,7 @@ begin
 
     l_out := request_pkg.normalise_payload(
         '{"DEPARTMENT":"1517","CLASS":"6892","SUBCLASS":"1128",
-          "PLMSizeCurveDtl":[{"SKU_SIZE":"7","SKU_QTY":1}]}');
+          "PLMSizeCurveDtl":[{"SKU_SIZE":"070","SKU_QTY":1}]}');
     check_it('legacy key becomes canonical',
         '1', to_char(case when json_exists(l_out, '$.SIZE_CURVE_DETAIL') then 1 else 0 end));
     check_it('legacy key is gone',
@@ -180,7 +180,7 @@ begin
         'Y', case when instr(l_out, '"DEPARTMENT":"1517"') = 0 then 'Y' else 'N' end);
 
     l_out := request_pkg.normalise_payload(
-        '{"SIZE_CURVE_DETAIL":[{"SKU_SIZE":"9"}],"PLMSizeCurveDtl":[{"SKU_SIZE":"7"}]}');
+        '{"SIZE_CURVE_DETAIL":[{"SKU_SIZE":"090"}],"PLMSizeCurveDtl":[{"SKU_SIZE":"070"}]}');
     check_it('canonical wins when both are sent',
         '9', json_value(l_out, '$.SIZE_CURVE_DETAIL[0].SKU_SIZE'));
     check_it('legacy dropped when both are sent',

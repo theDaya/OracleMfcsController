@@ -63,6 +63,43 @@ create or replace package body validation_pkg as
         return config_pkg.get_config(p_key) is not null;
     end;
 
+    -- Whether the tenant holds this reference value.
+    --
+    -- These checks used to read MAP.* config, a list maintained alongside master
+    -- data and free to disagree with it - which is how MAP.COLOUR.BLACK came to
+    -- exist, offering a colour the tenant would reject after an item number had
+    -- already been burned. Master data is what the tenant actually has.
+    --
+    -- Returns true when the type has not been loaded at all. A database whose
+    -- master data has never been refreshed should not reject every document; it
+    -- should behave as it did before the check existed. The refresh log is where
+    -- an empty type is visible, not here.
+    function has_master(
+        p_type   in varchar2,
+        p_code   in varchar2,
+        p_parent in varchar2 default '~'
+    ) return boolean is
+        l_loaded number;
+        l_found number;
+    begin
+        if p_code is null then
+            return false;
+        end if;
+
+        select count(*) into l_loaded from master_data where data_type = p_type;
+        if l_loaded = 0 then
+            return true;
+        end if;
+
+        select count(*)
+          into l_found
+          from master_data
+         where data_type = p_type
+           and data_code = p_code
+           and parent_code = nvl(p_parent, '~');
+        return l_found > 0;
+    end;
+
     function validate_request(
         p_payload in clob,
         o_errors  out clob
@@ -517,33 +554,49 @@ create or replace package body validation_pkg as
             end if;
         end loop;
 
-        if trim(l_department) is not null and not has_config('MAP.DEPARTMENT.' || l_department) then
-            add_error(l_errors, 'DEPARTMENT', 'MAPPING_NOT_FOUND', 'Department mapping is not configured.');
+        if trim(l_department) is not null
+           and not has_master('DEPARTMENT', trim(l_department)) then
+            add_error(l_errors, 'DEPARTMENT', 'UNKNOWN_DEPARTMENT',
+                'Department ' || l_department || ' is not known to this tenant.');
         end if;
 
-        if trim(l_department) is not null and trim(l_class) is not null and not has_config('MAP.CLASS.' || l_department || '.' || l_class) then
-            add_error(l_errors, 'CLASS', 'MAPPING_NOT_FOUND', 'Class mapping is not configured.');
+        if trim(l_department) is not null and trim(l_class) is not null
+           and not has_master('CLASS', trim(l_class), trim(l_department)) then
+            add_error(l_errors, 'CLASS', 'UNKNOWN_CLASS',
+                'Class ' || l_class || ' is not known under department ' || l_department || '.');
         end if;
 
         if trim(l_department) is not null and trim(l_class) is not null and trim(l_subclass) is not null
-           and not has_config('MAP.SUBCLASS.' || l_department || '.' || l_class || '.' || l_subclass) then
-            add_error(l_errors, 'SUBCLASS', 'MAPPING_NOT_FOUND', 'Subclass mapping is not configured.');
+           and not has_master('SUBCLASS', trim(l_subclass),
+                              trim(l_department) || '.' || trim(l_class)) then
+            add_error(l_errors, 'SUBCLASS', 'UNKNOWN_SUBCLASS',
+                'Subclass ' || l_subclass || ' is not known under ' || l_department || '.' || l_class || '.');
         end if;
 
-        if trim(l_supplier) is not null and not has_config('MAP.SUPPLIER.' || l_supplier) then
-            add_error(l_errors, 'SUPPLIER', 'MAPPING_NOT_FOUND', 'Supplier mapping is not configured.');
+        if trim(l_supplier) is not null
+           and not has_master('SUPPLIER_SVC', trim(l_supplier)) then
+            add_error(l_errors, 'SUPPLIER', 'UNKNOWN_SUPPLIER',
+                'Supplier ' || l_supplier || ' is not known to this tenant.');
         end if;
 
-        if trim(l_country) is not null and not has_config('MAP.COUNTRY.' || upper(l_country)) then
-            add_error(l_errors, 'ORIGIN_COUNTRY', 'MAPPING_NOT_FOUND', 'Country mapping is not configured.');
+        if trim(l_country) is not null
+           and not has_master('COUNTRY', upper(trim(l_country))) then
+            add_error(l_errors, 'ORIGIN_COUNTRY', 'UNKNOWN_COUNTRY',
+                'Country ' || l_country || ' is not known to this tenant.');
         end if;
 
-        if trim(l_currency) is not null and not has_config('MAP.CURRENCY.' || upper(l_currency)) then
-            add_error(l_errors, 'CURRENCY_CODE', 'MAPPING_NOT_FOUND', 'Currency mapping is not configured.');
+        if trim(l_currency) is not null
+           and not has_master('CURRENCY', upper(trim(l_currency))) then
+            add_error(l_errors, 'CURRENCY_CODE', 'UNKNOWN_CURRENCY',
+                'Currency ' || l_currency || ' is not known to this tenant.');
         end if;
 
-        if trim(l_colour) is not null and not has_config('MAP.COLOUR.' || upper(l_colour)) then
-            add_error(l_errors, 'COLOUR', 'MAPPING_NOT_FOUND', 'Colour mapping is not configured.');
+        -- The colour is a differentiator ID, not a name. Front ends send the
+        -- tenant's own code; there is no description to translate.
+        if trim(l_colour) is not null
+           and not has_master('DIFF_C', trim(l_colour)) then
+            add_error(l_errors, 'COLOUR', 'UNKNOWN_COLOUR',
+                'Colour ' || l_colour || ' is not a differentiator on this tenant.');
         end if;
 
         for v in (
@@ -554,8 +607,15 @@ create or replace package body validation_pkg as
                       sku_width varchar2(60) path '$.SKU_WIDTH' null on error
               )
         ) loop
-            if v.sku_size is null or not has_config('MAP.SIZE.' || upper(v.sku_size)) then
-                add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_SIZE', 'MAPPING_NOT_FOUND', 'Size mapping is not configured.');
+            -- Likewise a differentiator ID. This is what removed the last reason
+            -- to keep MAP: eight size descriptions are ambiguous on this tenant
+            -- ("16" is three different differentiators), and a code never is.
+            if v.sku_size is null then
+                add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_SIZE', 'REQUIRED',
+                    'SKU_SIZE is required.');
+            elsif not has_master('DIFF_S', trim(v.sku_size)) then
+                add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_SIZE', 'UNKNOWN_SIZE',
+                    'Size ' || v.sku_size || ' is not a differentiator on this tenant.');
             end if;
 
         end loop;

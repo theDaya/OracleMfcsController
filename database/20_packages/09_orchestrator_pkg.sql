@@ -568,13 +568,15 @@ create or replace package body orchestrator_pkg as
             end if;
         end loop;
 
-        -- An unmapped size would go out as a null differentiator. The gap analysis
-        -- reads diffs back through the same MAP.SIZE entries, so even if MFCS took
-        -- it, the next run would report the same combination missing again.
+        -- A null size would go out as a null differentiator, and the gap analysis
+        -- would report the same combination missing on every subsequent run. Since
+        -- sizes are now the tenant's own differentiator IDs rather than display
+        -- values needing a MAP.SIZE entry, this only fires on a genuinely empty
+        -- size rather than on a missing mapping.
         if l_unmapped is not null then
             raise_application_error(-20963,
-                'Style ' || p_style || ' needs sizes that have no MAP.SIZE mapping: '
-                || substr(l_unmapped, 1, 300) || '. Add the mapping before creating children.');
+                'Style ' || p_style || ' needs sizes that resolved to no differentiator: '
+                || substr(l_unmapped, 1, 300) || '.');
         end if;
 
         event_pkg.log_event(
@@ -933,8 +935,8 @@ create or replace package body orchestrator_pkg as
 
         -- Order-level values for the line nodes, same sources as the order mapper.
         l_plan.order_no := l_order_no;
-        l_plan.location := to_number(config_pkg.get_config(
-            'MAP.ORDER_LOCATION.' || payload_pkg.string_value(l_payload, 'DELIVERY_LOC'),
+        l_plan.location := to_number(nvl(
+            payload_pkg.virtual_location(payload_pkg.string_value(l_payload, 'DELIVERY_LOC')),
             config_pkg.get_config('MFCS_ORDER_DEFAULT_LOCATION', '19271')));
         l_plan.location_type := config_pkg.get_config('MFCS_ORDER_LOCATION_TYPE', 'W');
         l_plan.origin_country := payload_pkg.string_value(l_payload, 'ORIGIN_COUNTRY');
