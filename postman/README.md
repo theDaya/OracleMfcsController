@@ -7,7 +7,7 @@ style/order viewer.
 
 | File | Purpose |
 | --- | --- |
-| `OracleMFCS.postman_collection.json` | The collection: 32 requests across 9 folders |
+| `OracleMFCS.postman_collection.json` | The collection: 45 requests across 10 folders |
 | `MFCS-Dev.postman_environment.json` | Environment holding the two hosts and your credentials |
 
 Import both into Postman, select the environment, then fill in `clientId` and `clientSecret`.
@@ -53,6 +53,7 @@ than letting you chase a confusing 401.
 | `06 - Item Locations` | Feature-disabled; requests kept for hierarchy-value hunting |
 | `07 - Purchase Orders` | Reserve number, create, verify, update |
 | `08 - Diagnostics & Recovery` | Status lookup by correlation ID |
+| `09 - Flow: Create Style with SKUs` | The whole create sequence as one runnable folder |
 
 ## What the GETs actually do (swept 2026-08-21)
 
@@ -108,6 +109,66 @@ automatically, so each create already knows the numbers the reservation just ret
 03 approve
 07 reserve order  →  07 create PO  →  07 verify PO
 ```
+
+Folder `09` is that chain pre-assembled for the style half, so you do not have to click through
+folders 02–05 in the right order. See below.
+
+## Folder 09 — create a style with SKUs in one run
+
+Open the Collection Runner, select **only** folder `09 - Flow: Create Style with SKUs`, and run it.
+It performs the same calls, in the same order, with the same payloads as the integration's
+`CREATE_STYLE` step graph:
+
+```
+00 preflight (token still valid?)
+01 reserve parent          →  {{parentItem}}
+02 reserve child SKU 1     →  {{childItem1}}
+03 reserve child SKU 2     →  {{childItem2}}
+04 create parent style         diff GROUPS   RMS_ALL_C / ALL
+05 create parent supplier
+06 create child SKUs           concrete diffs 08610 / 070 / 080
+07 create child suppliers
+08 create countries of manufacture
+09 create item UDAs            empty arrays, on purpose
+10 READ BACK  itemDetail   →  assert both children exist with the right diffs
+11 approve parent + children
+12 READ BACK  itemDetail   →  assert all three are status A
+```
+
+**It creates real records on the dev tenant and burns real item numbers.** There is no simulator
+behind the collection.
+
+Three things about it are deliberate:
+
+**Steps 10 and 12 are the only real verification.** MFCS answers a write that changed nothing with
+HTTP 200 `SUCCESS`, so asserting on `status === "SUCCESS"` only catches loud failures. Reading the
+style back is what proves the children exist and the approval landed.
+
+**The read-backs use `itemDetail`, not `foundation/item`.** The feed read 404s on a style created
+minutes ago, and `itemDetail` is the only call that returns a style with its children in one go. It
+answers a JSON array whose rows carry `item`, `itemParent`, `diff1`, `diff2` and `status` — a third
+vocabulary, neither the feed's nor the write services'. Both read-backs retry up to three times
+before failing, so feed lag is not reported as a silent failure that did not happen.
+
+**Any failure halts the run.** A half-created style makes every following step address items that do
+not exist, and the resulting errors all look like payload problems. The console line beginning
+`HALTING -` names the request that actually broke.
+
+Each run stamps `{{flowDescription}}` with a fresh timestamp, so repeated runs are distinguishable
+in the tenant rather than piling up under one description.
+
+## There is no Flows canvas file
+
+Postman **Flows** — the visual block canvas — has no export or import file format. Flows are
+authored in the Postman app against your Postman cloud workspace, and as of this writing exporting
+one to a file is still an open feature request, not a capability. A hand-authored `.pmflow` would
+not import, so this repo does not carry one; folder `09` is the runnable artifact.
+
+If you want the canvas anyway, it rebuilds from folder `09` in a few minutes: start a flow, add a
+**Send Request** block per row of the diagram above pointing at that folder's request, and wire each
+block's output into the next block's input, mapping `body.items[0].item` out of the three
+reservation blocks into the create blocks. The value of the canvas is watching the data move; the
+assertions and the halt-on-failure behaviour already live in the folder.
 
 Two ordering rules are load-bearing:
 

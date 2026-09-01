@@ -345,6 +345,18 @@
       "key": "today",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "flowRunId",
+      "value": ""
+    },
+    {
+      "key": "flowDescription",
+      "value": ""
+    },
+    {
+      "key": "readBackAttempt",
+      "value": "0"
     }
   ],
   "item": [
@@ -2303,6 +2315,1002 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "09 - Flow: Create Style with SKUs",
+      "description": "Runnable end-to-end create of one style with two child SKUs, in the same order and with the same payloads the integration's CREATE_STYLE step graph uses.\n\n**This creates real records on the dev tenant and burns real item numbers.** There is no simulator behind it.\n\nOpen the Collection Runner, select only this folder, and run it top to bottom. Each request halts the run on failure rather than letting a half-created style cascade into errors that all look like payload problems.\n\nSteps 10 and 12 are the ones that actually prove anything. MFCS answers a write that changed nothing with HTTP 200 SUCCESS, so the itemDetail read-backs are the verification; the SUCCESS assertions only catch loud failures.",
+      "item": [
+        {
+          "name": "00 - Preflight: token is valid",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/administration/operations/restService/status?xCorrelationId={{correlationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "administration",
+                "operations",
+                "restService",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "xCorrelationId",
+                  "value": "{{correlationId}}"
+                }
+              ]
+            },
+            "description": "Fails fast on an expired bearer token. Tokens last one hour, and a stale one makes every step below fail with a 401 that reads like a payload problem."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('token is accepted by the tenant', function () {",
+                  "    pm.expect(pm.response.code,",
+                  "        'HTTP status - 401 means the bearer token is stale, re-run 00 - Authentication')",
+                  "      .to.not.eql(401);",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// One run id per flow run, so repeated runs are told apart in the tenant.",
+                  "var runId = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);",
+                  "pm.collectionVariables.set('flowRunId', runId);",
+                  "pm.collectionVariables.set('flowDescription', 'Postman flow ' + runId);",
+                  "",
+                  "// Clear numbers from any previous run so a halted run cannot leak into this one.",
+                  "['parentItem', 'childItem1', 'childItem2'].forEach(function (k) {",
+                  "    pm.collectionVariables.set(k, '');",
+                  "});",
+                  "pm.collectionVariables.set('readBackAttempt', 0);",
+                  "console.log('Flow run ' + runId + ' - this WILL create real records on the dev tenant.');",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01 - Reserve parent item number",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/itemNumbers/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "itemNumbers",
+                "reserve"
+              ]
+            },
+            "description": "Quantity 1 per call, matching the integration's own reservation chunk size.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemNumberType\": \"ITEM\",\n  \"quantity\": 1,\n  \"daysUntilExpiry\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Parent style number reserved', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var n = pm.response.json().items[0].item;",
+                  "    pm.expect(n, 'reserved item number').to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('parentItem', n);",
+                  "    console.log('Parent style = ' + n);",
+                  "});",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 - Reserve child SKU 1 number",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/itemNumbers/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "itemNumbers",
+                "reserve"
+              ]
+            },
+            "description": "Child SKU for display size {{size1Display}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemNumberType\": \"ITEM\",\n  \"quantity\": 1,\n  \"daysUntilExpiry\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Child SKU 1 number reserved', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var n = pm.response.json().items[0].item;",
+                  "    pm.expect(n, 'reserved item number').to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('childItem1', n);",
+                  "    console.log('Child SKU 1 = ' + n);",
+                  "});",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 - Reserve child SKU 2 number",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/itemNumbers/reserve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "itemNumbers",
+                "reserve"
+              ]
+            },
+            "description": "Child SKU for display size {{size2Display}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemNumberType\": \"ITEM\",\n  \"quantity\": 1,\n  \"daysUntilExpiry\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Child SKU 2 number reserved', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var n = pm.response.json().items[0].item;",
+                  "    pm.expect(n, 'reserved item number').to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('childItem2', n);",
+                  "    console.log('Child SKU 2 = ' + n);",
+                  "});",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 - Create parent style",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/items/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "items",
+                "create"
+              ]
+            },
+            "description": "itemLevel 1. The parent carries differentiator GROUPS ({{parentDiff1Group}} / {{parentDiff2Group}}), never concrete diff IDs. Swapping these with the children's is the most common create failure.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 1,\n  \"items\": [\n    {\n      \"item\": \"{{parentItem}}\",\n      \"itemDescription\": \"{{flowDescription}}\",\n      \"shortDescription\": \"{{flowDescription}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"itemNumberType\": \"ITEM\",\n      \"itemLevel\": 1,\n      \"tranLevel\": 2,\n      \"dept\": {{dept}},\n      \"class\": {{class}},\n      \"subclass\": {{subclass}},\n      \"status\": \"W\",\n      \"approveInd\": \"N\",\n      \"standardUom\": \"EA\",\n      \"merchandiseInd\": \"Y\",\n      \"inventoryInd\": \"Y\",\n      \"sellableInd\": \"Y\",\n      \"orderableInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"originalRetail\": {{retailPrice}},\n      \"costZoneGroupId\": {{costZoneGroupId}},\n      \"diff1\": \"{{parentDiff1Group}}\",\n      \"diff1Type\": \"C\",\n      \"diff2\": \"{{parentDiff2Group}}\",\n      \"diff2Type\": \"S\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Parent style create accepted', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql('SUCCESS');",
+                  "});",
+                  "",
+                  "// SUCCESS is not proof anything changed - MFCS answers a no-op write the same way.",
+                  "// The itemDetail read-backs at steps 10 and 12 are what actually verify the style.",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 - Create parent item supplier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/suppliers/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "suppliers",
+                "create"
+              ]
+            },
+            "description": "Sourcing must exist before approval. defaultUop, costUom, both pack sizes and purchaseType are all required by this tenant, though none of them are obviously mandatory from the spec.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 1,\n  \"items\": [\n    {\n      \"item\": \"{{parentItem}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"primarySupplierInd\": \"Y\",\n          \"countryOfSourcing\": [\n            {\n              \"originCountry\": \"{{originCountry}}\",\n              \"primaryCountryInd\": \"Y\",\n              \"unitCost\": {{unitCost}},\n              \"defaultUop\": \"{{defaultUop}}\",\n              \"costUom\": \"{{costUom}}\",\n              \"supplierPackSize\": {{supplierPackSize}},\n              \"innerPackSize\": {{innerPackSize}},\n              \"purchaseType\": {{purchaseType}}\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Parent sourcing create accepted', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql('SUCCESS');",
+                  "});",
+                  "",
+                  "// SUCCESS is not proof anything changed - MFCS answers a no-op write the same way.",
+                  "// The itemDetail read-backs at steps 10 and 12 are what actually verify the style.",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 - Create child SKU items",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/items/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "items",
+                "create"
+              ]
+            },
+            "description": "itemLevel 2 under the reserved parent. Children carry CONCRETE diff IDs - colour {{colourDiff}}, sizes {{size1Diff}} / {{size2Diff}}. The colour must belong to the parent's diff group ({{parentDiff1Group}}); a colour outside it is one of the few loud failures MFCS gives you.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 2,\n  \"items\": [\n    {\n      \"item\": \"{{childItem1}}\",\n      \"itemDescription\": \"{{flowDescription}} {{size1Display}} {{widthDisplay}}\",\n      \"shortDescription\": \"{{flowDescription}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"itemParent\": \"{{parentItem}}\",\n      \"itemNumberType\": \"ITEM\",\n      \"itemLevel\": 2,\n      \"tranLevel\": 2,\n      \"dept\": {{dept}},\n      \"class\": {{class}},\n      \"subclass\": {{subclass}},\n      \"status\": \"W\",\n      \"approveInd\": \"N\",\n      \"standardUom\": \"EA\",\n      \"merchandiseInd\": \"Y\",\n      \"inventoryInd\": \"Y\",\n      \"sellableInd\": \"Y\",\n      \"orderableInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"originalRetail\": {{retailPrice}},\n      \"costZoneGroupId\": {{costZoneGroupId}},\n      \"diff1\": \"{{colourDiff}}\",\n      \"diff1Type\": \"C\",\n      \"diff2\": \"{{size1Diff}}\",\n      \"diff2Type\": \"S\"\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"itemDescription\": \"{{flowDescription}} {{size2Display}} {{widthDisplay}}\",\n      \"shortDescription\": \"{{flowDescription}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"itemParent\": \"{{parentItem}}\",\n      \"itemNumberType\": \"ITEM\",\n      \"itemLevel\": 2,\n      \"tranLevel\": 2,\n      \"dept\": {{dept}},\n      \"class\": {{class}},\n      \"subclass\": {{subclass}},\n      \"status\": \"W\",\n      \"approveInd\": \"N\",\n      \"standardUom\": \"EA\",\n      \"merchandiseInd\": \"Y\",\n      \"inventoryInd\": \"Y\",\n      \"sellableInd\": \"Y\",\n      \"orderableInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"originalRetail\": {{retailPrice}},\n      \"costZoneGroupId\": {{costZoneGroupId}},\n      \"diff1\": \"{{colourDiff}}\",\n      \"diff1Type\": \"C\",\n      \"diff2\": \"{{size2Diff}}\",\n      \"diff2Type\": \"S\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Child SKU create accepted', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql('SUCCESS');",
+                  "});",
+                  "",
+                  "// SUCCESS is not proof anything changed - MFCS answers a no-op write the same way.",
+                  "// The itemDetail read-backs at steps 10 and 12 are what actually verify the style.",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 - Create child item suppliers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/suppliers/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "suppliers",
+                "create"
+              ]
+            },
+            "description": "Same sourcing shape as the parent, one entry per child.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 2,\n  \"items\": [\n    {\n      \"item\": \"{{childItem1}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"primarySupplierInd\": \"Y\",\n          \"countryOfSourcing\": [\n            {\n              \"originCountry\": \"{{originCountry}}\",\n              \"primaryCountryInd\": \"Y\",\n              \"unitCost\": {{unitCost}},\n              \"defaultUop\": \"{{defaultUop}}\",\n              \"costUom\": \"{{costUom}}\",\n              \"supplierPackSize\": {{supplierPackSize}},\n              \"innerPackSize\": {{innerPackSize}},\n              \"purchaseType\": {{purchaseType}}\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"primarySupplierInd\": \"Y\",\n          \"countryOfSourcing\": [\n            {\n              \"originCountry\": \"{{originCountry}}\",\n              \"primaryCountryInd\": \"Y\",\n              \"unitCost\": {{unitCost}},\n              \"defaultUop\": \"{{defaultUop}}\",\n              \"costUom\": \"{{costUom}}\",\n              \"supplierPackSize\": {{supplierPackSize}},\n              \"innerPackSize\": {{innerPackSize}},\n              \"purchaseType\": {{purchaseType}}\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Child sourcing create accepted', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql('SUCCESS');",
+                  "});",
+                  "",
+                  "// SUCCESS is not proof anything changed - MFCS answers a no-op write the same way.",
+                  "// The itemDetail read-backs at steps 10 and 12 are what actually verify the style.",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 - Create countries of manufacture",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/supplier/countriesOfManufacture/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "supplier",
+                "countriesOfManufacture",
+                "create"
+              ]
+            },
+            "description": "Approval fails without this. Note it cannot be re-created: against a style that already has a row MFCS answers 'already exists', and you have to use the update service instead.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 3,\n  \"items\": [\n    {\n      \"item\": \"{{parentItem}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"countryOfManufacture\": [\n            {\n              \"manufacturerCountry\": \"{{manufacturerCountry}}\",\n              \"primaryManufacturerCountryInd\": \"Y\"\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"item\": \"{{childItem1}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"countryOfManufacture\": [\n            {\n              \"manufacturerCountry\": \"{{manufacturerCountry}}\",\n              \"primaryManufacturerCountryInd\": \"Y\"\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"supplier\": [\n        {\n          \"supplier\": {{supplier}},\n          \"countryOfManufacture\": [\n            {\n              \"manufacturerCountry\": \"{{manufacturerCountry}}\",\n              \"primaryManufacturerCountryInd\": \"Y\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Country of manufacture create accepted', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql('SUCCESS');",
+                  "});",
+                  "",
+                  "// SUCCESS is not proof anything changed - MFCS answers a no-op write the same way.",
+                  "// The itemDetail read-backs at steps 10 and 12 are what actually verify the style.",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 - Create item UDAs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/item/uda/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "item",
+                "uda",
+                "create"
+              ]
+            },
+            "description": "Empty arrays on purpose. This tenant has no UDA definitions - foundation/uda is empty and itemUda is null on every item - so the step exists to stay explicitly logged, not to carry values. Not a bug to fix here.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 2,\n  \"items\": [\n    {\n      \"item\": \"{{childItem1}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"uda\": []\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"dataLoadingDestination\": \"RMS\",\n      \"uda\": []\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Item UDA create accepted', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql('SUCCESS');",
+                  "});",
+                  "",
+                  "// SUCCESS is not proof anything changed - MFCS answers a no-op write the same way.",
+                  "// The itemDetail read-backs at steps 10 and 12 are what actually verify the style.",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 - Read back: children exist",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/RmsReSTServices/services/private/Item/itemDetail?item={{parentItem}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "RmsReSTServices",
+                "services",
+                "private",
+                "Item",
+                "itemDetail"
+              ],
+              "query": [
+                {
+                  "key": "item",
+                  "value": "{{parentItem}}"
+                }
+              ]
+            },
+            "description": "The verification that matters. items/create answers SUCCESS whether or not it changed anything, so reading the style back is the only evidence the children exist. itemDetail is used rather than foundation/item because the feed read 404s on a style created minutes ago, and it is the only call that returns a style with its children in one go."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var rows = [];",
+                  "try { rows = pm.response.json(); } catch (e) { rows = []; }",
+                  "if (!Array.isArray(rows)) { rows = []; }",
+                  "var parent = String(pm.collectionVariables.get('parentItem'));",
+                  "var kids = rows.filter(function (r) { return String(r.itemParent) === parent; });",
+                  "",
+                  "// Bounded retry. itemDetail normally returns a fresh style straight away, but a read",
+                  "// that concludes too early reports a silent failure that did not actually happen.",
+                  "var attempt = Number(pm.collectionVariables.get('readBackAttempt') || 0);",
+                  "if (kids.length < 2 && attempt < 3) {",
+                  "    pm.collectionVariables.set('readBackAttempt', attempt + 1);",
+                  "    console.warn('Only ' + kids.length + ' children visible, retry '",
+                  "        + (attempt + 1) + ' of 3.');",
+                  "    postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.set('readBackAttempt', 0);",
+                  "",
+                  "    pm.test('itemDetail returns the style', function () {",
+                  "        pm.response.to.have.status(200);",
+                  "        pm.expect(rows, 'itemDetail rows').to.be.an('array').that.is.not.empty;",
+                  "    });",
+                  "",
+                  "    pm.test('both child SKUs exist under the parent', function () {",
+                  "        pm.expect(kids.length, 'children of ' + parent).to.eql(2);",
+                  "        var nums = kids.map(function (r) { return String(r.item); });",
+                  "        pm.expect(nums).to.include(String(pm.collectionVariables.get('childItem1')));",
+                  "        pm.expect(nums).to.include(String(pm.collectionVariables.get('childItem2')));",
+                  "    });",
+                  "",
+                  "    pm.test('children carry concrete diffs, not the parent groups', function () {",
+                  "        var sizes = kids.map(function (r) { return String(r.diff2); }).sort();",
+                  "        pm.expect(sizes).to.eql([",
+                  "            String(pm.collectionVariables.get('size1Diff')),",
+                  "            String(pm.collectionVariables.get('size2Diff'))",
+                  "        ].sort());",
+                  "        kids.forEach(function (r) {",
+                  "            pm.expect(String(r.diff1), 'colour diff on ' + r.item)",
+                  "              .to.eql(String(pm.collectionVariables.get('colourDiff')));",
+                  "        });",
+                  "    });",
+                  "",
+                  "    if (kids.length !== 2) { postman.setNextRequest(null); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 - Approve parent and children",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/MerchIntegrations/services/items/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "MerchIntegrations",
+                "services",
+                "items",
+                "update"
+              ]
+            },
+            "description": "Approval only succeeds once sourcing AND country of manufacture exist, which is why it runs last. storeOrderMultiple has to be sent: items/update refuses without it even for a description-only change.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"collectionSize\": 3,\n  \"items\": [\n    {\n      \"item\": \"{{parentItem}}\",\n      \"itemDescription\": \"{{flowDescription}}\",\n      \"shortDescription\": \"{{flowDescription}}\",\n      \"status\": \"A\",\n      \"approveInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"dataLoadingDestination\": \"RMS\"\n    },\n    {\n      \"item\": \"{{childItem1}}\",\n      \"itemDescription\": \"{{flowDescription}}\",\n      \"shortDescription\": \"{{flowDescription}}\",\n      \"status\": \"A\",\n      \"approveInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"dataLoadingDestination\": \"RMS\"\n    },\n    {\n      \"item\": \"{{childItem2}}\",\n      \"itemDescription\": \"{{flowDescription}}\",\n      \"shortDescription\": \"{{flowDescription}}\",\n      \"status\": \"A\",\n      \"approveInd\": \"Y\",\n      \"storeOrderMultiple\": \"{{storeOrderMultiple}}\",\n      \"dataLoadingDestination\": \"RMS\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Approval accepted', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql('SUCCESS');",
+                  "});",
+                  "",
+                  "// SUCCESS is not proof anything changed - MFCS answers a no-op write the same way.",
+                  "// The itemDetail read-backs at steps 10 and 12 are what actually verify the style.",
+                  "var ok = pm.response.ok;",
+                  "try { var s = pm.response.json().status; if (s && s !== 'SUCCESS') { ok = false; } } catch (e) {}",
+                  "if (!ok) {",
+                  "    console.error('HALTING - ' + pm.info.requestName + ' returned HTTP ' + pm.response.code",
+                  "        + ': ' + pm.response.text().slice(0, 400));",
+                  "    postman.setNextRequest(null);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 - Read back: style is approved",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{correlationId}}"
+              },
+              {
+                "key": "X-Client-Principal-User",
+                "value": "{{principalUser}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/RmsReSTServices/services/private/Item/itemDetail?item={{parentItem}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "RmsReSTServices",
+                "services",
+                "private",
+                "Item",
+                "itemDetail"
+              ],
+              "query": [
+                {
+                  "key": "item",
+                  "value": "{{parentItem}}"
+                }
+              ]
+            },
+            "description": "Confirms the approval landed on all three records rather than being answered SUCCESS and quietly dropped."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var rows = [];",
+                  "try { rows = pm.response.json(); } catch (e) { rows = []; }",
+                  "if (!Array.isArray(rows)) { rows = []; }",
+                  "var parent = String(pm.collectionVariables.get('parentItem'));",
+                  "var mine = rows.filter(function (r) {",
+                  "    return String(r.item) === parent || String(r.itemParent) === parent;",
+                  "});",
+                  "var approved = mine.filter(function (r) { return String(r.status) === 'A'; });",
+                  "",
+                  "var attempt = Number(pm.collectionVariables.get('readBackAttempt') || 0);",
+                  "if (approved.length < 3 && attempt < 3) {",
+                  "    pm.collectionVariables.set('readBackAttempt', attempt + 1);",
+                  "    console.warn('Only ' + approved.length + ' of 3 approved, retry '",
+                  "        + (attempt + 1) + ' of 3.');",
+                  "    postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.set('readBackAttempt', 0);",
+                  "",
+                  "    pm.test('parent style is approved', function () {",
+                  "        var p = rows.filter(function (r) { return String(r.item) === parent; })[0];",
+                  "        pm.expect(p, 'parent row ' + parent).to.not.be.undefined;",
+                  "        pm.expect(String(p.status), 'parent status').to.eql('A');",
+                  "    });",
+                  "",
+                  "    pm.test('both children are approved', function () {",
+                  "        var kids = rows.filter(function (r) { return String(r.itemParent) === parent; });",
+                  "        pm.expect(kids.length).to.eql(2);",
+                  "        kids.forEach(function (r) {",
+                  "            pm.expect(String(r.status), 'status of child ' + r.item).to.eql('A');",
+                  "        });",
+                  "    });",
+                  "",
+                  "    console.log('FLOW COMPLETE - style ' + parent + ' with SKUs '",
+                  "        + pm.collectionVariables.get('childItem1') + ' and '",
+                  "        + pm.collectionVariables.get('childItem2'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Give the run a description even when 00 - Preflight was skipped.",
+              "if (!pm.collectionVariables.get('flowDescription')) {",
+              "    pm.collectionVariables.set('flowDescription', 'Postman flow ' + Date.now());",
+              "}"
+            ]
+          }
         }
       ]
     }
