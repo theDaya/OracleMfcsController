@@ -12,8 +12,8 @@ page 20 (
         formAutoComplete: false
     }
 
-    region picker (
-        name: Request
+    region search (
+        name: Look up in MFCS
         type: staticContent
         layout {
             sequence: 10
@@ -25,31 +25,51 @@ page 20 (
         }
     )
 
-    region summary (
-        name: Summary
+    region style-head (
+        name: Style
         type: classicReport
         source {
             location: localDatabase
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select r.operation_name,
-                       r.request_status,
-                       r.style_no,
-                       r.order_no,
-                       r.source_system,
-                       r.source_style_ref,
-                       to_char(r.created_at, 'YYYY-MM-DD HH24:MI:SS') created_at,
-                       to_char(r.completed_at, 'YYYY-MM-DD HH24:MI:SS') completed_at,
-                       (select count(*) from step s
-                         where s.action_request_id = r.action_request_id) steps,
-                       (select count(*) from step s
-                         where s.action_request_id = r.action_request_id
-                           and s.step_status = 'SUCCEEDED') steps_succeeded,
-                       (select count(*) from attempt a
-                         where a.action_request_id = r.action_request_id) mfcs_calls
-                  from request r
-                 where r.action_request_id = :P20_REQUEST_ID
+                select j.item,
+                       j.item_description,
+                       j.status,
+                       j.dept || ' / ' || j.class || ' / ' || j.subclass hierarchy,
+                       j.dept_name || ' / ' || j.class_name || ' / ' || j.subclass_name names,
+                       j.diff1 || '  ' || j.diff1_level || '  ' || j.diff1_description colour,
+                       j.diff2 || '  ' || j.diff2_level || '  ' || j.diff2_description size_group,
+                       j.unit_retail,
+                       j.original_retail,
+                       j.brand_name,
+                       j.standard_uom,
+                       j.cost_zone_group_id
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0]'
+                           columns
+                               item                varchar2(30)  path '$.item',
+                               item_description    varchar2(250) path '$.itemDescription',
+                               status              varchar2(10)  path '$.status',
+                               dept                varchar2(20)  path '$.dept',
+                               class               varchar2(20)  path '$.class',
+                               subclass            varchar2(20)  path '$.subclass',
+                               dept_name           varchar2(60)  path '$.deptName',
+                               class_name          varchar2(60)  path '$.className',
+                               subclass_name       varchar2(60)  path '$.subclassName',
+                               diff1               varchar2(30)  path '$.diff1',
+                               diff1_level         varchar2(10)  path '$.diff1Level',
+                               diff1_description   varchar2(80)  path '$.diff1Description',
+                               diff2               varchar2(30)  path '$.diff2',
+                               diff2_level         varchar2(10)  path '$.diff2Level',
+                               diff2_description   varchar2(80)  path '$.diff2Description',
+                               unit_retail         number        path '$.unitRetail',
+                               original_retail     number        path '$.originalRetail',
+                               brand_name          varchar2(40)  path '$.brandName',
+                               standard_uom        varchar2(10)  path '$.standardUom',
+                               cost_zone_group_id  number        path '$.costZoneGroupId'
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
                 ```
         }
         layout {
@@ -63,354 +83,164 @@ page 20 (
         componentAppearance {
             template: @value-attribute-pairs-row
         }
-        serverSideCondition {
-            type: itemIsNotNull
-            item: P20_REQUEST_ID
-        }
 
-        column OPERATION_NAME (
+        column ITEM (
             type: plainText
             heading {
-                heading: Operation
+                heading: Item
             }
             layout {
                 sequence: 10
             }
         )
-
-        column REQUEST_STATUS (
+        column ITEM_DESCRIPTION (
             type: plainText
             heading {
-                heading: Status
+                heading: Description
             }
             layout {
                 sequence: 20
             }
         )
-
-        column STYLE_NO (
+        column STATUS (
             type: plainText
             heading {
-                heading: MFCS Style
+                heading: Status
             }
             layout {
                 sequence: 30
             }
         )
-
-        column ORDER_NO (
+        column HIERARCHY (
             type: plainText
             heading {
-                heading: MFCS Order
+                heading: Dept / Class / Subclass
             }
             layout {
                 sequence: 40
             }
         )
-
-        column SOURCE_SYSTEM (
+        column NAMES (
             type: plainText
             heading {
-                heading: Source
+                heading: Hierarchy Names
             }
             layout {
                 sequence: 50
             }
         )
-
-        column SOURCE_STYLE_REF (
+        column COLOUR (
             type: plainText
             heading {
-                heading: Source Style Ref
+                heading: diff1 Colour
             }
             layout {
                 sequence: 60
             }
         )
-
-        column CREATED_AT (
+        column SIZE_GROUP (
             type: plainText
             heading {
-                heading: Created
+                heading: diff2 Size
             }
             layout {
                 sequence: 70
             }
         )
-
-        column COMPLETED_AT (
+        column UNIT_RETAIL (
             type: plainText
             heading {
-                heading: Completed
+                heading: Unit Retail
             }
             layout {
                 sequence: 80
             }
         )
-
-        column STEPS (
+        column ORIGINAL_RETAIL (
             type: plainText
             heading {
-                heading: Steps
+                heading: Original Retail
             }
             layout {
                 sequence: 90
             }
         )
-
-        column STEPS_SUCCEEDED (
+        column BRAND_NAME (
             type: plainText
             heading {
-                heading: Succeeded
+                heading: Brand
             }
             layout {
                 sequence: 100
             }
         )
-
-        column MFCS_CALLS (
+        column STANDARD_UOM (
             type: plainText
             heading {
-                heading: MFCS Calls
+                heading: UOM
             }
             layout {
                 sequence: 110
             }
         )
+        column COST_ZONE_GROUP_ID (
+            type: plainText
+            heading {
+                heading: Cost Zone Group
+            }
+            layout {
+                sequence: 120
+            }
+        )
     )
 
-    region steps (
-        name: Steps
-        type: classicReport
-        source {
-            location: localDatabase
-            type: sqlQuery
-            sqlQuery:
-                ```sql
-                select s.step_sequence,
-                       s.step_code,
-                       s.step_status,
-                       s.entity_identifier,
-                       to_char(s.completed_at, 'HH24:MI:SS') completed_at,
-                       s.last_error_message
-                  from step s
-                 where s.action_request_id = :P20_REQUEST_ID
-                 order by s.step_sequence
-                ```
-        }
+    region detail-tabs (
+        name: Detail
+        type: staticContent
         layout {
             sequence: 30
             slot: contentBody
         }
         appearance {
-            template: @standard
-            templateOptions: [
-                #DEFAULT#
-                t-Region--scrollBody
-            ]
+            template: @tabs-container
         }
-        componentAppearance {
-            template: @standard
-        }
-        serverSideCondition {
-            type: itemIsNotNull
-            item: P20_REQUEST_ID
-        }
-
-        column STEP_SEQUENCE (
-            type: plainText
-            heading {
-                heading: Seq
-            }
-            layout {
-                sequence: 10
-            }
-        )
-
-        column STEP_CODE (
-            type: plainText
-            heading {
-                heading: Step
-            }
-            layout {
-                sequence: 20
-            }
-        )
-
-        column STEP_STATUS (
-            type: plainText
-            heading {
-                heading: Status
-            }
-            layout {
-                sequence: 30
-            }
-        )
-
-        column ENTITY_IDENTIFIER (
-            type: plainText
-            heading {
-                heading: Entity
-            }
-            layout {
-                sequence: 40
-            }
-        )
-
-        column COMPLETED_AT (
-            type: plainText
-            heading {
-                heading: Completed
-            }
-            layout {
-                sequence: 50
-            }
-        )
-
-        column LAST_ERROR_MESSAGE (
-            type: plainText
-            heading {
-                heading: Error
-            }
-            layout {
-                sequence: 60
-            }
-        )
-    )
-
-    region calls (
-        name: MFCS Calls
-        type: classicReport
-        source {
-            location: localDatabase
-            type: sqlQuery
-            sqlQuery:
-                ```sql
-                select a.step_code,
-                       a.http_method,
-                       a.http_status,
-                       a.attempt_status,
-                       regexp_replace(a.endpoint, '^https?://[^/]+', '') endpoint,
-                       to_char(a.created_at, 'HH24:MI:SS') called_at,
-                       dbms_lob.substr(a.response_payload, 200, 1) response
-                  from attempt a
-                 where a.action_request_id = :P20_REQUEST_ID
-                 order by a.attempt_id
-                ```
-        }
-        layout {
-            sequence: 40
-            slot: contentBody
-        }
-        appearance {
-            template: @standard
-            templateOptions: [
-                #DEFAULT#
-                t-Region--scrollBody
-            ]
-        }
-        componentAppearance {
-            template: @standard
-        }
-        serverSideCondition {
-            type: itemIsNotNull
-            item: P20_REQUEST_ID
-        }
-
-        column STEP_CODE (
-            type: plainText
-            heading {
-                heading: Step
-            }
-            layout {
-                sequence: 10
-            }
-        )
-
-        column HTTP_METHOD (
-            type: plainText
-            heading {
-                heading: Method
-            }
-            layout {
-                sequence: 20
-            }
-        )
-
-        column HTTP_STATUS (
-            type: plainText
-            heading {
-                heading: HTTP
-            }
-            layout {
-                sequence: 30
-            }
-        )
-
-        column ATTEMPT_STATUS (
-            type: plainText
-            heading {
-                heading: Outcome
-            }
-            layout {
-                sequence: 40
-            }
-        )
-
-        column ENDPOINT (
-            type: plainText
-            heading {
-                heading: Endpoint
-            }
-            layout {
-                sequence: 50
-            }
-        )
-
-        column CALLED_AT (
-            type: plainText
-            heading {
-                heading: Called
-            }
-            layout {
-                sequence: 60
-            }
-        )
-
-        column RESPONSE (
-            type: plainText
-            heading {
-                heading: Response
-            }
-            layout {
-                sequence: 70
-            }
-        )
     )
 
     region skus (
-        name: SKUs and Barcodes
+        name: SKUs
         type: classicReport
         source {
             location: localDatabase
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select e.mfcs_sku_no,
-                       e.sku_size,
-                       e.source_variant_ref
-                  from entity_map e
-                 where e.source_system = (select source_system from request
-                                           where action_request_id = :P20_REQUEST_ID)
-                   and e.source_style_ref = (select source_style_ref from request
-                                              where action_request_id = :P20_REQUEST_ID)
-                   and e.mfcs_sku_no is not null
-                 order by e.sku_size
+                select j.item,
+                       j.diff2,
+                       j.diff2_description,
+                       j.diff1,
+                       j.status,
+                       j.item_parent,
+                       j.item_description
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].resolved.skus[*]'
+                           columns
+                               item              varchar2(30)  path '$.item',
+                               item_description  varchar2(250) path '$.itemDescription',
+                               status            varchar2(10)  path '$.status',
+                               diff1             varchar2(30)  path '$.diff1',
+                               diff2             varchar2(30)  path '$.diff2',
+                               diff2_description varchar2(80)  path '$.diff2Description',
+                               item_parent       varchar2(30)  path '$.itemParent'
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
+                   and j.item is not null
+                 order by j.diff2
                 ```
         }
         layout {
-            sequence: 50
-            slot: contentBody
+            sequence: 10
+            parentRegion: @detail-tabs
+            slot: subRegions
         }
         appearance {
             template: @standard
@@ -422,22 +252,17 @@ page 20 (
         componentAppearance {
             template: @standard
         }
-        serverSideCondition {
-            type: itemIsNotNull
-            item: P20_REQUEST_ID
-        }
 
-        column MFCS_SKU_NO (
+        column ITEM (
             type: plainText
             heading {
-                heading: MFCS SKU
+                heading: SKU
             }
             layout {
                 sequence: 10
             }
         )
-
-        column SKU_SIZE (
+        column DIFF2 (
             type: plainText
             heading {
                 heading: Size Diff
@@ -446,41 +271,658 @@ page 20 (
                 sequence: 20
             }
         )
-
-        column SOURCE_VARIANT_REF (
+        column DIFF2_DESCRIPTION (
             type: plainText
             heading {
-                heading: Source Variant
+                heading: Size
             }
             layout {
                 sequence: 30
             }
         )
+        column DIFF1 (
+            type: plainText
+            heading {
+                heading: Colour Diff
+            }
+            layout {
+                sequence: 40
+            }
+        )
+        column STATUS (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 50
+            }
+        )
+        column ITEM_PARENT (
+            type: plainText
+            heading {
+                heading: Parent Style
+            }
+            layout {
+                sequence: 60
+            }
+        )
+        column ITEM_DESCRIPTION (
+            type: plainText
+            heading {
+                heading: Description
+            }
+            layout {
+                sequence: 70
+            }
+        )
     )
 
-    pageItem P20_REQUEST_ID (
-        type: selectList
-        label {
-            label: Request
-        }
-        lov {
+    region barcodes (
+        name: Barcodes
+        type: classicReport
+        source {
+            location: localDatabase
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select r.action_request_id
-                       || '  -  ' || r.operation_name
-                       || '  -  ' || r.request_status
-                       || case when r.style_no is not null
-                               then '  -  style ' || r.style_no end d,
-                       r.action_request_id r
-                  from request r
-                 order by r.created_at desc
+                select j.sku,
+                       j.sku_size,
+                       j.reference_item,
+                       j.primary_ind,
+                       j.item_no_type
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].resolved.skus[*]'
+                           columns
+                               sku      varchar2(30) path '$.item',
+                               sku_size varchar2(80) path '$.diff2Description',
+                               nested path '$.referenceItem[*]'
+                                   columns (
+                                       reference_item varchar2(30) path '$.referenceItem',
+                                       primary_ind    varchar2(1)  path '$.primaryInd',
+                                       item_no_type   varchar2(10) path '$.itemNoType'
+                                   )
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
+                   and j.reference_item is not null
+                 order by j.sku, j.primary_ind desc
                 ```
-            displayNullValue: true
+        }
+        layout {
+            sequence: 20
+            parentRegion: @detail-tabs
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column SKU (
+            type: plainText
+            heading {
+                heading: SKU
+            }
+            layout {
+                sequence: 10
+            }
+        )
+        column SKU_SIZE (
+            type: plainText
+            heading {
+                heading: Size
+            }
+            layout {
+                sequence: 20
+            }
+        )
+        column REFERENCE_ITEM (
+            type: plainText
+            heading {
+                heading: Barcode
+            }
+            layout {
+                sequence: 30
+            }
+        )
+        column PRIMARY_IND (
+            type: plainText
+            heading {
+                heading: Primary
+            }
+            layout {
+                sequence: 40
+            }
+        )
+        column ITEM_NO_TYPE (
+            type: plainText
+            heading {
+                heading: Type
+            }
+            layout {
+                sequence: 50
+            }
+        )
+    )
+
+    region sourcing (
+        name: Sourcing
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select j.supplier,
+                       j.primary_supplier,
+                       j.origin_country,
+                       j.primary_country,
+                       j.unit_cost,
+                       j.cost_uom,
+                       j.supplier_pack_size,
+                       j.inner_pack_size
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].itemSupplier[*]'
+                           columns
+                               supplier         varchar2(30) path '$.supplier',
+                               primary_supplier varchar2(1)  path '$.primarySupplierInd',
+                               nested path '$.itemSupplierCountry[*]'
+                                   columns (
+                                       origin_country     varchar2(3)  path '$.originCountry',
+                                       primary_country    varchar2(1)  path '$.primaryCountryInd',
+                                       unit_cost          number       path '$.unitCost',
+                                       supplier_pack_size number       path '$.supplierPackSize',
+                                       inner_pack_size    number       path '$.innerPackSize',
+                                       cost_uom           varchar2(10) path '$.costUom'
+                                   )
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
+                   and j.supplier is not null
+                ```
+        }
+        layout {
+            sequence: 30
+            parentRegion: @detail-tabs
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column SUPPLIER (
+            type: plainText
+            heading {
+                heading: Supplier
+            }
+            layout {
+                sequence: 10
+            }
+        )
+        column PRIMARY_SUPPLIER (
+            type: plainText
+            heading {
+                heading: Primary
+            }
+            layout {
+                sequence: 20
+            }
+        )
+        column ORIGIN_COUNTRY (
+            type: plainText
+            heading {
+                heading: Origin
+            }
+            layout {
+                sequence: 30
+            }
+        )
+        column PRIMARY_COUNTRY (
+            type: plainText
+            heading {
+                heading: Primary Country
+            }
+            layout {
+                sequence: 40
+            }
+        )
+        column UNIT_COST (
+            type: plainText
+            heading {
+                heading: Unit Cost
+            }
+            layout {
+                sequence: 50
+            }
+        )
+        column COST_UOM (
+            type: plainText
+            heading {
+                heading: Cost UOM
+            }
+            layout {
+                sequence: 60
+            }
+        )
+        column SUPPLIER_PACK_SIZE (
+            type: plainText
+            heading {
+                heading: Supplier Pack
+            }
+            layout {
+                sequence: 70
+            }
+        )
+        column INNER_PACK_SIZE (
+            type: plainText
+            heading {
+                heading: Inner Pack
+            }
+            layout {
+                sequence: 80
+            }
+        )
+    )
+
+    region attributes (
+        name: Attributes
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select 'Style' held_on, j.uda_id, j.uda_description,
+                       j.uda_value, j.uda_value_description
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].itemUda.udaLov[*]'
+                           columns
+                               uda_id                number        path '$.udaId',
+                               uda_description       varchar2(120) path '$.udaDescription',
+                               uda_value             varchar2(30)  path '$.udaValue',
+                               uda_value_description varchar2(120) path '$.udaValueDescription'
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
+                   and j.uda_id is not null
+                union all
+                select 'SKU ' || j.sku, j.uda_id, j.uda_description,
+                       j.uda_value, j.uda_value_description
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].resolved.skus[*]'
+                           columns
+                               sku varchar2(30) path '$.item',
+                               nested path '$.itemUda.udaLov[*]'
+                                   columns (
+                                       uda_id                number        path '$.udaId',
+                                       uda_description       varchar2(120) path '$.udaDescription',
+                                       uda_value             varchar2(30)  path '$.udaValue',
+                                       uda_value_description varchar2(120) path '$.udaValueDescription'
+                                   )
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
+                   and j.uda_id is not null
+                 order by 1, 2
+                ```
+        }
+        layout {
+            sequence: 40
+            parentRegion: @detail-tabs
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column HELD_ON (
+            type: plainText
+            heading {
+                heading: Held On
+            }
+            layout {
+                sequence: 10
+            }
+        )
+        column UDA_ID (
+            type: plainText
+            heading {
+                heading: UDA
+            }
+            layout {
+                sequence: 20
+            }
+        )
+        column UDA_DESCRIPTION (
+            type: plainText
+            heading {
+                heading: Attribute
+            }
+            layout {
+                sequence: 30
+            }
+        )
+        column UDA_VALUE (
+            type: plainText
+            heading {
+                heading: Value
+            }
+            layout {
+                sequence: 40
+            }
+        )
+        column UDA_VALUE_DESCRIPTION (
+            type: plainText
+            heading {
+                heading: Means
+            }
+            layout {
+                sequence: 50
+            }
+        )
+    )
+
+    region seasons-tariff (
+        name: Seasons and Tariff
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select 'Season' kind,
+                       to_char(j.season_id) val_a,
+                       to_char(j.phase_id) val_b,
+                       to_char(j.sequence_no) val_c,
+                       cast(null as varchar2(20)) val_d,
+                       cast(null as varchar2(5)) val_e
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].itemSeason[*]'
+                           columns
+                               season_id   number path '$.seasonId',
+                               phase_id    number path '$.phaseId',
+                               sequence_no number path '$.sequenceNo'
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
+                   and j.season_id is not null
+                union all
+                select 'Tariff', j.hts, j.import_country, j.origin_country,
+                       j.effect_from, j.status
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].hts[*]'
+                           columns
+                               hts            varchar2(30) path '$.hts',
+                               import_country varchar2(3)  path '$.importCountry',
+                               origin_country varchar2(3)  path '$.originCountry',
+                               effect_from    varchar2(20) path '$.effectFrom',
+                               status         varchar2(5)  path '$.status'
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
+                   and j.hts is not null
+                ```
+        }
+        layout {
+            sequence: 50
+            parentRegion: @detail-tabs
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column KIND (
+            type: plainText
+            heading {
+                heading: Kind
+            }
+            layout {
+                sequence: 10
+            }
+        )
+        column VAL_A (
+            type: plainText
+            heading {
+                heading: Season / Tariff Code
+            }
+            layout {
+                sequence: 20
+            }
+        )
+        column VAL_B (
+            type: plainText
+            heading {
+                heading: Phase / Import
+            }
+            layout {
+                sequence: 30
+            }
+        )
+        column VAL_C (
+            type: plainText
+            heading {
+                heading: Sequence / Origin
+            }
+            layout {
+                sequence: 40
+            }
+        )
+        column VAL_D (
+            type: plainText
+            heading {
+                heading: Effective From
+            }
+            layout {
+                sequence: 50
+            }
+        )
+        column VAL_E (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 60
+            }
+        )
+    )
+
+    region order-lines (
+        name: Order
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select j.order_no,
+                       j.supplier,
+                       j.order_status,
+                       j.item,
+                       j.location,
+                       j.quantity_ordered,
+                       j.unit_cost,
+                       j.origin_country
+                  from apex_collections c,
+                       json_table(c.clob001, '$'
+                           columns
+                               order_no     varchar2(30) path '$.orderNo',
+                               supplier     varchar2(30) path '$.supplier',
+                               order_status varchar2(10) path '$.status',
+                               nested path '$.details[*]'
+                                   columns (
+                                       item             varchar2(30) path '$.item',
+                                       location         varchar2(20) path '$.location',
+                                       quantity_ordered number       path '$.physicalQuantityOrdered',
+                                       unit_cost        number       path '$.unitCost',
+                                       origin_country   varchar2(3)  path '$.originCountryId'
+                                   )
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
+                   and j.order_no is not null
+                ```
+        }
+        layout {
+            sequence: 60
+            parentRegion: @detail-tabs
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column ORDER_NO (
+            type: plainText
+            heading {
+                heading: Order
+            }
+            layout {
+                sequence: 10
+            }
+        )
+        column SUPPLIER (
+            type: plainText
+            heading {
+                heading: Supplier
+            }
+            layout {
+                sequence: 20
+            }
+        )
+        column ORDER_STATUS (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 30
+            }
+        )
+        column ITEM (
+            type: plainText
+            heading {
+                heading: Item
+            }
+            layout {
+                sequence: 40
+            }
+        )
+        column LOCATION (
+            type: plainText
+            heading {
+                heading: Location
+            }
+            layout {
+                sequence: 50
+            }
+        )
+        column QUANTITY_ORDERED (
+            type: plainText
+            heading {
+                heading: Qty
+            }
+            layout {
+                sequence: 60
+            }
+        )
+        column UNIT_COST (
+            type: plainText
+            heading {
+                heading: Unit Cost
+            }
+            layout {
+                sequence: 70
+            }
+        )
+        column ORIGIN_COUNTRY (
+            type: plainText
+            heading {
+                heading: Origin
+            }
+            layout {
+                sequence: 80
+            }
+        )
+    )
+
+    region raw (
+        name: Raw Document
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select c.clob001 document
+                  from apex_collections c
+                 where c.collection_name = 'MFCS_BROWSE'
+                ```
+        }
+        layout {
+            sequence: 70
+            parentRegion: @detail-tabs
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column DOCUMENT (
+            type: plainText
+            heading {
+                heading: What MFCS returned
+            }
+            layout {
+                sequence: 10
+            }
+        )
+    )
+
+    pageItem P20_ITEM (
+        type: textField
+        label {
+            label: Style or Order
         }
         layout {
             sequence: 10
-            region: @picker
+            region: @search
             slot: regionBody
             alignment: left
         }
@@ -494,12 +936,47 @@ page 20 (
         }
     )
 
-    button show (
-        buttonName: SHOW
-        label: Show
+    pageItem P20_KIND (
+        type: selectList
+        label {
+            label: Look up as
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select 'Style' d, 'STYLE' r from dual
+                union all
+                select 'Purchase Order' d, 'ORDER' r from dual
+                ```
+            displayNullValue: false
+        }
         layout {
             sequence: 20
-            region: @picker
+            region: @search
+            slot: regionBody
+            alignment: left
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        default {
+            type: static
+            staticValue: STYLE
+        }
+        security {
+            sessionStateProtection: unrestricted
+            encryptSessionState: false
+        }
+    )
+
+    button fetch (
+        buttonName: FETCH
+        label: Fetch from MFCS
+        layout {
+            sequence: 30
+            region: @search
             slot: regionBody
             alignment: left
         }
@@ -509,6 +986,41 @@ page 20 (
         }
         behavior {
             warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    process fetch-from-mfcs (
+        name: Fetch from MFCS
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                declare
+                    l_doc clob;
+                begin
+                    if :P20_ITEM is null then
+                        return;
+                    end if;
+
+                    if :P20_KIND = 'ORDER' then
+                        l_doc := browse_pkg.get_order(:P20_ITEM);
+                    else
+                        l_doc := browse_pkg.get_style(:P20_ITEM, 'Y');
+                    end if;
+
+                    apex_collection.create_or_truncate_collection('MFCS_BROWSE');
+                    apex_collection.add_member(
+                        p_collection_name => 'MFCS_BROWSE',
+                        p_clob001         => l_doc);
+                end;
+                ```
+        }
+        execution {
+            sequence: 10
+        }
+        serverSideCondition {
+            type: requestIsContainedInValue
+            value: FETCH
         }
     )
 )
