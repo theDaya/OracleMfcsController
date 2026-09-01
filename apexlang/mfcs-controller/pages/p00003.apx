@@ -1580,20 +1580,11 @@ page 3 (
     )
 
     pageItem P3_DRAFT_ID (
-        type: displayOnly
-        label {
-            label: Draft ID
-            alignment: left
-        }
+        type: hidden
         layout {
             sequence: 10
             region: @draft
             slot: regionBody
-            alignment: left
-        }
-        appearance {
-            template: @optional-floating
-            templateOptions: #DEFAULT#
         }
         source {
             formRegion: @draft
