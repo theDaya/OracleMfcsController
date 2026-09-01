@@ -9,6 +9,10 @@ driving and inspecting it.
 - `docs/status-and-next-steps.md` — what is proven, what has never run live, what is outstanding
 - `docs/database-objects.md` — what every table and package does, and why the non-obvious ones exist
 - `docs/mfcs-actual-call-flow.md` — real payloads from runs that actually succeeded
+- `.claude/skills/apexlang-coding-agent/SKILL.md` — everything about the APEX console: the
+  validate/import loop, the four traps that pass validation and break at render, the dictionary
+  views for checking an import, and where the donor exports are. Loads automatically when you
+  work on `apexlang/`, but read it first if you are touching the console at all.
 
 Keep those three current. If you change behaviour they describe, update them in the same commit.
 

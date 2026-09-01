@@ -1,0 +1,38 @@
+[
+  {
+    "action": "INSERT",
+    "diffType": "C",
+    "diffTypeDescription": "Company Colour",
+    "createDateTime": "2026-08-27T11:41:01.000Z",
+    "updateDateTime": "2026-08-27T11:41:01.000Z",
+    "cacheTimestamp": "2026-08-31T15:24:32.054Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:32.054Z"
+  },
+  {
+    "action": "INSERT",
+    "diffType": "HL",
+    "diffTypeDescription": "High Level Colour",
+    "createDateTime": "2026-08-27T11:41:01.000Z",
+    "updateDateTime": "2026-08-27T11:41:01.000Z",
+    "cacheTimestamp": "2026-08-31T15:24:32.054Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:32.054Z"
+  },
+  {
+    "action": "INSERT",
+    "diffType": "LL",
+    "diffTypeDescription": "Low Level Colour",
+    "createDateTime": "2026-08-27T11:41:01.000Z",
+    "updateDateTime": "2026-08-27T11:41:01.000Z",
+    "cacheTimestamp": "2026-08-31T15:24:32.054Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:32.054Z"
+  },
+  {
+    "action": "INSERT",
+    "diffType": "S",
+    "diffTypeDescription": "Size",
+    "createDateTime": "2026-08-27T11:41:01.000Z",
+    "updateDateTime": "2026-08-27T11:41:01.000Z",
+    "cacheTimestamp": "2026-08-31T15:24:32.054Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:32.054Z"
+  }
+]

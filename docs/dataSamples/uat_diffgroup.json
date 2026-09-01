@@ -1,0 +1,2713 @@
+[
+  {
+    "action": "INSERT",
+    "diffGroupId": "ADULT_NUM",
+    "diffGroupDescription": "Adult numeric 020\u2013150 incl. 061/062",
+    "diffType": "S",
+    "createDateTime": "2026-08-27T11:58:26.000Z",
+    "updateDateTime": "2026-08-27T11:58:26.000Z",
+    "details": [
+      {
+        "diffId": "S020",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S025",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S140",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S135",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S130",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S125",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S120",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S115",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S110",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S105",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S100",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S095",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S090",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S085",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S080",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S075",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S070",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S065",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S062",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S061",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S060",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S055",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S050",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S045",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S040",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S035",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S030",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S150",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "ALL",
+    "diffGroupDescription": "All known sizes (catch-all)",
+    "diffType": "S",
+    "createDateTime": "2026-08-27T11:58:26.000Z",
+    "updateDateTime": "2026-08-27T11:58:26.000Z",
+    "details": [
+      {
+        "diffId": "S204",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S203",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S202",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S201",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S200",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S150",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S145",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S140",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S137",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S136",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S135",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S133",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S132",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S131",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S130",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S125",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S120",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S115",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S111",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S110",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S105",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S100",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S095",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S090",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S085",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S080",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S075",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S070",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S065",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S062",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S061",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S060",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S055",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S050",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S045",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S040",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S035",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S030",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S025",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S020",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S013",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S012",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S011",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S010",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S009",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S008",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S007",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S006",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S005",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S004",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S003",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S002",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S001",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S000",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S608",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S607",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S606",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S605",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S604",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S603",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S602",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S601",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S600",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S599",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S558",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S557",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S556",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S555",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S551",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S533",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S532",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S531",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S530",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S529",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S528",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S527",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S526",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S525",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S524",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S523",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S522",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S521",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S520",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S519",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S518",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S517",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S516",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S515",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S513",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S512",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S511",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S510",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S509",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S508",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S507",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S506",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S505",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S504",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S503",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S502",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S501",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S500",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S413",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S412",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S411",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S410",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S402",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S401",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S308",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S307",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S306",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S305",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S304",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S303",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S302",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S301",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S300",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S215",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S784",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S783",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S782",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S781",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S780",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S778",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S777",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S776",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S772",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S771",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S675",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S674",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S673",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S672",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S671",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S670",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S669",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S668",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S667",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S666",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S665",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S664",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S663",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S662",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S661",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S660",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S659",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S658",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S656",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S655",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S654",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S653",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S652",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S651",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S650",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S649",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S648",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S647",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S646",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S645",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S644",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S643",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S642",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S641",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S640",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S639",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S638",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S637",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S636",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S635",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S634",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S633",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S632",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S631",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S630",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S617",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S616",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S615",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S614",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S613",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S612",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S611",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S610",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S609",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S999",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S998",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S997",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S996",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S995",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S994",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S993",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S992",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S991",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S990",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S795",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S794",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S793",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S792",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S791",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S790",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S789",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S788",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S787",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S786",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S785",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:26.000Z"
+      },
+      {
+        "diffId": "S214",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S213",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S212",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S211",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S210",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S209",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S208",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S207",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S206",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S205",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "ALPHA_DUAL",
+    "diffGroupDescription": "Alpha dual sizes (S-M  S/M  etc.)",
+    "diffType": "S",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "S532",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S997",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S529",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S530",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "ALPHA_SNGL",
+    "diffGroupDescription": "Alpha single sizes (S  M  L  etc.)",
+    "diffType": "S",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "S993",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S990",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S531",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S996",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S991",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S992",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S995",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S994",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "DUAL_SIZE",
+    "diffGroupDescription": "DUAL_SIZE",
+    "diffType": "S",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "S200",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S205",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S215",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S214",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S213",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S207",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S636",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S204",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S203",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S202",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S201",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "KIDS_ALL",
+    "diffGroupDescription": "All kids size codes",
+    "diffType": "S",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "S000",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S998",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S783",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S778",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S777",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S776",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S772",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S771",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S662",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S661",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S660",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S659",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S658",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S656",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S655",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S651",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S643",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S642",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S641",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S630",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S617",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S616",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S615",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S614",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S613",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S612",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S608",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S607",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S551",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S513",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S512",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S511",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S510",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S509",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S508",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S507",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S506",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S505",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S504",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S503",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S502",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S501",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S500",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S413",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S412",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S411",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S410",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S402",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S401",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S308",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S307",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S306",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S305",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S215",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S213",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S212",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S211",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S210",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S208",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S111",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S013",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S012",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S011",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S010",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S009",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S008",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S007",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S006",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S005",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S004",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S003",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S002",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S001",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "KID_IN",
+    "diffGroupDescription": "Kids Infant",
+    "diffType": "S",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "S004",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S009",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S008",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S007",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S006",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S005",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S509",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S003",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S002",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S001",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S000",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S500",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S501",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S502",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S503",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S504",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S505",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S506",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S507",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S508",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "KID_JR",
+    "diffGroupDescription": "Kids Junior",
+    "diffType": "S",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "S011",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S010",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S013",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S012",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "KID_YTH",
+    "diffGroupDescription": "Kids Youth",
+    "diffType": "S",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "S111",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S210",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S215",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S213",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S212",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "S211",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "ONESZ",
+    "diffGroupDescription": "One size",
+    "diffType": "S",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "S999",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "RMS_ALL_C",
+    "diffGroupDescription": "[RMS] All Primary Colours",
+    "diffType": "C",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "640",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "630",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "620",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "610",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "600",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "590",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "580",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "570",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "560",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "550",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "540",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "530",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "520",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "510",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "500",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "490",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "480",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "470",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "460",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "450",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "440",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "430",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "420",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "410",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "400",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "390",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "380",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "370",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "360",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "350",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "340",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "330",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "320",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "310",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "300",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "290",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "280",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "270",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "260",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "250",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "240",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "230",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "220",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "210",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "200",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "190",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "180",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "170",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "160",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "150",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "140",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "130",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "120",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "110",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "100",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "090",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "080",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "070",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "060",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "050",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "040",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "030",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "020",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "010",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "000",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "990",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "980",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "970",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "960",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "950",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "940",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "930",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "920",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "910",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "900",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "890",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "880",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "870",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "860",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "850",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "840",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "830",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "820",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "810",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "800",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "790",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "780",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "770",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "760",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "750",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "740",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "730",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "720",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "710",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "700",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "690",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "680",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "670",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "660",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "650",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "RMS_ALL_HL",
+    "diffGroupDescription": "[RMS] All High Level Colours",
+    "diffType": "HL",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "HL15",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL14",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL17",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL18",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL19",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL2",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL20",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL3",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL4",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL5",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL6",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL7",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL8",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL9",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL1",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL10",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL11",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL12",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL13",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "HL16",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  },
+  {
+    "action": "INSERT",
+    "diffGroupId": "RMS_ALL_LL",
+    "diffGroupDescription": "[RMS] All Low Level Colours",
+    "diffType": "LL",
+    "createDateTime": "2026-08-27T11:58:27.000Z",
+    "updateDateTime": "2026-08-27T11:58:27.000Z",
+    "details": [
+      {
+        "diffId": "LL140",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL180",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL170",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL160",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL190",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL20",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL200",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL210",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL220",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL230",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL30",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL40",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL50",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL60",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL70",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL80",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL90",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL10",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL100",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL110",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL120",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL130",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      },
+      {
+        "diffId": "LL150",
+        "displaySequence": null,
+        "createDateTime": "2026-08-27T11:58:27.000Z"
+      }
+    ],
+    "cacheTimestamp": "2026-08-31T15:24:21.163Z",
+    "cacheCreateTimestamp": "2026-08-31T15:24:21.163Z"
+  }
+]

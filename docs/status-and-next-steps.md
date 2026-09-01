@@ -23,6 +23,10 @@ the `MFCS_CLIENT_MODE` switch were removed — if you find a reference to them, 
 | UDAs | **Proven live 2026-09-01.** Captured in the console, sent, read back |
 | Barcodes (level-3 UPCs) | **Proven live 2026-09-01.** Captured in the console, sent, read back |
 | `BRAND` | Sent and silently dropped by the tenant. **Does not work** |
+| Seasons, images, tariff codes | **Proven live 2026-09-01.** Captured in the console, sent, read back |
+| Console end to end | **Proven live 2026-09-01.** APEX draft through to MFCS, style 100150356 |
+| `MAP.*` config | **Retired 2026-09-01.** Lists and validation read `MASTER_DATA` |
+| APEX pages | 1 Home, 3 Create/Edit, 4 Activity, 5 Browse, **10 Style Capture**, **20 Style Explorer** |
 
 Environment: MFCS STG `https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs`
 and UAT `.../rgbu-rex-truw-uat3-mfcs`; the IDCS token host is different again. The database is
@@ -38,68 +42,91 @@ header shows remaining validity, and `GET /token-status` decodes it.
 
 ## Session of 2026-09-01 — what changed
 
-Seven commits, all pushed. Ordered by how much they alter the picture.
+Fifteen commits, all pushed. Ordered by how much each alters the picture.
 
-**The inbound contract changed shape.** `PLMSizeCurveDtl` is now `SIZE_CURVE_DETAIL`, and
-`request_pkg.normalise_payload` accepts either spelling at intake — before the payload is hashed,
-stored or validated, so resume replays a canonical document. `DEPARTMENT`, `CLASS` and `SUBCLASS` are
-settled as numbers. Two optional additions: `STYLE_UDAS` at the root and `SKU_UPCS` inside each
-size-curve row. `SKU_WIDTH` is no longer required — it reached no MFCS field. `BRAND` is accepted but
-does not work (below).
+**The inbound contract settled.** `PLMSizeCurveDtl` became `SIZE_CURVE_DETAIL`, and
+`request_pkg.normalise_payload` accepts either spelling at intake — before the payload is
+hashed, stored or validated, so resume replays a canonical document. `DEPARTMENT`, `CLASS` and
+`SUBCLASS` are numbers. New optional keys: `STYLE_UDAS`, `SKU_UPCS` (inside each size-curve
+row), `STYLE_SEASONS`, `STYLE_IMAGES`, `STYLE_HTS`, `BRAND`. `SKU_WIDTH` is no longer required.
 
-**UDAs and barcodes are built, proven live, and capturable.** Request `LIVE-UPC-184508` created style
-`100150161` with two SKUs and three barcodes, all eleven steps, read back through `itemDetail`. The
-APEX console gained two grids for them.
+**`MAP.*` is retired.** It was two things wearing one name: a translation table and a whitelist
+maintained alongside master data and free to disagree with it — which is how `MAP.COLOUR.BLACK`
+came to offer a colour the tenant rejects, after an item number had been burned. Every front end
+now sends the tenant's own identifiers, so the translations had nothing left to do, and the
+whitelists moved to `MASTER_DATA`. 340 config rows deleted. One translation survives because it
+is not a naming difference: `payload_pkg.virtual_location` maps a physical warehouse to its
+virtual one, derived from the warehouse feed rather than a hand-maintained row.
 
-**Two claims in CLAUDE.md were wrong and both discouraged looking further.** UDAs do work — the empty
-`foundation/uda` was a publish queue, not an empty definition set. And parents do not have to carry
-diff *groups*; `diff1Level` / `diff2Level` says which you have.
+**Five attribute types now reach MFCS, all proven live**: UDAs, barcodes (level-3 reference
+items), seasons, images and tariff codes. Style `100150305` carries all five, verified by
+read-back.
 
-**Foundation feeds now publish, per tenant.** STG serves `uda`, `supplier`, `store`, `warehouse`;
-`diffid`, `diffgroup`, `difftype` and `merchhier/*` are still empty there. UAT serves everything.
+**The console path is proven end to end.** Request `APEX-20260901212130632` completed from an
+APEX draft through to MFCS — style `100150356`, 17 steps, 20 calls.
 
-**Master data and the console's lists are populated.** `master_pkg.load_udas` loaded 23 definitions and
-750 values; `seed_map_config` derived 316 `MAP.*` rows (5 departments, 10 classes, 10 subclasses, 61
-suppliers, 217 colours, 29 sizes). Diff descriptions came from the front-end exports, so lists read
-"BLACK LEATHER" rather than "00078".
+**Master data is populated and is now the single source.** 23 UDA definitions with 750 values,
+244 brands, 60 suppliers, 250 countries, 12 warehouses, 215 colours and 29 sizes with
+descriptions from the front-end exports. `master_pkg.load_udas` and the fixed warehouse loader
+were both storing nothing before today.
+
+**Two new APEX pages**, leaving 3, 4 and 5 untouched: **10 Style Capture** and **20 Style
+Explorer**.
 
 ## Outstanding, in the order I would take it
 
-### A. Drive a draft through the console end to end
-Everything below the console is proven, and the console can now capture UDAs and barcodes, but
-**nothing has gone from an APEX draft through to MFCS with them**. Capture a style with both, submit,
-confirm the read-back. This is the shortest path to knowing the whole chain holds.
+### A. Items are created with no price
+Everything we create reads back `unitRetail: 0`; a real UAT item reads `85`. We send
+`originalRetail` and it does not reach the field the tenant treats as the price. Consistent with
+`ENDPOINT.INITIAL_RETAIL` being a placeholder with no matching write service. **This is the
+largest functional gap** — a style in MFCS priced at zero is not a usable style. Needs a decision
+on what Office expects before it can be built.
 
-### B. `BRAND` silently fails
-`items/create` takes `brandName`, answers SUCCESS, and the item reads back with no brand — while UDAs
-written in the same call are present. The stored attempt payload proves it was sent, and the brand code
-was checked against the tenant's own 246 brands, so it is not a bad value. `items/update` as a second
-attempt hit post-approval record locking and settled nothing. Not exposed in the console on purpose:
-offering a field that does nothing is worse than not having it.
+### B. The differentiator group is not selectable
+The parent's `diff1`/`diff2` groups come from `MFCS_PARENT_DIFF1_GROUP` and
+`MFCS_PARENT_DIFF2_GROUP` config, hardcoded to `RMS_ALL_C` and `ALL`. Nobody chooses them per
+style. The group is what says which children are legal — CLAUDE.md already records that a colour
+outside the parent's group is rejected loudly at `items/create`, and sizes are no different. So
+today a style can be given sizes from two different curves and nothing stops it.
 
-### C. `unitRetail` is 0 on everything we create
-A real UAT item reads `unitRetail: 85`; ours read `0`. We send `originalRetail` and it does not reach
-the field the tenant treats as the price. Consistent with `ENDPOINT.INITIAL_RETAIL` being a
-placeholder. Confirm what Office expects before deciding whether it matters.
+Blocked on data: `foundation/diffgroup` returns 13 groups with a `details` array naming each
+group's member diffs, **but only on UAT**. STG's is empty. One front-end export of Differentiator
+Groups, or one read against UAT, closes it. Then: `SIZE_GROUP` and `COLOUR_GROUP` on the document
+defaulting to the config values, a picker on the header, and validation that every SKU's diff
+belongs to the chosen group.
 
-### D. The APEX value list does not cascade
-The UDA value list labels every entry with its attribute ("Gender: Boy") rather than filtering on the
-chosen attribute, because a grid-column cascade has no syntax donor in this export. Wrong combinations
-are rejected by `validation_pkg` before any MFCS call, so it is safe — just more scrolling.
+### C. Non-merchandise costs have no capture
+`NON_MERCH_COSTS` is validated and previewed by the backend and maps to the order's `expenses`,
+but neither console has a field for it, and it has never been sent live.
 
-### E. Seasons, HTS and images
-Still absent from what we create. Services exist for all three (`item/seasons/create`,
-`item/hts/create` plus assessments, `item/images/create`), and the front-end exports carry the
-reference data. HTS needs domain input on assessment components; the other two do not.
+### D. `BRAND` is accepted and silently dropped
+`items/create` takes `brandName`, answers SUCCESS, and the item reads back with no brand while
+UDAs written in the same call are present. The brand code was checked against the tenant's own
+246, so it is not a bad value. `items/update` as a second attempt hit post-approval record
+locking and settled nothing. Parked by agreement; not exposed in either console, because offering
+a field that does nothing is worse than not having it.
 
-### F. The `CREATE_REFERENCE_ITEMS` update path is unproven
-On `MODIFY_STYLE` and the order operations the step resolves to `items/update`. Whether that service
-accepts a level-3 item has never been tested.
+### E. Only `CREATE_ALL` has run from the console
+The console offers all five operations. `CREATE_STYLE`, `CREATE_ORDER`, `MODIFY_STYLE` and
+`MODIFY_ORDER` have never been driven from it. Related and unproven: on the modify paths
+`CREATE_REFERENCE_ITEMS` resolves to `items/update`, and whether that service accepts a level-3
+item has never been tested.
 
-### G. Two directories are untracked pending a decision
-`docs/dataSamples/` (includes 60 real suppliers with addresses) and `docs/foundationExports/` (2.3MB,
-with exact duplicates: `Differentiators` twice, `HTS Definition` twice, `Phases` three times). Neither
-is in git.
+### F. HTS assessments are not sent
+The tenant's own rows carry `componentId DTY7AGB` against `computationValueBase VFDGB` with duty,
+expense and ALC flags. The tariff code is useful without them; the assessments need someone who
+knows the customs side.
+
+### G. The capture page is reorganised, not redesigned
+Page 10 groups 27 header fields into four titled sections and is derived from page 3. Real polish
+— a summary card, a wizard flow, a popup colour picker over the 48,624 differentiators rather
+than a select list — is a deliberate piece of design work still to do. The `popupLov` donor and
+the syntax are recorded in the APEXlang skill.
+
+### H. Two directories are untracked pending a decision
+`docs/dataSamples/` (includes 60 real suppliers with addresses) and `docs/foundationExports/`
+(2.3 MB, with exact duplicates: `Differentiators` twice, `HTS Definition` twice, `Phases` three
+times). Neither is in git.
 
 ## Older outstanding work
 
