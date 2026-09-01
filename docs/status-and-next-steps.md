@@ -92,6 +92,45 @@ The mapping is in and previews correctly. It has not been sent to MFCS, so the c
 (`FREIGHT`, `DUTY`, …) have not been validated against what the tenant actually accepts. Expect the
 first live attempt to reveal the valid component list.
 
+## What Office items actually look like, and what we do not build — 2026-09-01
+
+Three real item documents (a style, a SKU and its barcodes) were compared against a style this layer
+created. Samples are cached in `docs/dataSamples/`.
+
+**The shapes match.** `foundation/item` returns 118 keys on UAT and 125 on STG, and every UAT key exists
+on STG — STG is a superset, adding the company/division/group hierarchy. `itemDetail` rows are byte-for-
+byte the same shape at all three levels, 25 keys each. Nothing about what we create is structurally
+wrong.
+
+**What a real item carries that ours does not:**
+
+| | ours | theirs |
+| --- | --- | --- |
+| `itemUda` | 3 (written by hand in a probe) | 13 |
+| `referenceItem` | 1 (written by hand in a probe) | 2, one primary |
+| `itemSeason` | null | `seasonId 1, phaseId 1, sequenceNo 1` |
+| `itemImage` / `primaryImageUrl` | null | Amplience CDN, `imageType T` |
+| `hts` | null | `6402993900` GB←DE, with `assessments` |
+| `brandName` / `brandDescription` | null | `18` / `Birkenstock` |
+
+Both mechanisms behind the first two rows are now proven live — see
+`docs/mfcs-actual-call-flow.md`. Neither has a step in the graph yet.
+
+**One defect, not a gap.** Our SKU reads back `unitRetail: 0` where the real one reads `85`. We send
+`originalRetail` and it does not reach `unitRetail`, which is where the tenant keeps the effective
+price. Everything this layer has created is priced at zero. Confirm what Office expects before deciding
+whether that matters.
+
+**Foundation data is no longer the blocker it was.** STG now publishes `uda` (23 definitions with their
+values), `supplier`, `store` and `warehouse`. UAT publishes all of those plus `diffid` (380),
+`diffgroup` (13, each naming its member diffs), `difftype` and all three `merchhier` levels. The
+`MAP.*`-and-derive-from-item-feed approach was a workaround for empty feeds; on UAT it is no longer
+needed.
+
+**The bottleneck is now inbound.** We cannot send UDA values, barcodes, seasons or HTS codes that the
+Office document has no room for. The MFCS-side work is mapper work in shapes we already run; agreeing
+the inbound contract is the critical path.
+
 ## Known gaps that are not our bugs
 
 **UDAs do not work because the tenant has none.** `foundation/uda` returns zero rows and `itemUda` is

@@ -9,3 +9,9 @@ __pycache__/
 # UI build output and dependencies
 ui/node_modules/
 ui/dist/
+
+# Database credentials - never commit. See deploy/mdutils/README.md
+deploy/mdutils/connect.env
+*.credentials
+docs/testToken.file
+*token*.file

@@ -914,6 +914,121 @@ history. Cancel reasons come from code type `ORCA`: `B` for reductions, `S` for 
 The step verifies by read-back — every named line at its quantity AND every cancelled line at
 zero — waiting out the ~30-second lag with the order-verify retry settings.
 
+## Item UDAs, proven — live, 2026-09-01
+
+Written against style `100150111` and SKU `100150129` on STG, using values taken from the tenant's own
+`foundation/uda` feed. Both persisted.
+
+`displayType` is required per row and decides which value field is read: `LV` uses `udaValue`, `FF`
+uses `udaText`, `DT` uses `udaDate`. The empty array the mapper currently sends is accepted and does
+nothing.
+
+```jsonc
+// POST /MerchIntegrations/services/item/uda/create   ->  {"status":"SUCCESS"}
+{
+  "collectionSize": 2,
+  "items": [
+    {
+      "item": "100150111",
+      "dataLoadingDestination": "RMS",
+      "uda": [
+        // udaId 239 = Gender, value 3. Definitions and their valid values come from
+        // GET /MerchIntegrations/services/foundation/uda - 23 on STG, 27 on UAT.
+        { "udaId": 239,   "displayType": "LV", "udaValue": "3" },
+        { "udaId": 51037, "displayType": "LV", "udaValue": "1" },
+        { "udaId": 225,   "displayType": "LV", "udaValue": "5" }
+      ]
+    },
+    { "item": "100150129", "dataLoadingDestination": "RMS", "uda": [ /* same three */ ] }
+  ]
+}
+```
+
+The read-back needs care. `foundation/item/100150111` showed `itemUda.udaLov` empty immediately after
+the write and populated about a minute later, when the document's own `cacheTimestamp` advanced. That
+is cache lag, not a silent failure — see the note in CLAUDE.md.
+
+`item/uda/update` is **not** symmetric with create: it matches the existing row on its current value and
+carries the change in `newUdaValue` / `newUdaText` / `newUdaDate`.
+
+## Barcodes as level-3 items, proven — live, 2026-09-01
+
+There is no reference-item service anywhere in the tenant's 323 paths. A barcode is an item at level 3
+hanging off the SKU, created through `items/create`, the same endpoint used for styles and SKUs.
+
+```jsonc
+// POST /MerchIntegrations/services/items/create   ->  {"status":"SUCCESS"}
+{
+  "collectionSize": 1,
+  "items": [
+    {
+      "item": "2930000003016",          // EAN-13. Prefix 29 is the GS1 restricted range.
+      "itemParent": "100150129",        // the SKU
+      "itemGrandparent": "100150111",   // the style
+      "itemLevel": 3,
+      "tranLevel": 2,
+
+      // EAN13 is the only type that accepts 13 digits. ITEM and an absent type both
+      // demand 9 characters; UPC-A demands 12.
+      "itemNumberType": "EAN13",
+      "primaryReferenceItemInd": "Y",
+
+      "dataLoadingDestination": "RMS",
+      "itemDescription": "Flow barcode test",
+      "shortDescription": "Flow barcode",
+      "dept": 1517,
+      "class": 6892,
+      "subclass": 1128,
+      "diff1": "08621",
+      "diff2": "070",
+      "sellableInd": "Y",
+      "orderableInd": "Y",
+      "merchandiseInd": "Y",
+      "inventoryInd": "Y",
+      "standardUom": "EA",
+
+      // Must be sent, and must equal the parent's. Omitting it returns
+      // "Field cannot be modified. Field: COST_ZONE_GROUP_ID" - an error naming a
+      // field that was never in the request. This was the whole blocker.
+      "costZoneGroupId": 2000
+    }
+  ]
+}
+```
+
+`status` and `itemSupplier` are inherited from the parent and should not be sent — the record came back
+`status: "A"` with the parent's supplier attached, having been sent neither.
+
+Errors along the way were loud and useful, which is unusual for this tenant:
+
+| sent | response |
+| --- | --- |
+| no `itemNumberType` | `The Item number must be 9 characters in length` |
+| `UPC-A` | `The UCC12 must be 12 characters in length` |
+| `EAN13`, no `costZoneGroupId` | `Field cannot be modified. Field: COST_ZONE_GROUP_ID` |
+| missing `shortDescription` | `Field must be entered. Field: SHORT_DESC` |
+| missing hierarchy | `Field must be entered. Field: SUBCLASS` |
+| no `sellableInd`/`orderableInd` | `Regular items must be either orderable or sellable` |
+
+Reading it back, in two places — `foundation/item/2930000003016` 404s, on both tenants:
+
+```jsonc
+// GET /RmsReSTServices/services/private/Item/itemDetail?item=100150111
+{ "item": "2930000003016", "itemParent": "100150129", "itemGrandparent": "100150111",
+  "itemLevel": 3, "primaryRefItemInd": "Y", "status": "A" }
+
+// GET /MerchIntegrations/services/foundation/item/100150129  ->  referenceItem[]
+{ "referenceItem": "2930000003016", "primaryInd": "Y", "itemNoType": "EAN13",
+  "formatId": null, "prefix": null }
+```
+
+Note the renames across the three vocabularies: `itemNumberType` on write, `itemNoType` in
+`referenceItem`; `primaryReferenceItemInd` on write, `primaryRefItemInd` in `itemDetail`, `primaryInd`
+in `referenceItem`. Three names for one flag.
+
+A real UAT SKU carries two barcodes, exactly one with `primaryInd: "Y"`, and the non-primary one is
+type `MANL` rather than `EAN13`.
+
 ## Current Assumptions
 
 These values are configurable and should be replaced with authoritative Office/MFCS foundation mappings when available:

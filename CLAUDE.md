@@ -77,7 +77,7 @@ body, so anything a body calls must already exist. `payload_pkg` is called stati
 
 ```bash
 # Install from zero, as the schema owner (MFCS_INTEGRATION)
-@deploy/adb-free/install.sql
+@deploy/adb-free/install.sql          # directory name is legacy; run it against mdutils
 @deploy/adb-free/99_verify.sql        # expect zero invalid objects
 
 # Fault-injected failure and resume coverage - CREATES REAL TENANT RECORDS
@@ -86,16 +86,24 @@ body, so anything a body calls must already exist. `payload_pkg` is called stati
 cd ui && npm install && npm run dev   # http://localhost:5173
 ```
 
-Local database is the `adb-free` container. It is Autonomous, so connections are TCPS with service
-names, not a SID. The reliable route is sqlplus inside the container:
+**The database is `mdutilstst01`, not a local container.** Oracle 23.26.2.0.0, PDB `FREEPDB1`, schema
+`MFCS_INTEGRATION`. It is a normal Oracle server: plain TCP on a service name, no wallet, no TCPS, and
+`TNS_ADMIN` is irrelevant. This is where the console deploys and where live requests actually run.
 
 ```bash
-docker exec adb-free bash -lc 'export TNS_ADMIN=/u01/app/oracle/wallets/tls_wallet && \
-  sqlplus -s -L mfcs_integration/CsidbaLocal2026@myatp_low'
+deploy/mdutils/sql.sh script.sql                        # run a file
+echo "select count(*) from request;" | deploy/mdutils/sql.sh
+deploy/mdutils/sql.sh deploy/mdutils/token_status.sql   # check the token first, always
 ```
 
-Copy scripts in with `docker cp` to a **fresh** directory (`docker cp` nests into an existing one), then
-`cd` inside `bash -lc`. Do not use `docker exec -w` — Git Bash rewrites the path and it fails.
+Credentials live in `deploy/mdutils/connect.env`, which is gitignored and must stay that way - this
+repository has a public remote. `deploy/mdutils/README.md` says how to recreate it.
+
+Use the **service-name** form, `//host:1521/FREEPDB1`. The colon form `host:1521:FREEPDB1` is SID
+syntax and will not connect. The wrapper appends `exit`, because SQLcl otherwise sits in its REPL until
+it is killed, and strips the JVM warnings it prints before every result.
+
+The `adb-free` container in older notes is not running and is not the deployment target.
 
 ## Tenant behaviour that will cost you a day
 
@@ -107,9 +115,15 @@ All verified live. Most are silent failures, which is why they are worth memoris
   working filter. It is `deptId`, not `dept`. There is no `itemParent` filter.
 - **List endpoints are publish/delta feeds**, not queries — approved and published records only, with a
   few seconds of lag. Empty does not mean absent.
-- **Most foundation services are empty publish queues** on this tenant (`merchhier/*`, `diffid`,
-  `supplier`, `store`, `warehouse`, `uda`). That is why master data derives hierarchy, differentiator
-  and supplier values from the item and order feeds, and records `SOURCE` on every row.
+- **Which foundation services publish depends on the tenant, and it changed.** Verified 2026-09-01.
+  On STG `uda` (23), `supplier`, `store` and `warehouse` now return data; `diffid`, `diffgroup`,
+  `difftype` and `merchhier/*` are still HTTP 200 with zero rows. On UAT **everything** publishes -
+  `diffid` 380, `diffgroup` 13 (with a `details` array naming each group's member diffs), `difftype` 4,
+  and all three `merchhier` levels. Deriving hierarchy, differentiator and supplier values from the item
+  and order feeds is therefore a STG workaround, not a permanent necessity - the `SOURCE` column on
+  every master-data row exists so the two origins stay distinguishable. Paths are case-sensitive and
+  easy to get wrong: it is `diffid`, not `diffId`, and `merchhier/deps`, not `merchhier/department`;
+  both wrong forms 404 rather than returning empty.
 - **`OTB_EOW_DATE` must fall on a Sunday** (the retail week end). MFCS only enforces it at order create,
   by which point a style exists and an order number is burned, so validation checks it up front.
 - **Item ranging needs the virtual warehouse** (19271), not the physical location (1927). Both mappers
@@ -117,6 +131,9 @@ All verified live. Most are silent failures, which is why they are worth memoris
 - **A purchase order ranges its own items**, so `CREATE_ITEM_LOCATIONS` only matters for style-only creates.
 - **Approval requires sourcing and country of manufacture first.**
 - **Parent styles carry differentiator *groups*** (`RMS_ALL_C`/`ALL`); children carry *concrete* diff IDs.
+  That is how *we* create them, not a tenant law: a real UAT style carries a concrete colour (`100`,
+  Black) with a size *group* (`ADULT_NUM`). The authoritative discriminator is `diff1Level` /
+  `diff2Level`, which reads `ID` or `GROUP`. We do not read it anywhere yet.
 - **Order read and write disagree on names**: read gives `physicalQuantityOrdered` / `originCountryId`,
   write wants `quantityOrdered` / `originCountry`.
 - **`purchaseOrders/update` is header-only in practice.** It answers SUCCESS while ignoring the
@@ -134,8 +151,32 @@ All verified live. Most are silent failures, which is why they are worth memoris
   rescued by resuming; it needs a fresh request.
 - **`foundation/item/{item}` is a feed read** and 404s on a style created minutes ago. `itemDetail`
   returns it in full. Never build on the feed anything that must see a fresh record.
+- **`foundation/item` is served from a cache and lags roughly a minute.** The document carries its own
+  `cacheTimestamp` and `cacheCreateTimestamp`. A read-back inside that window shows the record without
+  the write you just made, which reads exactly like one of this tenant's silent failures and is not one.
+  Check `cacheTimestamp` before concluding a write was ignored.
+- **`foundation/item` cannot see level 3 at all.** `itemLevel=3` returns zero rows and a direct read of
+  a barcode 404s, on both STG and UAT. Reference items are visible in two other places: `itemDetail`,
+  and the parent SKU's own `referenceItem` array.
 - **`itemDetail` uses a third set of field names**, neither the feed's nor the write services':
   `classAttribute`, `itemDesc`/`shortDesc`, `primarySuppInd`, `originCountryId`, `suppPackSize`.
+  The same concept keeps being renamed. Item number type is `itemNumberType` on write, and `itemNoType`
+  inside `referenceItem` on read. The primary-reference flag is `primaryReferenceItemInd` on write and
+  `primaryRefItemInd` on read. Assume a rename until you have checked.
+- **UDA writes need `displayType`, and it selects the value field.** `item/uda/create` requires
+  `udaId` and `displayType` per row; `LV` then uses `udaValue`, `FF` uses `udaText`, `DT` uses
+  `udaDate`. Sending an empty `uda` array is accepted and does nothing. `item/uda/update` is not
+  symmetric with create: it identifies the existing row by its current value and carries the change in
+  `newUdaValue` / `newUdaText` / `newUdaDate`. `items/create` also accepts a nested `uda` array, so
+  UDAs can ride along at create time instead of needing their own call.
+- **Barcodes are items at level 3, not a separate service.** There is no reference-item endpoint in the
+  323-path spec. A UPC is `items/create` with `itemLevel: 3`, `itemParent` set to the SKU,
+  `itemGrandparent` to the style, and `primaryReferenceItemInd`. Three things it costs a dozen attempts
+  to learn: `itemNumberType` must be `EAN13` (`ITEM` and an absent type both demand a 9-character
+  number, `UPC-A` demands 12); `costZoneGroupId` must be sent and must equal the parent's, or MFCS
+  answers `Field cannot be modified. Field: COST_ZONE_GROUP_ID` - an error naming a field you did not
+  send; and `status` and `itemSupplier` are inherited from the parent, so do not send them. A SKU
+  carries several barcodes with exactly one `primaryInd: Y`. All verified live on STG 2026-09-01.
 - **The update services want the whole record, not a patch.** `items/update` refuses without
   `STORE_ORD_MULT` even for a description-only change; `suppliers/update` refuses without
   `DIRECT_SHIP_IND`, then `INNER_NAME`. All are now sent on both paths. Valid packaging names come
@@ -171,6 +212,21 @@ All verified live. Most are silent failures, which is why they are worth memoris
 
 ## Not our bugs
 
-UDAs do not work because the tenant has no UDA definitions — `foundation/uda` is empty and `itemUda` is
-null on every item. `ENDPOINT.INITIAL_RETAIL` is a placeholder because no matching write service exists.
-Neither is worth "fixing" in code.
+`ENDPOINT.INITIAL_RETAIL` is a placeholder because no matching write service exists.
+
+## Known defects in what we create
+
+**Items we create have no retail price.** A style created by this layer reads back `unitRetail: 0`
+against a real UAT item's `85`, even though we send `originalRetail`. `unitRetail` is where the tenant
+keeps the effective price, and nothing we send reaches it. Consistent with `ENDPOINT.INITIAL_RETAIL`
+being a placeholder, but worth confirming against what Office expects rather than assuming it is
+cosmetic.
+
+**We create nothing below level 2.** Real Office items carry barcodes as level-3 reference items, two
+per SKU. The mechanism is proven (see above) but no step builds them yet.
+
+**UDAs are sent as an empty array.** The tenant has 23 definitions on STG and 27 on UAT, all with
+values; a real item carries a dozen. `payload_pkg.item_uda_request` emits `"uda": []` for every SKU.
+This was previously recorded here as "not our bug" on the grounds that the tenant had no UDA
+definitions. That was wrong: `foundation/uda` was an empty *publish queue*, which is not the same as an
+empty definition set.
