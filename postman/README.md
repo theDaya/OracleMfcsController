@@ -152,10 +152,27 @@ before failing, so feed lag is not reported as a silent failure that did not hap
 
 **Any failure halts the run.** A half-created style makes every following step address items that do
 not exist, and the resulting errors all look like payload problems. The console line beginning
-`HALTING -` names the request that actually broke.
+`HALTING -` names the request that actually broke. A non-2xx on a read-back halts immediately rather
+than spending its retries: a broken call is not feed lag.
 
 Each run stamps `{{flowDescription}}` with a fresh timestamp, so repeated runs are distinguishable
 in the tenant rather than piling up under one description.
+
+## Checking the folder after you edit it
+
+```bash
+node postman/verify-flow.js
+```
+
+No dependencies, no network, creates nothing. It resolves every `{{variable}}` and parses the
+bodies, then executes each test script against a fake response to check what it does: halt on a
+failure, not halt on a healthy 200, retry a read-back while the style is still landing, and give up
+once the retries are spent.
+
+That last part is not paranoia. The first version of this folder read `pm.response.ok` — a Fetch API
+property that Postman's response object does not have. It parsed cleanly, and then halted the run
+after every single request, including ones that returned HTTP 200 and passed their own assertions.
+Syntax checking cannot see that; running the script against a fake 200 can.
 
 ## There is no Flows canvas file
 
