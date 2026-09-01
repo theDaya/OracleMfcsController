@@ -90,6 +90,44 @@ list desktop-navigation-menu (
         }
     )
 
+    entry style-capture (
+        label: Style Capture
+        icon {
+            imageIconCssClasses: fa-pencil-square-o
+        }
+        layout {
+            sequence: 25
+        }
+        isCurrent {
+            type: pages
+            pages: 10
+        }
+        link {
+            target: {
+                page: 10
+            }
+        }
+    )
+
+    entry style-explorer (
+        label: Style Explorer
+        icon {
+            imageIconCssClasses: fa-search-plus
+        }
+        layout {
+            sequence: 26
+        }
+        isCurrent {
+            type: pages
+            pages: 20
+        }
+        link {
+            target: {
+                page: 20
+            }
+        }
+    )
+
     entry browse-mfcs (
         label: Browse MFCS
         icon {
