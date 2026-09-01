@@ -81,8 +81,26 @@ create or replace package body ui_pkg as
                                           'SKU_SIZE' value s.sku_size,
                                           'SKU_WIDTH' value s.sku_width,
                                           'SKU_QTY' value s.sku_qty,
-                                          'SKU_ID' value case when d.operation_name in ('CREATE_STYLE', 'CREATE_ALL') then null else s.sku_id end
-                                      returning clob)
+                                          'SKU_ID' value case when d.operation_name in ('CREATE_STYLE', 'CREATE_ALL') then null else s.sku_id end,
+                                          -- Absent, not empty, when the SKU has no
+                                          -- barcodes. The backend treats a missing
+                                          -- SKU_UPCS and an empty one the same, but
+                                          -- an absent key says "none captured"
+                                          -- rather than "none, deliberately".
+                                          'SKU_UPCS' value (
+                                              select json_arrayagg(
+                                                         json_object(
+                                                             'UPC' value u.upc,
+                                                             'UPC_TYPE' value u.upc_type,
+                                                             'PRIMARY_YN' value u.primary_yn
+                                                         absent on null returning clob)
+                                                         order by u.primary_yn desc, u.draft_upc_id
+                                                         returning clob
+                                                     )
+                                                from ui_draft_sku_upc u
+                                               where u.draft_sku_id = s.draft_sku_id
+                                          ) format json
+                                      absent on null returning clob)
                                       order by s.draft_sku_id
                                       returning clob
                                   ),
@@ -90,6 +108,23 @@ create or replace package body ui_pkg as
                               )
                          from ui_draft_sku s
                         where s.draft_id = d.draft_id
+                   ) format json,
+                   -- Style level only. SKUs inherit these, so the console has no
+                   -- SKU-level UDA capture and the backend writes the same set to
+                   -- the parent and every child.
+                   'STYLE_UDAS' value (
+                       select json_arrayagg(
+                                  json_object(
+                                      'UDA_ID' value ud.uda_id,
+                                      'UDA_VALUE' value ud.uda_value,
+                                      'UDA_TEXT' value ud.uda_text,
+                                      'UDA_DATE' value to_char(ud.uda_date, 'YYYY-MM-DD')
+                                  absent on null returning clob)
+                                  order by ud.uda_id
+                                  returning clob
+                              )
+                         from ui_draft_uda ud
+                        where ud.draft_id = d.draft_id
                    ) format json,
                    'NOT_BEFORE_DATE' value to_char(d.not_before_date, 'YYYY-MM-DD'),
                    'NOT_AFTER_DATE' value to_char(d.not_after_date, 'YYYY-MM-DD'),

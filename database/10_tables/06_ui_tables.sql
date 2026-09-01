@@ -103,4 +103,78 @@ begin
 end;
 /
 
+-- UDAs captured against the style. There is no SKU-level table on purpose: SKUs
+-- inherit their style's UDAs, which is the contract the backend mapper implements.
+create table ui_draft_uda (
+    draft_uda_id number not null,
+    draft_id     number not null,
+    uda_id       number not null,
+    uda_value    varchar2(30),
+    uda_text     varchar2(250),
+    uda_date     date,
+    created_at   timestamp with time zone default systimestamp not null,
+    updated_at   timestamp with time zone default systimestamp not null
+);
+
+-- Barcodes, one row per UPC per SKU. draft_id is denormalised from the parent SKU
+-- so the console's grid is a single-table query filtered by the page's draft, and
+-- APEX can process its rows automatically. The trigger keeps it true.
+create table ui_draft_sku_upc (
+    draft_upc_id number not null,
+    draft_id     number not null,
+    draft_sku_id number not null,
+    upc          varchar2(30) not null,
+    upc_type     varchar2(10) default 'EAN13',
+    primary_yn   varchar2(1)  default 'N',
+    created_at   timestamp with time zone default systimestamp not null,
+    updated_at   timestamp with time zone default systimestamp not null
+);
+
+create sequence ui_draft_uda_seq start with 1 increment by 1 nocache;
+create sequence ui_draft_sku_upc_seq start with 1 increment by 1 nocache;
+
+alter table ui_draft_uda add constraint ui_draft_uda_pk primary key (draft_uda_id);
+alter table ui_draft_uda add constraint ui_draft_uda_fk foreign key (draft_id)
+    references ui_draft (draft_id) on delete cascade;
+-- One row per UDA per draft. A second value for the same UDA is a contradiction,
+-- not an addition: every definition on this tenant is singleValueInd Y.
+alter table ui_draft_uda add constraint ui_draft_uda_uk unique (draft_id, uda_id);
+create index ui_draft_uda_ix1 on ui_draft_uda (draft_id);
+
+alter table ui_draft_sku_upc add constraint ui_draft_sku_upc_pk primary key (draft_upc_id);
+alter table ui_draft_sku_upc add constraint ui_draft_sku_upc_fk foreign key (draft_sku_id)
+    references ui_draft_sku (draft_sku_id) on delete cascade;
+alter table ui_draft_sku_upc add constraint ui_draft_sku_upc_draft_fk foreign key (draft_id)
+    references ui_draft (draft_id) on delete cascade;
+-- A barcode identifies exactly one item, so it cannot repeat within a style.
+alter table ui_draft_sku_upc add constraint ui_draft_sku_upc_uk unique (draft_id, upc);
+alter table ui_draft_sku_upc add constraint ui_draft_sku_upc_primary_ck check (primary_yn in ('Y', 'N'));
+create index ui_draft_sku_upc_ix1 on ui_draft_sku_upc (draft_sku_id);
+
+create or replace trigger ui_draft_uda_biu
+    before insert or update on ui_draft_uda
+    for each row
+begin
+    if inserting and :new.draft_uda_id is null then
+        :new.draft_uda_id := ui_draft_uda_seq.nextval;
+    end if;
+    :new.updated_at := systimestamp;
+end;
+/
+
+create or replace trigger ui_draft_sku_upc_biu
+    before insert or update on ui_draft_sku_upc
+    for each row
+begin
+    if inserting and :new.draft_upc_id is null then
+        :new.draft_upc_id := ui_draft_sku_upc_seq.nextval;
+    end if;
+    -- Derived, never captured: the grid only asks which SKU the barcode belongs to.
+    select s.draft_id into :new.draft_id
+      from ui_draft_sku s
+     where s.draft_sku_id = :new.draft_sku_id;
+    :new.updated_at := systimestamp;
+end;
+/
+
 prompt OFFICE MFCS APEX UI staging objects created

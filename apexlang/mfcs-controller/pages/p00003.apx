@@ -362,6 +362,485 @@ page 3 (
 
     )
 
+    region style-udas (
+        name: Style Attributes
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_uda_id,
+                       draft_id,
+                       uda_id,
+                       uda_value,
+                       uda_text,
+                       uda_date
+                  from ui_draft_uda
+                 where draft_id = :P3_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 40
+            parentRegion: @associated-items
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        toolbar {
+            controls: [
+                searchCol
+                searchField
+                actionsMenu
+                resetButton
+                saveButton
+            ]
+        }
+        heading {
+            fixedTo: region
+            fixedReportHeight: 320
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @UDA_ID
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @UDA_VALUE
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @UDA_TEXT
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @UDA_DATE
+                layout {
+                    sequence: 4
+                }
+            )
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 10
+            }
+        )
+
+        column APEX$ROW_SELECTOR (
+            type: rowSelector
+            layout {
+                sequence: 20
+            }
+        )
+
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+            default {
+                type: item
+                item: P3_DRAFT_ID
+            }
+        )
+
+        column DRAFT_UDA_ID (
+            type: hidden
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: DRAFT_UDA_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+            exportPrinting {
+                includeInExportPrint: false
+            }
+        )
+
+        column UDA_ID (
+            type: selectList
+            heading {
+                heading: Attribute
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select md.description || ' (' || md.data_code || ')' d,
+                           to_number(md.data_code) r
+                      from master_data md
+                     where md.data_type = 'UDA'
+                       and md.parent_code = '~'
+                     order by md.description
+                    ```
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: UDA_ID
+                dataType: number
+            }
+        )
+
+        column UDA_VALUE (
+            type: selectList
+            heading {
+                heading: Value
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    -- Every list-of-values entry on the tenant, labelled with the
+                    -- attribute it belongs to. The label carries the attribute name
+                    -- because this column does not cascade off UDA_ID - a grid
+                    -- column cascade has no donor in this export to copy from.
+                    -- Picking a value from the wrong attribute is caught by
+                    -- validation_pkg before any MFCS call is made.
+                    select p.description || ': ' || v.description d,
+                           v.data_code r
+                      from master_data v
+                      join master_data p
+                        on p.data_type = 'UDA'
+                       and p.parent_code = '~'
+                       and p.data_code = v.parent_code
+                     where v.data_type = 'UDA_VALUE'
+                     order by p.description, v.description
+                    ```
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                databaseColumn: UDA_VALUE
+                dataType: varchar2
+            }
+        )
+
+        column UDA_TEXT (
+            type: textField
+            heading {
+                heading: Free Text
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                databaseColumn: UDA_TEXT
+                dataType: varchar2
+            }
+        )
+
+        column UDA_DATE (
+            type: datePicker
+            heading {
+                heading: Date
+            }
+            layout {
+                sequence: 80
+            }
+            source {
+                databaseColumn: UDA_DATE
+                dataType: date
+            }
+        )
+    )
+
+    region sku-barcodes (
+        name: Barcodes
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_upc_id,
+                       draft_id,
+                       draft_sku_id,
+                       upc,
+                       upc_type,
+                       primary_yn
+                  from ui_draft_sku_upc
+                 where draft_id = :P3_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 50
+            parentRegion: @associated-items
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        toolbar {
+            controls: [
+                searchCol
+                searchField
+                actionsMenu
+                resetButton
+                saveButton
+            ]
+        }
+        heading {
+            fixedTo: region
+            fixedReportHeight: 320
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @DRAFT_SKU_ID
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @UPC
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @UPC_TYPE
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @PRIMARY_YN
+                layout {
+                    sequence: 4
+                }
+            )
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 10
+            }
+        )
+
+        column APEX$ROW_SELECTOR (
+            type: rowSelector
+            layout {
+                sequence: 20
+            }
+        )
+
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+            default {
+                type: item
+                item: P3_DRAFT_ID
+            }
+        )
+
+        column DRAFT_UPC_ID (
+            type: hidden
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: DRAFT_UPC_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+            exportPrinting {
+                includeInExportPrint: false
+            }
+        )
+
+        column DRAFT_SKU_ID (
+            type: selectList
+            heading {
+                heading: SKU
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    -- Only the SKUs on this draft. A barcode belongs to one SKU,
+                    -- and the size is how a buyer recognises it.
+                    select 'Size ' || s.sku_size d,
+                           s.draft_sku_id r
+                      from ui_draft_sku s
+                     where s.draft_id = :P3_DRAFT_ID
+                     order by s.draft_sku_id
+                    ```
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: DRAFT_SKU_ID
+                dataType: number
+            }
+        )
+
+        column UPC (
+            type: textField
+            heading {
+                heading: Barcode
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                databaseColumn: UPC
+                dataType: varchar2
+            }
+        )
+
+        column UPC_TYPE (
+            type: selectList
+            heading {
+                heading: Type
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    -- A real Office SKU carries one EAN13 and one MANL.
+                    select 'EAN13' d, 'EAN13' r from dual
+                    union all
+                    select 'MANL' d, 'MANL' r from dual
+                    ```
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                databaseColumn: UPC_TYPE
+                dataType: varchar2
+            }
+            default {
+                type: static
+                staticValue: EAN13
+            }
+        )
+
+        column PRIMARY_YN (
+            type: selectList
+            heading {
+                heading: Primary
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select 'Yes' d, 'Y' r from dual
+                    union all
+                    select 'No' d, 'N' r from dual
+                    ```
+            }
+            layout {
+                sequence: 80
+            }
+            source {
+                databaseColumn: PRIMARY_YN
+                dataType: varchar2
+            }
+            default {
+                type: static
+                staticValue: N
+            }
+        )
+    )
+
     region preview (
         name: Payload Preview
         type: classicReport
@@ -1521,6 +2000,30 @@ page 3 (
         }
         execution {
             sequence: 20
+        }
+    )
+
+    process save-style-udas (
+        name: Save Style Attributes
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @style-udas
+        target {
+            returnPksAfterInsert: false
+        }
+        execution {
+            sequence: 21
+        }
+    )
+
+    process save-sku-barcodes (
+        name: Save Barcodes
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @sku-barcodes
+        target {
+            returnPksAfterInsert: false
+        }
+        execution {
+            sequence: 22
         }
     )
 
