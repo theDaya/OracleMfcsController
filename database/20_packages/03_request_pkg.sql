@@ -315,9 +315,16 @@ create or replace package body request_pkg as
         elsif l_status = 'IN_PROGRESS' then
             o_result := 'EXECUTING';
             o_status := l_status;
-        elsif l_status = 'FAILED_NO_SIDE_EFFECT'
-              and o_response_payload is not null
-              and dbms_lob.instr(o_response_payload, 'MFCS_BATCH_WINDOW_ACTIVE') > 0 then
+        elsif l_status = 'FAILED_NO_SIDE_EFFECT' then
+            -- Always resumable, and the status name is the reason: nothing was
+            -- created, so re-running cannot duplicate anything.
+            --
+            -- This used to resume only when the stored response mentioned
+            -- MFCS_BATCH_WINDOW_ACTIVE, which was written for the one transient
+            -- cause that had been seen and never generalised. Every other
+            -- transient - a stale token being the common one - replayed its own
+            -- failure for ever, so a request that failed on a 401 could never be
+            -- retried even once the token was good again.
             update request
                set request_status = 'IN_PROGRESS',
                    started_at = coalesce(started_at, systimestamp),
@@ -325,7 +332,7 @@ create or replace package body request_pkg as
              where action_request_id = p_action_request_id;
             o_result := 'RESUME';
             o_status := 'IN_PROGRESS';
-        elsif l_status in ('COMPLETED', 'FAILED_NO_SIDE_EFFECT', 'MANUAL_REVIEW') then
+        elsif l_status in ('COMPLETED', 'MANUAL_REVIEW') then
             o_result := 'EXISTING';
             o_status := l_status;
         else

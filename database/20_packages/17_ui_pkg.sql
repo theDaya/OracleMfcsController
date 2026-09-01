@@ -385,8 +385,40 @@ create or replace package body ui_pkg as
         o_response     out clob
     ) is
         l_payload clob;
+        l_stored_hash varchar2(64);
+        l_new_hash varchar2(64);
     begin
         l_payload := build_document(p_draft_id);
+
+        -- Submit whatever the draft says now, not what it said when it first ran.
+        --
+        -- An unchanged draft keeps its ACTION_REQUEST_ID, which is what makes a
+        -- resubmit a resume: completed steps are skipped and the run picks up
+        -- where it stopped. An edited draft is a different request wearing the
+        -- same id, and the API rightly answers 409 - so it gets a new id here
+        -- and goes in as a fresh request. Either way the buyer presses one
+        -- button and the thing they are looking at is what gets sent.
+        l_new_hash := request_pkg.payload_hash(l_payload);
+        begin
+            select r.payload_hash
+              into l_stored_hash
+              from request r, ui_draft d
+             where d.draft_id = p_draft_id
+               and r.action_request_id = d.action_request_id;
+        exception
+            when no_data_found then
+                l_stored_hash := null;
+        end;
+
+        if l_stored_hash is not null and l_stored_hash <> l_new_hash then
+            update ui_draft
+               set action_request_id = new_action_request_id,
+                   updated_at = systimestamp
+             where draft_id = p_draft_id;
+            commit;
+            l_payload := build_document(p_draft_id);
+        end if;
+
         api_pkg.submit_transaction(l_payload, o_http_status, o_response);
 
         update ui_draft

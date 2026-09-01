@@ -152,7 +152,13 @@ All verified live. Most are silent failures, which is why they are worth memoris
   few seconds of feed lag elsewhere. A read-back that concludes too early reports a silent failure
   that did not happen.
 - **Resume replays the *stored* payload.** A request that failed on a bad value in that payload cannot be
-  rescued by resuming; it needs a fresh request.
+  rescued by resuming; it needs a fresh request. The console's Retry button handles this: it rebuilds
+  the document from the draft and, if that no longer matches what was stored, gives the draft a new
+  ACTION_REQUEST_ID so the corrected version goes in as a fresh request rather than a 409.
+- **`FAILED_NO_SIDE_EFFECT` is always resumable, and the name is the reason** - nothing was created, so
+  re-running cannot duplicate anything. It used to resume only when the stored response mentioned
+  `MFCS_BATCH_WINDOW_ACTIVE`, which meant a request that failed on a stale-token 401 replayed its own
+  failure for ever and could never be retried, even once the token was good again.
 - **`foundation/item/{item}` is a feed read** and 404s on a style created minutes ago. `itemDetail`
   returns it in full. Never build on the feed anything that must see a fresh record.
 - **`foundation/item` is served from a cache and lags roughly a minute.** The document carries its own
