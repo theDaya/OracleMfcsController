@@ -155,6 +155,34 @@ region details (
 Sub-regions join it with `layout { parentRegion: @details, slot: subRegions }`. Note
 `templateOptions` is rejected on this region.
 
+### Blocks must be multi-line
+
+`heading { heading: Item }` on one line is rejected with `Invalid token`. Every block needs
+its own lines, however short:
+
+```apex
+heading {
+    heading: Item
+}
+```
+
+### A process that runs on a button
+
+`serverSideCondition { type: requestIsContainedInValue, value: FETCH }`, where `FETCH` is the
+button's `buttonName`. `type: request` is not valid.
+
+### Testing an APEX collection outside a session
+
+`apex_collection` raises `ORA-06501` from a plain SQLcl connection. Create a session first,
+then the collection and any `json_table` over `apex_collections` behave exactly as they do on
+the page:
+
+```sql
+apex_session.create_session(p_app_id => 102, p_page_id => 20, p_username => 'MFCS_INTEGRATION');
+```
+
+That is the fastest way to prove a region's query before importing it.
+
 ### Properties rejected where you would expect them
 
 | On | Rejected |
