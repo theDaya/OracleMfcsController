@@ -1184,6 +1184,27 @@ create or replace package body orchestrator_pkg as
                     || '","requestBytes":' || coalesce(to_char(dbms_lob.getlength(l_request_payload)), '0') || '}'
             );
 
+            -- A step whose write set came out empty has nothing to say to the
+            -- tenant, and saying it anyway is not harmless: items/create rejects
+            -- an empty items array, which fails the step and leaves the request
+            -- PARTIALLY_COMPLETED for a document that was never wrong.
+            --
+            -- This is how CREATE_REFERENCE_ITEMS stays genuinely optional. A
+            -- document with no SKU_UPCS builds collectionSize 0, and the step
+            -- succeeds without a call rather than being skipped from the graph -
+            -- so the journal still shows it was considered.
+            if l_request_payload is not null
+               and json_value(l_request_payload, '$.collectionSize' returning number null on error) = 0 then
+                step_pkg.set_step_status(p_action_request_id, l_step, 'SUCCEEDED');
+                event_pkg.log_event(
+                    p_action_request_id => p_action_request_id,
+                    p_event_phase => 'STEP_SUCCEEDED',
+                    p_step_code => l_step,
+                    p_message => 'Nothing to send: the document produced an empty write set.'
+                );
+                continue;
+            end if;
+
             if l_step = 'RESERVE_ITEM_NUMBERS'
                and to_number(config_pkg.get_config('MFCS_ITEM_NUMBER_RESERVATION_CHUNK_SIZE', '1')) = 1 then
                 reserve_item_numbers_chunked(p_action_request_id, l_user_id);

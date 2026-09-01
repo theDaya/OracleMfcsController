@@ -102,8 +102,12 @@ using (
     select 'DEFAULT', 'MAP.COUNTRY.GB', 'GB', 'Y' from dual union all
     select 'DEFAULT', 'MAP.CURRENCY.ZAR', 'ZAR', 'Y' from dual union all
     select 'DEFAULT', 'MAP.CURRENCY.USD', 'USD', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.COLOUR.BLACK', 'BLACK', 'Y' from dual union all
-    select 'DEFAULT', 'MAP.COLOUR.WHITE', 'WHITE', 'Y' from dual union all
+    -- Disabled: neither is a real differentiator ID on this tenant, checked against
+    -- the 48,837 in the foundation export. A document sending COLOUR "BLACK" would
+    -- map to the literal string and be rejected at items/create - after a reserved
+    -- item number had already been burned.
+    select 'DEFAULT', 'MAP.COLOUR.BLACK', 'BLACK', 'N' from dual union all
+    select 'DEFAULT', 'MAP.COLOUR.WHITE', 'WHITE', 'N' from dual union all
     select 'DEFAULT', 'MAP.COLOUR.RMS_ALL_C', 'RMS_ALL_C', 'Y' from dual union all
     select 'DEFAULT', 'MAP.COLOUR.08610', '08610', 'Y' from dual union all
     select 'DEFAULT', 'MAP.COLOUR.08621', '08621', 'Y' from dual union all
