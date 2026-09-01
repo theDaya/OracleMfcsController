@@ -169,6 +169,14 @@ All verified live. Most are silent failures, which is why they are worth memoris
   symmetric with create: it identifies the existing row by its current value and carries the change in
   `newUdaValue` / `newUdaText` / `newUdaDate`. `items/create` also accepts a nested `uda` array, so
   UDAs can ride along at create time instead of needing their own call.
+- **A barcode cannot be created until its parent SKU is out of worksheet status.** MFCS answers
+  `This item's parent must be in submitted status before the item can be submitted`. This is why
+  `CREATE_REFERENCE_ITEMS` runs *after* `APPROVE_ITEMS` rather than next to the child create, where it
+  looks like it belongs. Proven both ways live: it failed at sequence 45 against freshly created
+  worksheet SKUs, and succeeded at 85 against the same style once approved.
+- **An item is briefly locked after a create/approve run.** `items/update` against a style whose
+  approval has just completed returns `The record is currently locked by another user`. It is transient
+  and not a payload problem, so do not treat it as one.
 - **Barcodes are items at level 3, not a separate service.** There is no reference-item endpoint in the
   323-path spec. A UPC is `items/create` with `itemLevel: 3`, `itemParent` set to the SKU,
   `itemGrandparent` to the style, and `primaryReferenceItemInd`. Three things it costs a dozen attempts
@@ -253,11 +261,13 @@ keeps the effective price, and nothing we send reaches it. Consistent with `ENDP
 being a placeholder, but worth confirming against what Office expects rather than assuming it is
 cosmetic.
 
-**We create nothing below level 2.** Real Office items carry barcodes as level-3 reference items, two
-per SKU. The mechanism is proven (see above) but no step builds them yet.
+**Brand does not stick.** `items/create` accepts `brandName` with the tenant's own brand code, answers
+SUCCESS, and the item reads back with `brandName` empty. Verified end to end on 2026-09-01: the stored
+request payload shows `"brandName":"02"` was sent, and `foundation/item` returned the style with no
+brand once its cache had refreshed and the UDAs written in the same run *were* visible. Trying
+`items/update` instead hit the post-approval record lock and settled nothing. The mapper still sends it
+and validation still checks it against master data, because both are correct as far as we know - but
+nothing reaches the tenant, so do not report brand as working.
 
-**UDAs are sent as an empty array.** The tenant has 23 definitions on STG and 27 on UAT, all with
-values; a real item carries a dozen. `payload_pkg.item_uda_request` emits `"uda": []` for every SKU.
-This was previously recorded here as "not our bug" on the grounds that the tenant had no UDA
-definitions. That was wrong: `foundation/uda` was an empty *publish queue*, which is not the same as an
-empty definition set.
+**We create nothing Office would call complete.** Seasons, HTS codes and images are still absent -
+see `docs/status-and-next-steps.md`. UDAs and barcodes are done and proven live.

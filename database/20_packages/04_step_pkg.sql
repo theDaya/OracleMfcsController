@@ -108,10 +108,7 @@ create or replace package body step_pkg as
             add_step(p_action_request_id, 'CREATE_PARENT_ITEM_HIERARCHY', 30);
             add_step(p_action_request_id, 'CREATE_PARENT_ITEM_SOURCING', 35);
             add_step(p_action_request_id, 'CREATE_CHILD_ITEM_HIERARCHY', 40);
-            -- Barcodes are level-3 items under the SKUs, so they can only be
-            -- created once the SKUs exist. No-op when the document carries no
-            -- SKU_UPCS, which is how a style without barcodes stays legal.
-            add_step(p_action_request_id, 'CREATE_REFERENCE_ITEMS', 45);
+
             add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 50);
             add_step(p_action_request_id, 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE', 55);
             add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 60);
@@ -119,6 +116,13 @@ create or replace package body step_pkg as
                 add_step(p_action_request_id, 'CREATE_ITEM_LOCATIONS', 70);
             end if;
             add_step(p_action_request_id, 'APPROVE_ITEMS', 80);
+            -- Barcodes come last, after approval, and the ordering is not
+            -- cosmetic. A level-3 item is refused while its parent SKU is still
+            -- in worksheet status: "This item's parent must be in submitted
+            -- status before the item can be submitted" - proven live, 2026-09-01.
+            -- No-op when the document carries no SKU_UPCS, which is how a style
+            -- without barcodes stays legal.
+            add_step(p_action_request_id, 'CREATE_REFERENCE_ITEMS', 85);
         elsif p_operation_name in ('MODIFY_STYLE', 'CREATE_ORDER', 'MODIFY_ORDER') then
             -- The whole style write set, every time, for every operation that touches
             -- an existing style. Not a diff.
@@ -143,7 +147,6 @@ create or replace package body step_pkg as
             -- reference it.
             add_step(p_action_request_id, 'ENSURE_STYLE_SKUS', 25);
             add_step(p_action_request_id, 'CREATE_ITEM_HIERARCHY', 30);
-            add_step(p_action_request_id, 'CREATE_REFERENCE_ITEMS', 35);
             add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 40);
             add_step(p_action_request_id, 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE', 45);
             add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 50);
@@ -151,6 +154,8 @@ create or replace package body step_pkg as
                 add_step(p_action_request_id, 'CREATE_ITEM_LOCATIONS', 60);
             end if;
             add_step(p_action_request_id, 'APPROVE_ITEMS', 70);
+            -- After approval, for the same reason as the create branch.
+            add_step(p_action_request_id, 'CREATE_REFERENCE_ITEMS', 75);
         end if;
 
         if p_operation_name = 'CREATE_ALL'

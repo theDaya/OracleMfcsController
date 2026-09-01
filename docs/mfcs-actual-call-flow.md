@@ -1029,6 +1029,65 @@ in `referenceItem`. Three names for one flag.
 A real UAT SKU carries two barcodes, exactly one with `primaryInd: "Y"`, and the non-primary one is
 type `MANL` rather than `EAN13`.
 
+## CREATE_STYLE with UDAs and barcodes, end to end — live, 2026-09-01
+
+Request `LIVE-UPC-184508` on STG. Completed, eleven steps, style `100150161` with SKUs `100150170` and
+`100150188` and three barcodes.
+
+The document deliberately used the **legacy** `PLMSizeCurveDtl` key, to prove intake normalisation on a
+real request rather than only in a test. The response came back naming `SIZE_CURVE_DETAIL`.
+
+```jsonc
+{
+  "OPERATION_NAME": "CREATE_STYLE",
+  "BRAND": "02",
+  "STYLE_UDAS": [
+    { "UDA_ID": 239,   "UDA_VALUE": "11" },   // Gender = Boy
+    { "UDA_ID": 51037, "UDA_VALUE": "1"  }    // Fit = Regular
+  ],
+  "PLMSizeCurveDtl": [                        // accepted; stored as SIZE_CURVE_DETAIL
+    { "SOURCE_VARIANT_REF": "...-7", "SKU_SIZE": "7", "SKU_QTY": 1,
+      "SKU_UPCS": [ { "UPC": "2900184508010", "PRIMARY_YN": "Y" },
+                    { "UPC": "2900184508027", "PRIMARY_YN": "N" } ] },
+    { "SOURCE_VARIANT_REF": "...-8", "SKU_SIZE": "8", "SKU_QTY": 1,
+      "SKU_UPCS": [ { "UPC": "2900184508034", "PRIMARY_YN": "Y" } ] }
+  ]
+}
+```
+
+Read back through `itemDetail`, six rows:
+
+```
+level 1  100150161
+level 2  100150170                     level 2  100150188
+level 3  2900184508010  primaryRef Y   level 3  2900184508034  primaryRef Y
+level 3  2900184508027  primaryRef N
+```
+
+and through `foundation/item`, `itemUda.udaLov` carrying `239 = Boy` and `51037 = Regular`.
+
+### The ordering this cost
+
+The first attempt placed `CREATE_REFERENCE_ITEMS` at sequence 45, straight after the children were
+created, which is where it looks like it belongs. It failed:
+
+```json
+{ "status": "ERROR",
+  "message": "This item was not submitted successfully.ITEM: 2900184340016 ... This item's parent must
+              be in submitted status before the item can be submitted.." }
+```
+
+A level-3 item is refused while its parent SKU is still in worksheet status. The step moved to 85, after
+`APPROVE_ITEMS`, and the identical payload succeeded. The earlier manual proof had worked only because
+it targeted a SKU that was already approved.
+
+### Brand did not stick
+
+`"brandName": "02"` was sent on the parent create - the stored attempt payload confirms it - and the
+style reads back with `brandName` empty, while UDAs written in the same run are present. SUCCESS, and
+nothing happened. `items/update` as a second attempt returned `The record is currently locked by
+another user`, which is transient post-approval locking rather than an answer.
+
 ## Current Assumptions
 
 These values are configurable and should be replaced with authoritative Office/MFCS foundation mappings when available:
