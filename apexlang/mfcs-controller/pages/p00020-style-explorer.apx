@@ -1,0 +1,514 @@
+page 20 (
+    name: Style Explorer
+    title: Style Explorer
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+
+    region picker (
+        name: Request
+        type: staticContent
+        layout {
+            sequence: 10
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region summary (
+        name: Summary
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select r.operation_name,
+                       r.request_status,
+                       r.style_no,
+                       r.order_no,
+                       r.source_system,
+                       r.source_style_ref,
+                       to_char(r.created_at, 'YYYY-MM-DD HH24:MI:SS') created_at,
+                       to_char(r.completed_at, 'YYYY-MM-DD HH24:MI:SS') completed_at,
+                       (select count(*) from step s
+                         where s.action_request_id = r.action_request_id) steps,
+                       (select count(*) from step s
+                         where s.action_request_id = r.action_request_id
+                           and s.step_status = 'SUCCEEDED') steps_succeeded,
+                       (select count(*) from attempt a
+                         where a.action_request_id = r.action_request_id) mfcs_calls
+                  from request r
+                 where r.action_request_id = :P20_REQUEST_ID
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+        componentAppearance {
+            template: @value-attribute-pairs-row
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P20_REQUEST_ID
+        }
+
+        column OPERATION_NAME (
+            type: plainText
+            heading {
+                heading: Operation
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column REQUEST_STATUS (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column STYLE_NO (
+            type: plainText
+            heading {
+                heading: MFCS Style
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column ORDER_NO (
+            type: plainText
+            heading {
+                heading: MFCS Order
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column SOURCE_SYSTEM (
+            type: plainText
+            heading {
+                heading: Source
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column SOURCE_STYLE_REF (
+            type: plainText
+            heading {
+                heading: Source Style Ref
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column CREATED_AT (
+            type: plainText
+            heading {
+                heading: Created
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column COMPLETED_AT (
+            type: plainText
+            heading {
+                heading: Completed
+            }
+            layout {
+                sequence: 80
+            }
+        )
+
+        column STEPS (
+            type: plainText
+            heading {
+                heading: Steps
+            }
+            layout {
+                sequence: 90
+            }
+        )
+
+        column STEPS_SUCCEEDED (
+            type: plainText
+            heading {
+                heading: Succeeded
+            }
+            layout {
+                sequence: 100
+            }
+        )
+
+        column MFCS_CALLS (
+            type: plainText
+            heading {
+                heading: MFCS Calls
+            }
+            layout {
+                sequence: 110
+            }
+        )
+    )
+
+    region steps (
+        name: Steps
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select s.step_sequence,
+                       s.step_code,
+                       s.step_status,
+                       s.entity_identifier,
+                       to_char(s.completed_at, 'HH24:MI:SS') completed_at,
+                       s.last_error_message
+                  from step s
+                 where s.action_request_id = :P20_REQUEST_ID
+                 order by s.step_sequence
+                ```
+        }
+        layout {
+            sequence: 30
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P20_REQUEST_ID
+        }
+
+        column STEP_SEQUENCE (
+            type: plainText
+            heading {
+                heading: Seq
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column STEP_CODE (
+            type: plainText
+            heading {
+                heading: Step
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column STEP_STATUS (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column ENTITY_IDENTIFIER (
+            type: plainText
+            heading {
+                heading: Entity
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column COMPLETED_AT (
+            type: plainText
+            heading {
+                heading: Completed
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column LAST_ERROR_MESSAGE (
+            type: plainText
+            heading {
+                heading: Error
+            }
+            layout {
+                sequence: 60
+            }
+        )
+    )
+
+    region calls (
+        name: MFCS Calls
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select a.step_code,
+                       a.http_method,
+                       a.http_status,
+                       a.attempt_status,
+                       regexp_replace(a.endpoint, '^https?://[^/]+', '') endpoint,
+                       to_char(a.created_at, 'HH24:MI:SS') called_at,
+                       dbms_lob.substr(a.response_payload, 200, 1) response
+                  from attempt a
+                 where a.action_request_id = :P20_REQUEST_ID
+                 order by a.attempt_id
+                ```
+        }
+        layout {
+            sequence: 40
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P20_REQUEST_ID
+        }
+
+        column STEP_CODE (
+            type: plainText
+            heading {
+                heading: Step
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column HTTP_METHOD (
+            type: plainText
+            heading {
+                heading: Method
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column HTTP_STATUS (
+            type: plainText
+            heading {
+                heading: HTTP
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column ATTEMPT_STATUS (
+            type: plainText
+            heading {
+                heading: Outcome
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column ENDPOINT (
+            type: plainText
+            heading {
+                heading: Endpoint
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column CALLED_AT (
+            type: plainText
+            heading {
+                heading: Called
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column RESPONSE (
+            type: plainText
+            heading {
+                heading: Response
+            }
+            layout {
+                sequence: 70
+            }
+        )
+    )
+
+    region skus (
+        name: SKUs and Barcodes
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select e.mfcs_sku_no,
+                       e.sku_size,
+                       e.source_variant_ref
+                  from entity_map e
+                 where e.source_system = (select source_system from request
+                                           where action_request_id = :P20_REQUEST_ID)
+                   and e.source_style_ref = (select source_style_ref from request
+                                              where action_request_id = :P20_REQUEST_ID)
+                   and e.mfcs_sku_no is not null
+                 order by e.sku_size
+                ```
+        }
+        layout {
+            sequence: 50
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P20_REQUEST_ID
+        }
+
+        column MFCS_SKU_NO (
+            type: plainText
+            heading {
+                heading: MFCS SKU
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column SKU_SIZE (
+            type: plainText
+            heading {
+                heading: Size Diff
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column SOURCE_VARIANT_REF (
+            type: plainText
+            heading {
+                heading: Source Variant
+            }
+            layout {
+                sequence: 30
+            }
+        )
+    )
+
+    pageItem P20_REQUEST_ID (
+        type: selectList
+        label {
+            label: Request
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select r.action_request_id
+                       || '  -  ' || r.operation_name
+                       || '  -  ' || r.request_status
+                       || case when r.style_no is not null
+                               then '  -  style ' || r.style_no end d,
+                       r.action_request_id r
+                  from request r
+                 order by r.created_at desc
+                ```
+            displayNullValue: true
+        }
+        layout {
+            sequence: 10
+            region: @picker
+            slot: regionBody
+            alignment: left
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        security {
+            sessionStateProtection: unrestricted
+            encryptSessionState: false
+        }
+    )
+
+    button show (
+        buttonName: SHOW
+        label: Show
+        layout {
+            sequence: 20
+            region: @picker
+            slot: regionBody
+            alignment: left
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+)
