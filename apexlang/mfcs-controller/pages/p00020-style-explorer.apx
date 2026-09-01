@@ -25,51 +25,53 @@ page 20 (
         }
     )
 
-    region style-head (
-        name: Style
+    region order-head (
+        name: Order
         type: classicReport
         source {
             location: localDatabase
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select j.item,
-                       j.item_description,
+                select j.order_no,
                        j.status,
-                       j.dept || ' / ' || j.class || ' / ' || j.subclass hierarchy,
-                       j.dept_name || ' / ' || j.class_name || ' / ' || j.subclass_name names,
-                       j.diff1 || '  ' || j.diff1_level || '  ' || j.diff1_description colour,
-                       j.diff2 || '  ' || j.diff2_level || '  ' || j.diff2_description size_group,
-                       j.unit_retail,
-                       j.original_retail,
-                       j.brand_name,
-                       j.standard_uom,
-                       j.cost_zone_group_id
+                       j.order_type,
+                       j.supplier,
+                       j.dept || '  ' || j.dept_name department,
+                       j.currency_code,
+                       j.terms_code,
+                       j.freight_terms,
+                       j.not_before_date,
+                       j.not_after_date,
+                       j.otb_eow_date,
+                       j.earliest_ship_date,
+                       j.latest_ship_date,
+                       j.written_date,
+                       j.import_country_id,
+                       j.comments
                   from apex_collections c,
                        json_table(c.clob001, '$.items[0]'
                            columns
-                               item                varchar2(30)  path '$.item',
-                               item_description    varchar2(250) path '$.itemDescription',
-                               status              varchar2(10)  path '$.status',
-                               dept                varchar2(20)  path '$.dept',
-                               class               varchar2(20)  path '$.class',
-                               subclass            varchar2(20)  path '$.subclass',
-                               dept_name           varchar2(60)  path '$.deptName',
-                               class_name          varchar2(60)  path '$.className',
-                               subclass_name       varchar2(60)  path '$.subclassName',
-                               diff1               varchar2(30)  path '$.diff1',
-                               diff1_level         varchar2(10)  path '$.diff1Level',
-                               diff1_description   varchar2(80)  path '$.diff1Description',
-                               diff2               varchar2(30)  path '$.diff2',
-                               diff2_level         varchar2(10)  path '$.diff2Level',
-                               diff2_description   varchar2(80)  path '$.diff2Description',
-                               unit_retail         number        path '$.unitRetail',
-                               original_retail     number        path '$.originalRetail',
-                               brand_name          varchar2(40)  path '$.brandName',
-                               standard_uom        varchar2(10)  path '$.standardUom',
-                               cost_zone_group_id  number        path '$.costZoneGroupId'
+                               order_no           varchar2(30)  path '$.orderNo',
+                               status             varchar2(10)  path '$.status',
+                               order_type         varchar2(20)  path '$.orderType',
+                               supplier           varchar2(30)  path '$.supplier',
+                               dept               varchar2(20)  path '$.dept',
+                               dept_name          varchar2(60)  path '$.deptName',
+                               currency_code      varchar2(5)   path '$.currencyCode',
+                               terms_code         varchar2(20)  path '$.termsCode',
+                               freight_terms      varchar2(20)  path '$.freightTerms',
+                               not_before_date    varchar2(20)  path '$.notBeforeDate',
+                               not_after_date     varchar2(20)  path '$.notAfterDate',
+                               otb_eow_date       varchar2(20)  path '$.otbEowDate',
+                               earliest_ship_date varchar2(20)  path '$.earliestShipDate',
+                               latest_ship_date   varchar2(20)  path '$.latestShipDate',
+                               written_date       varchar2(20)  path '$.writtenDate',
+                               import_country_id  varchar2(5)   path '$.importCountryId',
+                               comments           varchar2(250) path '$.comments'
                        ) j
                  where c.collection_name = 'MFCS_BROWSE'
+                   and j.order_no is not null
                 ```
         }
         layout {
@@ -81,13 +83,221 @@ page 20 (
             templateOptions: #DEFAULT#
         }
         componentAppearance {
-            template: @value-attribute-pairs-row
+            template: @standard
+        }
+
+        column ORDER_NO (
+            type: plainText
+            heading {
+                heading: Order
+            }
+            layout {
+                sequence: 10
+            }
+        )
+        column STATUS (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 20
+            }
+        )
+        column ORDER_TYPE (
+            type: plainText
+            heading {
+                heading: Type
+            }
+            layout {
+                sequence: 30
+            }
+        )
+        column SUPPLIER (
+            type: plainText
+            heading {
+                heading: Supplier
+            }
+            layout {
+                sequence: 40
+            }
+        )
+        column DEPARTMENT (
+            type: plainText
+            heading {
+                heading: Department
+            }
+            layout {
+                sequence: 50
+            }
+        )
+        column CURRENCY_CODE (
+            type: plainText
+            heading {
+                heading: Currency
+            }
+            layout {
+                sequence: 60
+            }
+        )
+        column TERMS_CODE (
+            type: plainText
+            heading {
+                heading: Terms
+            }
+            layout {
+                sequence: 70
+            }
+        )
+        column FREIGHT_TERMS (
+            type: plainText
+            heading {
+                heading: Freight
+            }
+            layout {
+                sequence: 80
+            }
+        )
+        column NOT_BEFORE_DATE (
+            type: plainText
+            heading {
+                heading: Not Before
+            }
+            layout {
+                sequence: 90
+            }
+        )
+        column NOT_AFTER_DATE (
+            type: plainText
+            heading {
+                heading: Not After
+            }
+            layout {
+                sequence: 100
+            }
+        )
+        column OTB_EOW_DATE (
+            type: plainText
+            heading {
+                heading: OTB EOW
+            }
+            layout {
+                sequence: 110
+            }
+        )
+        column EARLIEST_SHIP_DATE (
+            type: plainText
+            heading {
+                heading: Earliest Ship
+            }
+            layout {
+                sequence: 120
+            }
+        )
+        column LATEST_SHIP_DATE (
+            type: plainText
+            heading {
+                heading: Latest Ship
+            }
+            layout {
+                sequence: 130
+            }
+        )
+        column WRITTEN_DATE (
+            type: plainText
+            heading {
+                heading: Written
+            }
+            layout {
+                sequence: 140
+            }
+        )
+        column IMPORT_COUNTRY_ID (
+            type: plainText
+            heading {
+                heading: Import Country
+            }
+            layout {
+                sequence: 150
+            }
+        )
+        column COMMENTS (
+            type: plainText
+            heading {
+                heading: Comments
+            }
+            layout {
+                sequence: 160
+            }
+        )
+    )
+
+    region style-head (
+        name: Style
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select j.item,
+                       j.item_description,
+                       j.status,
+                       j.dept || '  ' || j.dept_name department,
+                       j.class || '  ' || j.class_name class_,
+                       j.subclass || '  ' || j.subclass_name subclass_,
+                       j.division_name || '  /  ' || j.group_name division_group,
+                       j.diff1 || '  ' || j.diff1_type colour_diff,
+                       j.diff2 || '  ' || j.diff2_type size_diff,
+                       j.unit_retail,
+                       j.original_retail,
+                       j.standard_uom,
+                       j.cost_zone_group_id,
+                       j.item_number_type
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0]'
+                           columns
+                               item                varchar2(30)  path '$.item',
+                               item_description    varchar2(250) path '$.itemDescription',
+                               status              varchar2(10)  path '$.status',
+                               dept                varchar2(20)  path '$.dept',
+                               dept_name           varchar2(60)  path '$.deptName',
+                               class               varchar2(20)  path '$.class',
+                               class_name          varchar2(60)  path '$.className',
+                               subclass            varchar2(20)  path '$.subclass',
+                               subclass_name       varchar2(60)  path '$.subclassName',
+                               division_name       varchar2(60)  path '$.divisionName',
+                               group_name          varchar2(60)  path '$.groupName',
+                               diff1               varchar2(30)  path '$.diff1',
+                               diff1_type          varchar2(10)  path '$.diff1Type',
+                               diff2               varchar2(30)  path '$.diff2',
+                               diff2_type          varchar2(10)  path '$.diff2Type',
+                               unit_retail         number        path '$.unitRetail',
+                               original_retail     number        path '$.originalRetail',
+                               standard_uom        varchar2(10)  path '$.standardUom',
+                               cost_zone_group_id  number        path '$.costZoneGroupId',
+                               item_number_type    varchar2(10)  path '$.itemNumberType'
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
+                   and j.item is not null
+                ```
+        }
+        layout {
+            sequence: 30
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+        componentAppearance {
+            template: @standard
         }
 
         column ITEM (
             type: plainText
             heading {
-                heading: Item
+                heading: Style
             }
             layout {
                 sequence: 10
@@ -111,40 +321,58 @@ page 20 (
                 sequence: 30
             }
         )
-        column HIERARCHY (
+        column DEPARTMENT (
             type: plainText
             heading {
-                heading: Dept / Class / Subclass
+                heading: Department
             }
             layout {
                 sequence: 40
             }
         )
-        column NAMES (
+        column CLASS_ (
             type: plainText
             heading {
-                heading: Hierarchy Names
+                heading: Class
             }
             layout {
                 sequence: 50
             }
         )
-        column COLOUR (
+        column SUBCLASS_ (
             type: plainText
             heading {
-                heading: diff1 Colour
+                heading: Subclass
             }
             layout {
                 sequence: 60
             }
         )
-        column SIZE_GROUP (
+        column DIVISION_GROUP (
+            type: plainText
+            heading {
+                heading: Division / Group
+            }
+            layout {
+                sequence: 70
+            }
+        )
+        column COLOUR_DIFF (
+            type: plainText
+            heading {
+                heading: diff1 Colour
+            }
+            layout {
+                sequence: 80
+            }
+        )
+        column SIZE_DIFF (
             type: plainText
             heading {
                 heading: diff2 Size
             }
             layout {
-                sequence: 70
+                sequence: 90
             }
         )
         column UNIT_RETAIL (
@@ -153,7 +381,7 @@ page 20 (
                 heading: Unit Retail
             }
             layout {
-                sequence: 80
+                sequence: 100
             }
         )
         column ORIGINAL_RETAIL (
@@ -162,16 +390,7 @@ page 20 (
                 heading: Original Retail
             }
             layout {
-                sequence: 90
-            }
-        )
-        column BRAND_NAME (
-            type: plainText
-            heading {
-                heading: Brand
-            }
-            layout {
-                sequence: 100
+                sequence: 110
             }
         )
         column STANDARD_UOM (
@@ -180,16 +399,25 @@ page 20 (
                 heading: UOM
             }
             layout {
-                sequence: 110
+                sequence: 120
             }
         )
         column COST_ZONE_GROUP_ID (
             type: plainText
             heading {
-                heading: Cost Zone Group
+                heading: Cost Zone
             }
             layout {
-                sequence: 120
+                sequence: 130
+            }
+        )
+        column ITEM_NUMBER_TYPE (
+            type: plainText
+            heading {
+                heading: Number Type
+            }
+            layout {
+                sequence: 140
             }
         )
     )
@@ -198,11 +426,16 @@ page 20 (
         name: Detail
         type: staticContent
         layout {
-            sequence: 30
+            sequence: 40
             slot: contentBody
         }
         appearance {
             template: @tabs-container
+            templateOptions: [
+                #DEFAULT#
+                t-TabsRegion-mod--pill
+                js-useLocalStorage
+            ]
         }
     )
 
@@ -411,6 +644,249 @@ page 20 (
         )
     )
 
+    region order-lines (
+        name: Order Lines
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select j.item,
+                       j.virtual_warehouse,
+                       j.physical_location,
+                       j.quantity_ordered,
+                       j.unit_cost,
+                       j.unit_retail,
+                       j.origin_country,
+                       j.supplier_pack_size,
+                       j.earliest_ship_date,
+                       j.latest_ship_date
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].details[*]'
+                           columns
+                               item               varchar2(30) path '$.item',
+                               virtual_warehouse  varchar2(20) path '$.virtualWarehouse',
+                               physical_location  varchar2(20) path '$.physicalLocation',
+                               quantity_ordered   number       path '$.physicalQuantityOrdered',
+                               unit_cost          number       path '$.unitCost',
+                               unit_retail        number       path '$.unitRetail',
+                               origin_country     varchar2(5)  path '$.originCountryId',
+                               supplier_pack_size number       path '$.supplierPackSize',
+                               earliest_ship_date varchar2(20) path '$.earliestShipDate',
+                               latest_ship_date   varchar2(20) path '$.latestShipDate'
+                       ) j
+                 where c.collection_name = 'MFCS_BROWSE'
+                   and j.item is not null
+                 order by j.item
+                ```
+        }
+        layout {
+            sequence: 30
+            parentRegion: @detail-tabs
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column ITEM (
+            type: plainText
+            heading {
+                heading: SKU
+            }
+            layout {
+                sequence: 10
+            }
+        )
+        column QUANTITY_ORDERED (
+            type: plainText
+            heading {
+                heading: Qty
+            }
+            layout {
+                sequence: 20
+            }
+        )
+        column UNIT_COST (
+            type: plainText
+            heading {
+                heading: Unit Cost
+            }
+            layout {
+                sequence: 30
+            }
+        )
+        column UNIT_RETAIL (
+            type: plainText
+            heading {
+                heading: Unit Retail
+            }
+            layout {
+                sequence: 40
+            }
+        )
+        column VIRTUAL_WAREHOUSE (
+            type: plainText
+            heading {
+                heading: Virtual WH
+            }
+            layout {
+                sequence: 50
+            }
+        )
+        column PHYSICAL_LOCATION (
+            type: plainText
+            heading {
+                heading: Physical
+            }
+            layout {
+                sequence: 60
+            }
+        )
+        column ORIGIN_COUNTRY (
+            type: plainText
+            heading {
+                heading: Origin
+            }
+            layout {
+                sequence: 70
+            }
+        )
+        column SUPPLIER_PACK_SIZE (
+            type: plainText
+            heading {
+                heading: Pack Size
+            }
+            layout {
+                sequence: 80
+            }
+        )
+        column EARLIEST_SHIP_DATE (
+            type: plainText
+            heading {
+                heading: Earliest Ship
+            }
+            layout {
+                sequence: 90
+            }
+        )
+        column LATEST_SHIP_DATE (
+            type: plainText
+            heading {
+                heading: Latest Ship
+            }
+            layout {
+                sequence: 100
+            }
+        )
+    )
+
+    region linked-orders (
+        name: Linked Orders
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select r.order_no,
+                       r.style_no,
+                       r.operation_name,
+                       r.request_status,
+                       r.action_request_id,
+                       to_char(r.created_at, 'YYYY-MM-DD HH24:MI') created_at
+                  from request r
+                 where r.order_no is not null
+                   and (   r.style_no = :P20_ITEM
+                        or r.order_no = :P20_ITEM
+                        or exists (select 1
+                                     from entity_map e
+                                    where e.source_system = r.source_system
+                                      and e.source_style_ref = r.source_style_ref
+                                      and e.mfcs_sku_no = :P20_ITEM))
+                 order by r.created_at desc
+                ```
+        }
+        layout {
+            sequence: 40
+            parentRegion: @detail-tabs
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column ORDER_NO (
+            type: plainText
+            heading {
+                heading: Order
+            }
+            layout {
+                sequence: 10
+            }
+        )
+        column STYLE_NO (
+            type: plainText
+            heading {
+                heading: Style
+            }
+            layout {
+                sequence: 20
+            }
+        )
+        column OPERATION_NAME (
+            type: plainText
+            heading {
+                heading: Operation
+            }
+            layout {
+                sequence: 30
+            }
+        )
+        column REQUEST_STATUS (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 40
+            }
+        )
+        column CREATED_AT (
+            type: plainText
+            heading {
+                heading: Created
+            }
+            layout {
+                sequence: 50
+            }
+        )
+        column ACTION_REQUEST_ID (
+            type: plainText
+            heading {
+                heading: Request
+            }
+            layout {
+                sequence: 60
+            }
+        )
+    )
+
     region sourcing (
         name: Sourcing
         type: classicReport
@@ -447,7 +923,7 @@ page 20 (
                 ```
         }
         layout {
-            sequence: 30
+            sequence: 50
             parentRegion: @detail-tabs
             slot: subRegions
         }
@@ -544,8 +1020,11 @@ page 20 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select 'Style' held_on, j.uda_id, j.uda_description,
-                       j.uda_value, j.uda_value_description
+                select 'Style' held_on,
+                       j.uda_id,
+                       j.uda_description,
+                       j.uda_value,
+                       j.uda_value_description
                   from apex_collections c,
                        json_table(c.clob001, '$.items[0].itemUda.udaLov[*]'
                            columns
@@ -557,8 +1036,11 @@ page 20 (
                  where c.collection_name = 'MFCS_BROWSE'
                    and j.uda_id is not null
                 union all
-                select 'SKU ' || j.sku, j.uda_id, j.uda_description,
-                       j.uda_value, j.uda_value_description
+                select 'SKU ' || j.sku,
+                       j.uda_id,
+                       j.uda_description,
+                       j.uda_value,
+                       j.uda_value_description
                   from apex_collections c,
                        json_table(c.clob001, '$.items[0].resolved.skus[*]'
                            columns
@@ -577,7 +1059,7 @@ page 20 (
                 ```
         }
         layout {
-            sequence: 40
+            sequence: 60
             parentRegion: @detail-tabs
             slot: subRegions
         }
@@ -663,8 +1145,12 @@ page 20 (
                  where c.collection_name = 'MFCS_BROWSE'
                    and j.season_id is not null
                 union all
-                select 'Tariff', j.hts, j.import_country, j.origin_country,
-                       j.effect_from, j.status
+                select 'Tariff',
+                       j.hts,
+                       j.import_country,
+                       j.origin_country,
+                       j.effect_from,
+                       j.status
                   from apex_collections c,
                        json_table(c.clob001, '$.items[0].hts[*]'
                            columns
@@ -679,7 +1165,7 @@ page 20 (
                 ```
         }
         layout {
-            sequence: 50
+            sequence: 70
             parentRegion: @detail-tabs
             slot: subRegions
         }
@@ -750,131 +1236,6 @@ page 20 (
         )
     )
 
-    region order-lines (
-        name: Order
-        type: classicReport
-        source {
-            location: localDatabase
-            type: sqlQuery
-            sqlQuery:
-                ```sql
-                select j.order_no,
-                       j.supplier,
-                       j.order_status,
-                       j.item,
-                       j.location,
-                       j.quantity_ordered,
-                       j.unit_cost,
-                       j.origin_country
-                  from apex_collections c,
-                       json_table(c.clob001, '$'
-                           columns
-                               order_no     varchar2(30) path '$.orderNo',
-                               supplier     varchar2(30) path '$.supplier',
-                               order_status varchar2(10) path '$.status',
-                               nested path '$.details[*]'
-                                   columns (
-                                       item             varchar2(30) path '$.item',
-                                       location         varchar2(20) path '$.location',
-                                       quantity_ordered number       path '$.physicalQuantityOrdered',
-                                       unit_cost        number       path '$.unitCost',
-                                       origin_country   varchar2(3)  path '$.originCountryId'
-                                   )
-                       ) j
-                 where c.collection_name = 'MFCS_BROWSE'
-                   and j.order_no is not null
-                ```
-        }
-        layout {
-            sequence: 60
-            parentRegion: @detail-tabs
-            slot: subRegions
-        }
-        appearance {
-            template: @standard
-            templateOptions: [
-                #DEFAULT#
-                t-Region--scrollBody
-            ]
-        }
-        componentAppearance {
-            template: @standard
-        }
-
-        column ORDER_NO (
-            type: plainText
-            heading {
-                heading: Order
-            }
-            layout {
-                sequence: 10
-            }
-        )
-        column SUPPLIER (
-            type: plainText
-            heading {
-                heading: Supplier
-            }
-            layout {
-                sequence: 20
-            }
-        )
-        column ORDER_STATUS (
-            type: plainText
-            heading {
-                heading: Status
-            }
-            layout {
-                sequence: 30
-            }
-        )
-        column ITEM (
-            type: plainText
-            heading {
-                heading: Item
-            }
-            layout {
-                sequence: 40
-            }
-        )
-        column LOCATION (
-            type: plainText
-            heading {
-                heading: Location
-            }
-            layout {
-                sequence: 50
-            }
-        )
-        column QUANTITY_ORDERED (
-            type: plainText
-            heading {
-                heading: Qty
-            }
-            layout {
-                sequence: 60
-            }
-        )
-        column UNIT_COST (
-            type: plainText
-            heading {
-                heading: Unit Cost
-            }
-            layout {
-                sequence: 70
-            }
-        )
-        column ORIGIN_COUNTRY (
-            type: plainText
-            heading {
-                heading: Origin
-            }
-            layout {
-                sequence: 80
-            }
-        )
-    )
-
     region raw (
         name: Raw Document
         type: classicReport
@@ -883,13 +1244,17 @@ page 20 (
             type: sqlQuery
             sqlQuery:
                 ```sql
-                select c.clob001 document
+                select p.part_no,
+                       dbms_lob.substr(c.clob001, 3800, (p.part_no - 1) * 3800 + 1) part
                   from apex_collections c
+                 cross join (select level part_no from dual connect by level <= 40) p
                  where c.collection_name = 'MFCS_BROWSE'
+                   and (p.part_no - 1) * 3800 < dbms_lob.getlength(c.clob001)
+                 order by p.part_no
                 ```
         }
         layout {
-            sequence: 70
+            sequence: 80
             parentRegion: @detail-tabs
             slot: subRegions
         }
@@ -904,13 +1269,22 @@ page 20 (
             template: @standard
         }
 
-        column DOCUMENT (
+        column PART_NO (
+            type: plainText
+            heading {
+                heading: Part
+            }
+            layout {
+                sequence: 10
+            }
+        )
+        column PART (
             type: plainText
             heading {
                 heading: What MFCS returned
             }
             layout {
-                sequence: 10
+                sequence: 20
             }
         )
     )
