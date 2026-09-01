@@ -489,7 +489,12 @@ create or replace package body master_pkg as
         load_direct('DEPARTMENT_SVC', '/MerchIntegrations/services/foundation/merchhier/deps', 'dept', 'deptName');
         load_direct('DIFF_SVC', '/MerchIntegrations/services/foundation/diffid', 'diffId', 'diffDesc');
         load_direct('SUPPLIER_SVC', '/MerchIntegrations/services/foundation/supplier', 'supplier', 'supplierName');
-        load_direct('WAREHOUSE_SVC', '/MerchIntegrations/services/foundation/warehouse', 'wh', 'whName');
+        -- warehouse / warehouseName, not wh / whName. Asking for the wrong names
+        -- loaded nothing at all, silently, for as long as this call has existed -
+        -- the same failure the UDA loader had with udaDesc. The row also carries
+        -- physicalWarehouse and primaryVirtualWarehouse, which is where the
+        -- physical-to-virtual translation comes from.
+        load_direct('WAREHOUSE_SVC', '/MerchIntegrations/services/foundation/warehouse', 'warehouse', 'warehouseName');
         load_direct('STORE_SVC', '/MerchIntegrations/services/foundation/store', 'store', 'storeName');
 
         harvest_from_items;
