@@ -92,6 +92,23 @@ list.
 
 ## Page And Component Pitfalls
 
+- **Never start an LOV query with a `--` comment.** APEX decides whether a source is SQL or PL/SQL by
+  looking at how the text begins. A leading comment makes it guess PL/SQL, wrap the query in
+  `declare function x return varchar2 is begin ... end;` and fail at render with
+  `PLS-00428: an INTO clause is expected in this SELECT statement`. The region reports it as
+  "Error during rendering of region", naming the *parent* region rather than the column at fault.
+
+  It validates and imports cleanly, so nothing catches it before someone opens the page. Put comments
+  after the `select`, never before it. Worth checking after any import:
+
+```sql
+select region_name, name,
+       case when substr(ltrim(lov_source), 1, 2) = '--' then 'STARTS WITH COMMENT' else 'ok' end
+  from apex_appl_page_ig_columns
+ where application_id = :app and lov_source is not null;
+```
+
+
 - **`staticValues` is a string, not an array.** Writing it as a list of pairs fails validation with
   `Property: staticValues, does not support Arrays`. The correct form, from the pattern catalog:
 

@@ -540,9 +540,9 @@ page 3 (
                 type: sqlQuery
                 sqlQuery:
                     ```sql
+                    select v.description d, v.data_code r
                     -- Narrowed to the attribute chosen in this row. Cascading on a
                     -- grid column binds the parent column like a page item.
-                    select v.description d, v.data_code r
                       from master_data v
                      where v.data_type = 'UDA_VALUE'
                        and v.parent_code = to_char(:UDA_ID)
@@ -745,10 +745,10 @@ page 3 (
                 type: sqlQuery
                 sqlQuery:
                     ```sql
-                    -- Only the SKUs on this draft. A barcode belongs to one SKU,
-                    -- and the size is how a buyer recognises it.
                     select 'Size ' || s.sku_size d,
                            s.draft_sku_id r
+                    -- Only the SKUs on this draft. A barcode belongs to one SKU,
+                    -- and the size is how a buyer recognises it.
                       from ui_draft_sku s
                      where s.draft_id = :P3_DRAFT_ID
                      order by s.draft_sku_id
@@ -786,9 +786,9 @@ page 3 (
                 type: sqlQuery
                 sqlQuery:
                     ```sql
-                    -- A real Office SKU carries one EAN13 and one MANL.
                     select 'EAN13' d, 'EAN13' r from dual
                     union all
+                    -- A real Office SKU carries one EAN13 and one MANL.
                     select 'MANL' d, 'MANL' r from dual
                     ```
             }
