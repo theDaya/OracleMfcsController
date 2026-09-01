@@ -177,4 +177,103 @@ begin
 end;
 /
 
+-- Seasons, images and tariff codes. All three hang off the draft rather than the
+-- SKU, for the same reason UDAs do: a real Office item carries them identically on
+-- the style and on every SKU, so the console captures them once and the mapper
+-- writes them to both levels.
+create table ui_draft_season (
+    draft_season_id number not null,
+    draft_id        number not null,
+    season_id       number not null,
+    phase_id        number not null,
+    sequence_no     number,
+    created_at      timestamp with time zone default systimestamp not null,
+    updated_at      timestamp with time zone default systimestamp not null
+);
+
+create table ui_draft_image (
+    draft_image_id    number not null,
+    draft_id          number not null,
+    image_name        varchar2(120) not null,
+    image_address     varchar2(255),
+    image_description varchar2(40),
+    image_type        varchar2(6),
+    primary_yn        varchar2(1) default 'N',
+    display_priority  number,
+    created_at        timestamp with time zone default systimestamp not null,
+    updated_at        timestamp with time zone default systimestamp not null
+);
+
+create table ui_draft_hts (
+    draft_hts_id   number not null,
+    draft_id       number not null,
+    hts            varchar2(25) not null,
+    import_country varchar2(3) not null,
+    origin_country varchar2(3) not null,
+    effect_from    date not null,
+    effect_to      date not null,
+    created_at     timestamp with time zone default systimestamp not null,
+    updated_at     timestamp with time zone default systimestamp not null
+);
+
+create sequence ui_draft_season_seq start with 1 increment by 1 nocache;
+create sequence ui_draft_image_seq start with 1 increment by 1 nocache;
+create sequence ui_draft_hts_seq start with 1 increment by 1 nocache;
+
+alter table ui_draft_season add constraint ui_draft_season_pk primary key (draft_season_id);
+alter table ui_draft_season add constraint ui_draft_season_fk foreign key (draft_id)
+    references ui_draft (draft_id) on delete cascade;
+-- A style sits in a season once. A second phase for the same season is a
+-- contradiction rather than an addition.
+alter table ui_draft_season add constraint ui_draft_season_uk unique (draft_id, season_id);
+create index ui_draft_season_ix1 on ui_draft_season (draft_id);
+
+alter table ui_draft_image add constraint ui_draft_image_pk primary key (draft_image_id);
+alter table ui_draft_image add constraint ui_draft_image_fk foreign key (draft_id)
+    references ui_draft (draft_id) on delete cascade;
+alter table ui_draft_image add constraint ui_draft_image_uk unique (draft_id, image_name);
+alter table ui_draft_image add constraint ui_draft_image_primary_ck check (primary_yn in ('Y', 'N'));
+create index ui_draft_image_ix1 on ui_draft_image (draft_id);
+
+alter table ui_draft_hts add constraint ui_draft_hts_pk primary key (draft_hts_id);
+alter table ui_draft_hts add constraint ui_draft_hts_fk foreign key (draft_id)
+    references ui_draft (draft_id) on delete cascade;
+-- One tariff code per importing country per style.
+alter table ui_draft_hts add constraint ui_draft_hts_uk unique (draft_id, hts, import_country);
+alter table ui_draft_hts add constraint ui_draft_hts_dates_ck check (effect_to >= effect_from);
+create index ui_draft_hts_ix1 on ui_draft_hts (draft_id);
+
+create or replace trigger ui_draft_season_biu
+    before insert or update on ui_draft_season
+    for each row
+begin
+    if inserting and :new.draft_season_id is null then
+        :new.draft_season_id := ui_draft_season_seq.nextval;
+    end if;
+    :new.updated_at := systimestamp;
+end;
+/
+
+create or replace trigger ui_draft_image_biu
+    before insert or update on ui_draft_image
+    for each row
+begin
+    if inserting and :new.draft_image_id is null then
+        :new.draft_image_id := ui_draft_image_seq.nextval;
+    end if;
+    :new.updated_at := systimestamp;
+end;
+/
+
+create or replace trigger ui_draft_hts_biu
+    before insert or update on ui_draft_hts
+    for each row
+begin
+    if inserting and :new.draft_hts_id is null then
+        :new.draft_hts_id := ui_draft_hts_seq.nextval;
+    end if;
+    :new.updated_at := systimestamp;
+end;
+/
+
 prompt OFFICE MFCS APEX UI staging objects created

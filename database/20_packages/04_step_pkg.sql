@@ -112,6 +112,12 @@ create or replace package body step_pkg as
             add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 50);
             add_step(p_action_request_id, 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE', 55);
             add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 60);
+            -- Season, image and tariff attributes. Each is a no-op when the
+            -- document carries none: the mapper returns collectionSize 0 and the
+            -- orchestrator skips the call rather than sending an empty array.
+            add_step(p_action_request_id, 'CREATE_ITEM_SEASONS', 62);
+            add_step(p_action_request_id, 'CREATE_ITEM_IMAGES', 64);
+            add_step(p_action_request_id, 'CREATE_ITEM_HTS', 66);
             if config_pkg.get_config('FEATURE_ITEM_LOCATIONS_YN', 'N') = 'Y' then
                 add_step(p_action_request_id, 'CREATE_ITEM_LOCATIONS', 70);
             end if;
@@ -150,6 +156,9 @@ create or replace package body step_pkg as
             add_step(p_action_request_id, 'CREATE_ITEM_SOURCING', 40);
             add_step(p_action_request_id, 'CREATE_ITEM_COUNTRIES_OF_MANUFACTURE', 45);
             add_step(p_action_request_id, 'CREATE_ITEM_UDAS', 50);
+            add_step(p_action_request_id, 'CREATE_ITEM_SEASONS', 52);
+            add_step(p_action_request_id, 'CREATE_ITEM_IMAGES', 54);
+            add_step(p_action_request_id, 'CREATE_ITEM_HTS', 56);
             if config_pkg.get_config('FEATURE_ITEM_LOCATIONS_YN', 'N') = 'Y' then
                 add_step(p_action_request_id, 'CREATE_ITEM_LOCATIONS', 60);
             end if;

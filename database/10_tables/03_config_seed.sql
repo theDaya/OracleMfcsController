@@ -71,6 +71,13 @@ using (
     select 'DEFAULT', 'ENDPOINT.ITEM_NUMBERS_MANAGE', '/MerchIntegrations/services/item/itemNumbers/reserve', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEMS_CREATE', '/MerchIntegrations/services/items/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEMS_UPDATE', '/MerchIntegrations/services/items/update', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_SEASONS_CREATE', '/MerchIntegrations/services/item/seasons/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_IMAGES_CREATE', '/MerchIntegrations/services/item/images/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_IMAGES_UPDATE', '/MerchIntegrations/services/item/images/update', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_HTS_CREATE', '/MerchIntegrations/services/item/hts/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_HTS_UPDATE', '/MerchIntegrations/services/item/hts/update', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_IMAGE_TYPE', 'T', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_HTS_STATUS', 'A', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_LOCATIONS_CREATE', '/MerchIntegrations/services/item/locations/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_SOURCING_CREATE', '/MerchIntegrations/services/item/suppliers/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.ITEM_SOURCING_UPDATE', '/MerchIntegrations/services/item/suppliers/update', 'Y' from dual union all

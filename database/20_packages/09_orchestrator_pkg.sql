@@ -387,6 +387,20 @@ create or replace package body orchestrator_pkg as
                 else
                     def('ENDPOINT.ITEM_UDAS_CREATE', 'POST', 'build_item_uda_request');
                 end if;
+            when 'CREATE_ITEM_SEASONS' then
+                def('ENDPOINT.ITEM_SEASONS_CREATE', 'POST', 'build_item_season_request');
+            when 'CREATE_ITEM_IMAGES' then
+                if l_existing then
+                    def('ENDPOINT.ITEM_IMAGES_UPDATE', 'PUT', 'build_item_image_request');
+                else
+                    def('ENDPOINT.ITEM_IMAGES_CREATE', 'POST', 'build_item_image_request');
+                end if;
+            when 'CREATE_ITEM_HTS' then
+                if l_existing then
+                    def('ENDPOINT.ITEM_HTS_UPDATE', 'PUT', 'build_item_hts_request');
+                else
+                    def('ENDPOINT.ITEM_HTS_CREATE', 'POST', 'build_item_hts_request');
+                end if;
             when 'CREATE_ITEM_LOCATIONS' then
                 if l_existing then
                     def('ENDPOINT.ITEM_LOCATIONS_UPDATE', 'PUT', 'build_item_location_request');

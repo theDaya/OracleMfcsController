@@ -55,6 +55,13 @@ begin
       "DEPARTMENT": "1517", "CLASS": "6892", "SUBCLASS": "1128",
       "SUPPLIER": "700087", "ORIGIN_COUNTRY": "GB", "CURRENCY_CODE": "ZAR",
       "COLOUR": "08610", "UNIT_COST": 48.49, "RETAIL_PRICE": 100,
+      "STYLE_SEASONS": [ { "SEASON_ID": 1, "PHASE_ID": 1, "SEQUENCE_NO": 1 } ],
+      "STYLE_IMAGES": [ { "IMAGE_NAME": "100150161_sd1.jpg",
+                          "IMAGE_ADDRESS": "https://cdn.media.amplience.net/i/office/",
+                          "PRIMARY_YN": "Y", "DISPLAY_PRIORITY": 1 } ],
+      "STYLE_HTS": [ { "HTS": "6402993900", "IMPORT_COUNTRY": "GB",
+                       "ORIGIN_COUNTRY": "DE",
+                       "EFFECT_FROM": "2026-01-01", "EFFECT_TO": "2049-01-01" } ],
       "STYLE_UDAS": [
         { "UDA_ID": 239, "UDA_VALUE": "3" },
         { "UDA_ID": 51040, "UDA_TYPE": "FF", "UDA_TEXT": "Leather upper" }
@@ -103,6 +110,17 @@ begin
     dbms_output.put_line('=== 3. build_reference_item_request ===');
     l_out := payload_pkg.build_request(l_id, 'build_reference_item_request');
     show('reference item payload', l_out);
+
+    dbms_output.put_line('');
+    dbms_output.put_line('=== 3b. season / image / hts mappers ===');
+    for m in (select 'build_item_season_request' n, 'season' k from dual union all
+              select 'build_item_image_request', 'image' from dual union all
+              select 'build_item_hts_request', 'hts' from dual) loop
+        l_out := payload_pkg.build_request(l_id, m.n);
+        dbms_output.put_line(rpad(m.n, 30)
+            || ' collectionSize=' || json_value(l_out, '$.collectionSize')
+            || '  first=' || substr(json_query(l_out, '$.items[0].' || m.k), 1, 120));
+    end loop;
 
     dbms_output.put_line('');
     dbms_output.put_line('=== 4. step graph for CREATE_STYLE ===');

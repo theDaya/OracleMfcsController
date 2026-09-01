@@ -104,6 +104,49 @@ create or replace package payload_pkg authid definer as
     -- The document puts its value in whichever of the three fields suits the UDA.
     -- Which one MFCS actually reads is decided by displayType, which comes from
     -- master data rather than from the document.
+    -- Seasons, images and tariff codes. Style-level like UDAs, and for the same
+    -- reason: a real Office item carries them identically on the style and on
+    -- every SKU, so there is no SKU-level slot to fill in.
+    cursor c_style_seasons(cp_payload clob) is
+        select rn, season_id, phase_id, sequence_no
+          from json_table(cp_payload, '$.STYLE_SEASONS[*]'
+              columns
+                  rn          for ordinality,
+                  season_id   number path '$.SEASON_ID',
+                  phase_id    number path '$.PHASE_ID',
+                  sequence_no number path '$.SEQUENCE_NO'
+          );
+
+    cursor c_style_images(cp_payload clob) is
+        select rn, image_name, image_address, image_description,
+               image_type, primary_yn, display_priority
+          from json_table(cp_payload, '$.STYLE_IMAGES[*]'
+              columns
+                  rn                for ordinality,
+                  image_name        varchar2(120) path '$.IMAGE_NAME',
+                  image_address     varchar2(255) path '$.IMAGE_ADDRESS',
+                  image_description varchar2(40)  path '$.IMAGE_DESCRIPTION',
+                  image_type        varchar2(6)   path '$.IMAGE_TYPE',
+                  primary_yn        varchar2(1)   path '$.PRIMARY_YN',
+                  display_priority  number        path '$.DISPLAY_PRIORITY'
+          );
+
+    -- Assessments are not carried. The tenant's own rows have componentId
+    -- DTY7AGB against computationValueBase VFDGB with duty and expense flags,
+    -- and nobody here knows what those should be for a new style. The tariff
+    -- code itself is useful without them.
+    cursor c_style_hts(cp_payload clob) is
+        select rn, hts, import_country, origin_country, effect_from, effect_to
+          from json_table(cp_payload, '$.STYLE_HTS[*]'
+              columns
+                  rn             for ordinality,
+                  hts            varchar2(25) path '$.HTS',
+                  import_country varchar2(3)  path '$.IMPORT_COUNTRY',
+                  origin_country varchar2(3)  path '$.ORIGIN_COUNTRY',
+                  effect_from    varchar2(20) path '$.EFFECT_FROM',
+                  effect_to      varchar2(20) path '$.EFFECT_TO'
+          );
+
     cursor c_style_udas(cp_payload clob) is
         select rn, uda_id, uda_type, uda_value, uda_text, uda_date
           from json_table(cp_payload, '$.STYLE_UDAS[*]'
@@ -851,6 +894,117 @@ create or replace package body payload_pkg as
         return l_udas;
     end;
 
+    -- The envelope every style-attribute service shares: one entry per item,
+    -- each carrying the same array under its own property name.
+    --
+    -- Returns collectionSize 0 when nothing was captured, which the orchestrator
+    -- treats as nothing to send rather than calling the tenant with an empty
+    -- array. That is what makes each of these genuinely optional.
+    function attribute_request(
+        p_action_request_id in varchar2,
+        p_property          in varchar2,
+        p_values            in json_array_t
+    ) return clob is
+        l_payload clob := payload(p_action_request_id);
+        l_style varchar2(30) := request_style(p_action_request_id);
+        l_root json_object_t := json_object_t();
+        l_items json_array_t := json_array_t();
+        l_item json_object_t;
+        l_sku varchar2(30);
+        l_values_clob clob;
+
+        -- json_array_t is a reference type, so each item needs its own copy or
+        -- they would all alias the same rows.
+        procedure add(p_item in varchar2) is
+        begin
+            if p_item is null then
+                return;
+            end if;
+            l_item := json_object_t();
+            l_item.put('item', p_item);
+            l_item.put('dataLoadingDestination', 'RMS');
+            l_item.put(p_property, json_array_t.parse(l_values_clob));
+            l_items.append(l_item);
+        end;
+    begin
+        if p_values is null or p_values.get_size = 0 then
+            l_root.put('collectionSize', 0);
+            l_root.put('items', json_array_t());
+            return l_root.to_clob;
+        end if;
+
+        l_values_clob := p_values.to_clob;
+        add(l_style);
+        for v in c_size_curve(l_payload) loop
+            l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
+            add(l_sku);
+        end loop;
+
+        l_root.put('collectionSize', l_items.get_size);
+        l_root.put('items', l_items);
+        return l_root.to_clob;
+    end;
+
+    function item_season_request(p_action_request_id in varchar2) return clob is
+        l_payload clob := payload(p_action_request_id);
+        l_arr json_array_t := json_array_t();
+        l_row json_object_t;
+    begin
+        for v in c_style_seasons(l_payload) loop
+            l_row := json_object_t();
+            l_row.put('seasonId', v.season_id);
+            l_row.put('phaseId', v.phase_id);
+            if v.sequence_no is not null then
+                l_row.put('sequenceNo', v.sequence_no);
+            end if;
+            l_arr.append(l_row);
+        end loop;
+        return attribute_request(p_action_request_id, 'season', l_arr);
+    end;
+
+    function item_image_request(p_action_request_id in varchar2) return clob is
+        l_payload clob := payload(p_action_request_id);
+        l_arr json_array_t := json_array_t();
+        l_row json_object_t;
+    begin
+        for v in c_style_images(l_payload) loop
+            l_row := json_object_t();
+            l_row.put('imageName', v.image_name);
+            if v.image_address is not null then
+                l_row.put('imageAddress', v.image_address);
+            end if;
+            if v.image_description is not null then
+                l_row.put('imageDescription', v.image_description);
+            end if;
+            l_row.put('imageType', nvl(v.image_type,
+                config_pkg.get_config('MFCS_IMAGE_TYPE', 'T')));
+            l_row.put('primaryImageInd', nvl(upper(v.primary_yn), 'N'));
+            if v.display_priority is not null then
+                l_row.put('displayPriority', v.display_priority);
+            end if;
+            l_arr.append(l_row);
+        end loop;
+        return attribute_request(p_action_request_id, 'image', l_arr);
+    end;
+
+    function item_hts_request(p_action_request_id in varchar2) return clob is
+        l_payload clob := payload(p_action_request_id);
+        l_arr json_array_t := json_array_t();
+        l_row json_object_t;
+    begin
+        for v in c_style_hts(l_payload) loop
+            l_row := json_object_t();
+            l_row.put('hts', v.hts);
+            l_row.put('importCountry', v.import_country);
+            l_row.put('originCountry', v.origin_country);
+            l_row.put('effectFrom', v.effect_from);
+            l_row.put('effectTo', v.effect_to);
+            l_row.put('status', config_pkg.get_config('MFCS_HTS_STATUS', 'A'));
+            l_arr.append(l_row);
+        end loop;
+        return attribute_request(p_action_request_id, 'hts', l_arr);
+    end;
+
     function item_uda_request(p_action_request_id in varchar2) return clob is
         l_payload clob := payload(p_action_request_id);
         l_style varchar2(30) := request_style(p_action_request_id);
@@ -1554,6 +1708,9 @@ create or replace package body payload_pkg as
             when 'build_item_country_of_manufacture_request' then return item_country_of_manufacture_request(p_action_request_id);
             when 'build_item_uda_request' then return item_uda_request(p_action_request_id);
             when 'build_reference_item_request' then return reference_item_request(p_action_request_id);
+            when 'build_item_season_request' then return item_season_request(p_action_request_id);
+            when 'build_item_image_request' then return item_image_request(p_action_request_id);
+            when 'build_item_hts_request' then return item_hts_request(p_action_request_id);
             when 'build_item_location_request' then return item_location_request(p_action_request_id);
             when 'build_item_approval_request' then return item_approval_request(p_action_request_id);
             when 'build_initial_retail_request' then return initial_retail_request(p_action_request_id);

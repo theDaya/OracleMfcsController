@@ -540,22 +540,17 @@ page 3 (
                 type: sqlQuery
                 sqlQuery:
                     ```sql
-                    -- Every list-of-values entry on the tenant, labelled with the
-                    -- attribute it belongs to. The label carries the attribute name
-                    -- because this column does not cascade off UDA_ID - a grid
-                    -- column cascade has no donor in this export to copy from.
-                    -- Picking a value from the wrong attribute is caught by
-                    -- validation_pkg before any MFCS call is made.
-                    select p.description || ': ' || v.description d,
-                           v.data_code r
+                    -- Narrowed to the attribute chosen in this row. Cascading on a
+                    -- grid column binds the parent column like a page item.
+                    select v.description d, v.data_code r
                       from master_data v
-                      join master_data p
-                        on p.data_type = 'UDA'
-                       and p.parent_code = '~'
-                       and p.data_code = v.parent_code
                      where v.data_type = 'UDA_VALUE'
-                     order by p.description, v.description
+                       and v.parent_code = to_char(:UDA_ID)
+                     order by v.description
                     ```
+            }
+            cascadingLov {
+                parentColumns: UDA_ID
             }
             layout {
                 sequence: 60
@@ -811,18 +806,9 @@ page 3 (
         )
 
         column PRIMARY_YN (
-            type: selectList
+            type: switch
             heading {
                 heading: Primary
-            }
-            lov {
-                type: sqlQuery
-                sqlQuery:
-                    ```sql
-                    select 'Yes' d, 'Y' r from dual
-                    union all
-                    select 'No' d, 'N' r from dual
-                    ```
             }
             layout {
                 sequence: 80
@@ -834,6 +820,686 @@ page 3 (
             default {
                 type: static
                 staticValue: N
+            }
+        )
+    )
+
+    region style-seasons (
+        name: Seasons
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_season_id, draft_id, season_id, phase_id, sequence_no
+                  from ui_draft_season
+                 where draft_id = :P3_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 60
+            parentRegion: @associated-items
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        toolbar {
+            controls: [
+                searchCol
+                searchField
+                actionsMenu
+                resetButton
+                saveButton
+            ]
+        }
+        heading {
+            fixedTo: region
+            fixedReportHeight: 320
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @SEASON_ID
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @PHASE_ID
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @SEQUENCE_NO
+                layout {
+                    sequence: 3
+                }
+            )
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 10
+            }
+        )
+
+        column APEX$ROW_SELECTOR (
+            type: rowSelector
+            layout {
+                sequence: 20
+            }
+        )
+
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+            default {
+                type: item
+                item: P3_DRAFT_ID
+            }
+        )
+
+        column DRAFT_SEASON_ID (
+            type: hidden
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: DRAFT_SEASON_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+            exportPrinting {
+                includeInExportPrint: false
+            }
+        )
+
+        column SEASON_ID (
+            type: selectList
+            heading {
+                heading: Season
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select description || ' (' || data_code || ')' d, data_code r
+                      from master_data
+                     where data_type = 'SEASON'
+                     order by to_number(nullif(regexp_replace(data_code, '[^0-9]', ''), '')), data_code
+                    ```
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: SEASON_ID
+                dataType: number
+            }
+        )
+
+        column PHASE_ID (
+            type: numberField
+            heading {
+                heading: Phase
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                databaseColumn: PHASE_ID
+                dataType: number
+            }
+            default {
+                type: static
+                staticValue: 1
+            }
+        )
+
+        column SEQUENCE_NO (
+            type: numberField
+            heading {
+                heading: Sequence
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                databaseColumn: SEQUENCE_NO
+                dataType: number
+            }
+            default {
+                type: static
+                staticValue: 1
+            }
+        )
+    )
+
+    region style-images (
+        name: Images
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_image_id, draft_id, image_name, image_address,
+                       image_description, image_type, primary_yn, display_priority
+                  from ui_draft_image
+                 where draft_id = :P3_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 70
+            parentRegion: @associated-items
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        toolbar {
+            controls: [
+                searchCol
+                searchField
+                actionsMenu
+                resetButton
+                saveButton
+            ]
+        }
+        heading {
+            fixedTo: region
+            fixedReportHeight: 320
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @IMAGE_NAME
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @IMAGE_ADDRESS
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @IMAGE_TYPE
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @PRIMARY_YN
+                layout {
+                    sequence: 4
+                }
+            )
+
+            displayColumn (
+                column: @DISPLAY_PRIORITY
+                layout {
+                    sequence: 5
+                }
+            )
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 10
+            }
+        )
+
+        column APEX$ROW_SELECTOR (
+            type: rowSelector
+            layout {
+                sequence: 20
+            }
+        )
+
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+            default {
+                type: item
+                item: P3_DRAFT_ID
+            }
+        )
+
+        column DRAFT_IMAGE_ID (
+            type: hidden
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: DRAFT_IMAGE_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+            exportPrinting {
+                includeInExportPrint: false
+            }
+        )
+
+        column IMAGE_NAME (
+            type: textField
+            heading {
+                heading: File Name
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: IMAGE_NAME
+                dataType: varchar2
+            }
+        )
+
+        column IMAGE_ADDRESS (
+            type: textField
+            heading {
+                heading: Address
+            }
+            layout {
+                sequence: 60
+            }
+            appearance {
+                width: 50
+            }
+            source {
+                databaseColumn: IMAGE_ADDRESS
+                dataType: varchar2
+            }
+        )
+
+        column IMAGE_DESCRIPTION (
+            type: textField
+            heading {
+                heading: Description
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                databaseColumn: IMAGE_DESCRIPTION
+                dataType: varchar2
+            }
+        )
+
+        column IMAGE_TYPE (
+            type: textField
+            heading {
+                heading: Type
+            }
+            layout {
+                sequence: 80
+            }
+            source {
+                databaseColumn: IMAGE_TYPE
+                dataType: varchar2
+            }
+            default {
+                type: static
+                staticValue: T
+            }
+        )
+
+        column PRIMARY_YN (
+            type: switch
+            heading {
+                heading: Primary
+            }
+            layout {
+                sequence: 90
+            }
+            source {
+                databaseColumn: PRIMARY_YN
+                dataType: varchar2
+            }
+            default {
+                type: static
+                staticValue: N
+            }
+        )
+
+        column DISPLAY_PRIORITY (
+            type: numberField
+            heading {
+                heading: Priority
+            }
+            layout {
+                sequence: 100
+            }
+            source {
+                databaseColumn: DISPLAY_PRIORITY
+                dataType: number
+            }
+        )
+    )
+
+    region style-hts (
+        name: Tariff Codes
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_hts_id, draft_id, hts, import_country,
+                       origin_country, effect_from, effect_to
+                  from ui_draft_hts
+                 where draft_id = :P3_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 80
+            parentRegion: @associated-items
+            slot: subRegions
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        toolbar {
+            controls: [
+                searchCol
+                searchField
+                actionsMenu
+                resetButton
+                saveButton
+            ]
+        }
+        heading {
+            fixedTo: region
+            fixedReportHeight: 320
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @HTS
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @IMPORT_COUNTRY
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @ORIGIN_COUNTRY
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @EFFECT_FROM
+                layout {
+                    sequence: 4
+                }
+            )
+
+            displayColumn (
+                column: @EFFECT_TO
+                layout {
+                    sequence: 5
+                }
+            )
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 10
+            }
+        )
+
+        column APEX$ROW_SELECTOR (
+            type: rowSelector
+            layout {
+                sequence: 20
+            }
+        )
+
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+            default {
+                type: item
+                item: P3_DRAFT_ID
+            }
+        )
+
+        column DRAFT_HTS_ID (
+            type: hidden
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: DRAFT_HTS_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+            exportPrinting {
+                includeInExportPrint: false
+            }
+        )
+
+        column HTS (
+            type: textField
+            heading {
+                heading: Tariff Code
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: HTS
+                dataType: varchar2
+            }
+        )
+
+        column IMPORT_COUNTRY (
+            type: selectList
+            heading {
+                heading: Import Country
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select data_code || ' - ' || description d, data_code r
+                      from master_data
+                     where data_type = 'COUNTRY'
+                     order by description
+                    ```
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                databaseColumn: IMPORT_COUNTRY
+                dataType: varchar2
+            }
+        )
+
+        column ORIGIN_COUNTRY (
+            type: selectList
+            heading {
+                heading: Origin Country
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select data_code || ' - ' || description d, data_code r
+                      from master_data
+                     where data_type = 'COUNTRY'
+                     order by description
+                    ```
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                databaseColumn: ORIGIN_COUNTRY
+                dataType: varchar2
+            }
+        )
+
+        column EFFECT_FROM (
+            type: datePicker
+            heading {
+                heading: Effective From
+            }
+            layout {
+                sequence: 80
+            }
+            source {
+                databaseColumn: EFFECT_FROM
+                dataType: date
+            }
+        )
+
+        column EFFECT_TO (
+            type: datePicker
+            heading {
+                heading: Effective To
+            }
+            layout {
+                sequence: 90
+            }
+            source {
+                databaseColumn: EFFECT_TO
+                dataType: date
             }
         )
     )
@@ -1964,6 +2630,42 @@ page 3 (
         }
         execution {
             sequence: 22
+        }
+    )
+
+    process save-style-seasons (
+        name: Save Seasons
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @style-seasons
+        target {
+            returnPksAfterInsert: false
+        }
+        execution {
+            sequence: 23
+        }
+    )
+
+    process save-style-images (
+        name: Save Images
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @style-images
+        target {
+            returnPksAfterInsert: false
+        }
+        execution {
+            sequence: 24
+        }
+    )
+
+    process save-style-hts (
+        name: Save Tariff Codes
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @style-hts
+        target {
+            returnPksAfterInsert: false
+        }
+        execution {
+            sequence: 25
         }
     )
 

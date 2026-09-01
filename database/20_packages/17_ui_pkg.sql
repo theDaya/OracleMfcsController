@@ -109,6 +109,45 @@ create or replace package body ui_pkg as
                          from ui_draft_sku s
                         where s.draft_id = d.draft_id
                    ) format json,
+                   'STYLE_SEASONS' value (
+                       select json_arrayagg(
+                                  json_object(
+                                      'SEASON_ID' value sn.season_id,
+                                      'PHASE_ID' value sn.phase_id,
+                                      'SEQUENCE_NO' value sn.sequence_no
+                                  absent on null returning clob)
+                                  order by sn.season_id returning clob)
+                         from ui_draft_season sn
+                        where sn.draft_id = d.draft_id
+                   ) format json,
+                   'STYLE_IMAGES' value (
+                       select json_arrayagg(
+                                  json_object(
+                                      'IMAGE_NAME' value im.image_name,
+                                      'IMAGE_ADDRESS' value im.image_address,
+                                      'IMAGE_DESCRIPTION' value im.image_description,
+                                      'IMAGE_TYPE' value im.image_type,
+                                      'PRIMARY_YN' value im.primary_yn,
+                                      'DISPLAY_PRIORITY' value im.display_priority
+                                  absent on null returning clob)
+                                  order by im.primary_yn desc, im.display_priority, im.draft_image_id
+                                  returning clob)
+                         from ui_draft_image im
+                        where im.draft_id = d.draft_id
+                   ) format json,
+                   'STYLE_HTS' value (
+                       select json_arrayagg(
+                                  json_object(
+                                      'HTS' value h.hts,
+                                      'IMPORT_COUNTRY' value h.import_country,
+                                      'ORIGIN_COUNTRY' value h.origin_country,
+                                      'EFFECT_FROM' value to_char(h.effect_from, 'YYYY-MM-DD'),
+                                      'EFFECT_TO' value to_char(h.effect_to, 'YYYY-MM-DD')
+                                  absent on null returning clob)
+                                  order by h.hts returning clob)
+                         from ui_draft_hts h
+                        where h.draft_id = d.draft_id
+                   ) format json,
                    -- Style level only. SKUs inherit these, so the console has no
                    -- SKU-level UDA capture and the backend writes the same set to
                    -- the parent and every child.

@@ -213,6 +213,12 @@ a caller sending the legacy key sees `SIZE_CURVE_DETAIL.SKU_QTY` in the response
 
 Optional additions, absent from documents written earlier and behaving exactly as before when absent:
 
+- `STYLE_SEASONS`, `STYLE_IMAGES` and `STYLE_HTS` at the root, all style-level for the same reason as
+  UDAs. Seasons carry `SEASON_ID` / `PHASE_ID` / `SEQUENCE_NO`; images carry a file name, address,
+  type and a primary flag; tariff codes carry the code with its import and origin countries and an
+  effective range. **HTS assessments are not sent** - the tenant's own rows carry `componentId`
+  `DTY7AGB` against `computationValueBase` `VFDGB` with duty and expense flags, and nobody here knows
+  what those should be for a new style. The code itself is useful without them.
 - `STYLE_UDAS` at the root. Style-level only - **SKUs inherit their style's UDAs**, so there is
   deliberately no SKU-level slot. The mapper writes the same set to the parent and to every child,
   because MFCS is not known to cascade and a real item carries copies at both levels. Office sends the
