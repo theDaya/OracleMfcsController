@@ -28,7 +28,35 @@ apex import -input "C:\path\to\apexlang\app-folder" -workspace WORKSPACE_NAME -i
 
 The installed SQLcl 26.2 validates/imports successfully here, but `apex export` and `apex generate` have thrown a Java `Path.of(null)` error in this shell. Do not rely on those commands until SQLcl is upgraded or the issue is retested.
 
+## Donor exports
+
+Oracle's **UX Pattern Catalog** (app 103 here) is checked out separately at
+<https://github.com/theDaya/apexlangExports> - 21 pages of Oracle's own APEXlang, and the best source
+of syntax that this repo's own export does not contain.
+
+What it does carry: `facetedSearch`, `chart`, `themeTemplateComponent` (cards, media lists),
+`classicReport`, drawer forms, dashboards, master-detail, and a `staticValues` donor.
+
+What it does **not** carry, so do not go looking: `popupLov`, `interactiveGrid`, `comboBox`, `shuttle`.
+For interactive grids the donor is this repo's own `apexlang/mfcs-controller/pages/p00003.apx`. There
+is still no donor anywhere for a grid-column cascading LOV.
+
 ## Page And Component Pitfalls
+
+- **`staticValues` is a string, not an array.** Writing it as a list of pairs fails validation with
+  `Property: staticValues, does not support Arrays`. The correct form, from the pattern catalog:
+
+```apex
+lov {
+    type: staticValues
+    staticValues: STATIC:Manager A;A,Manager B;B
+}
+```
+
+  Display first, then `;`, then the return value; pairs separated by commas. A `sqlQuery` selecting
+  literals from dual also works and is what this repo currently uses in p00003, but the static form is
+  what Oracle writes.
+
 
 - For page-load JavaScript, prefer the page-level block:
 
