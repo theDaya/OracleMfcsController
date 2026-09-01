@@ -115,7 +115,8 @@ create or replace package payload_pkg authid definer as
                   season_id   number path '$.SEASON_ID',
                   phase_id    number path '$.PHASE_ID',
                   sequence_no number path '$.SEQUENCE_NO'
-          );
+          )
+         where season_id is not null;
 
     cursor c_style_images(cp_payload clob) is
         select rn, image_name, image_address, image_description,
@@ -129,7 +130,8 @@ create or replace package payload_pkg authid definer as
                   image_type        varchar2(6)   path '$.IMAGE_TYPE',
                   primary_yn        varchar2(1)   path '$.PRIMARY_YN',
                   display_priority  number        path '$.DISPLAY_PRIORITY'
-          );
+          )
+         where image_name is not null;
 
     -- Assessments are not carried. The tenant's own rows have componentId
     -- DTY7AGB against computationValueBase VFDGB with duty and expense flags,
@@ -145,7 +147,8 @@ create or replace package payload_pkg authid definer as
                   origin_country varchar2(3)  path '$.ORIGIN_COUNTRY',
                   effect_from    varchar2(20) path '$.EFFECT_FROM',
                   effect_to      varchar2(20) path '$.EFFECT_TO'
-          );
+          )
+         where hts is not null;
 
     cursor c_style_udas(cp_payload clob) is
         select rn, uda_id, uda_type, uda_value, uda_text, uda_date
@@ -157,7 +160,8 @@ create or replace package payload_pkg authid definer as
                   uda_value varchar2(30)  path '$.UDA_VALUE',
                   uda_text  varchar2(250) path '$.UDA_TEXT',
                   uda_date  varchar2(30)  path '$.UDA_DATE'
-          );
+          )
+         where uda_id is not null;
 
 
     -- The size curve of any document carrying SIZE_CURVE_DETAIL - the stored
