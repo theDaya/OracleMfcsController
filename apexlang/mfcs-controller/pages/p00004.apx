@@ -903,6 +903,27 @@ page 4 (
         }
     )
 
+    button retry (
+        buttonName: RETRY
+        label: Retry / Resume
+        layout {
+            sequence: 30
+            region: @controls
+            slot: change
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P4_DRAFT_ID
+        }
+    )
+
     button refresh-master (
         buttonName: REFRESH_MASTER
         label: Refresh Master Data
@@ -917,6 +938,23 @@ page 4 (
         }
         behavior {
             warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    process retry-draft (
+        name: Retry draft
+        type: executeCode
+        source {
+            plsqlCode: ui_pkg.enqueue_submit(:P4_DRAFT_ID);
+        }
+        execution {
+            sequence: 20
+        }
+        successMessage {
+            successMessage: Resubmitted. The draft keeps its ACTION_REQUEST_ID, so completed steps are skipped and the run picks up from the one that failed. Refresh to watch it progress.
+        }
+        serverSideCondition {
+            whenButtonPressed: @retry
         }
     )
 
