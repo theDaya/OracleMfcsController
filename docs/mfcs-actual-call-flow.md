@@ -105,6 +105,8 @@ The orchestrator runs these steps for `CREATE_STYLE`:
 
 The configured reservation chunk size is `1`, so the integration calls MFCS once for the parent and once per child SKU. The response is persisted to `ENTITY_MAP`.
 
+**This step makes no call at all when the document carries its own `ITEM_NUMBER`.** The numbers are recorded against the request instead, and everything below runs identically against them - the payloads differ only in `itemNumberType`, which is then `MANL` rather than `ITEM`. See the inbound-document section of `CLAUDE.md`. The run recorded below is the reserve path, which is unchanged.
+
 ```jsonc
 // POST /MerchIntegrations/services/item/itemNumbers/reserve
 {
@@ -610,7 +612,13 @@ The order number is reserved before the purchase-order create call, then stored 
   "quantity": 1,
 
   // Configured as MFCS_ORDER_RESERVATION_DAYS_UNTIL_EXPIRY.
-  "daysUntilExpiry": 1
+  //
+  // expiryDays, not daysUntilExpiry - this service and item/itemNumbers/reserve
+  // name the same idea differently, and sending the item service's spelling here
+  // is refused with "must not be null, field: expiryDays". This document said
+  // daysUntilExpiry until 2026-09-10; payload_pkg has always sent expiryDays,
+  // which is why the live runs worked and the doc was wrong.
+  "expiryDays": 1
 }
 ```
 

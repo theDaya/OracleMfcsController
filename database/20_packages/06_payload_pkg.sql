@@ -25,6 +25,32 @@ create or replace package payload_pkg authid definer as
     -- real mappers and became a forwarding layer once the simulators were removed.
     function source_system(p_payload in clob) return varchar2;
     function source_style_ref(p_payload in clob) return varchar2;
+
+    -- The style's MFCS item number when the caller chose it, null when it did
+    -- not. Null is what puts the request on the reserve path, so this is the one
+    -- test that decides which way item numbering goes.
+    function document_item_number(p_payload in clob) return varchar2;
+
+    -- The type MFCS is to be told, which follows from who chose the number.
+    -- MANL when the caller supplied one - the only type a caller can supply,
+    -- since ITEM demands nine characters with a valid Oracle check digit and
+    -- refuses an invented number. ITEM otherwise, because the numbers then came
+    -- from itemNumbers/reserve, which issues that type.
+    function document_item_number_type(p_payload in clob) return varchar2;
+
+    -- The style's MFCS description. The document's own ITEM_DESCRIPTION when it
+    -- carries one, otherwise SOURCE_STYLE_REF, which is what every document
+    -- written before this field existed relies on.
+    function style_description(p_payload in clob) return varchar2;
+
+    -- One SKU's MFCS description. The row's own ITEM_DESCRIPTION when it carries
+    -- one, otherwise the style description with the size differentiator appended,
+    -- which is the derivation this layer has always used.
+    function sku_description(
+        p_payload          in clob,
+        p_item_description in varchar2,
+        p_sku_size         in varchar2
+    ) return varchar2;
     function source_order_ref(p_payload in clob) return varchar2;
     function user_id(p_payload in clob) return varchar2;
     function request_payload(p_action_request_id in varchar2) return clob;
@@ -48,7 +74,17 @@ create or replace package payload_pkg authid definer as
         sku_size           varchar2(60),
         sku_width          varchar2(60),
         sku_id             varchar2(30),
-        sku_qty            number
+        sku_qty            number,
+        -- The SKU's MFCS item number when the caller chose it. Distinct from
+        -- SKU_ID, which names a SKU MFCS already holds: SKU_ID is a reference on
+        -- a modify, ITEM_NUMBER is an assignment on a create, and validation
+        -- keeps them from ever arriving together.
+        item_number        varchar2(30),
+        -- The SKU's MFCS description when the caller composed it. Same argument
+        -- as ITEM_NUMBER: a caller that builds "MODEL Colour Size" from its own
+        -- data should send the result, not have this layer guess at it from a
+        -- style reference and a differentiator id.
+        item_description   varchar2(250)
     );
     type t_size_curve is table of t_size_curve_row index by pls_integer;
 
@@ -57,7 +93,8 @@ create or replace package payload_pkg authid definer as
     -- readers used to carry their own json_table of this array; a column
     -- added to the curve is now added here and nowhere else.
     cursor c_size_curve(cp_payload clob) is
-        select rn, source_variant_ref, sku_size, sku_width, sku_id, sku_qty
+        select rn, source_variant_ref, sku_size, sku_width, sku_id, sku_qty,
+               item_number, item_description
           from json_table(cp_payload, '$.SIZE_CURVE_DETAIL[*]'
               columns
                   rn                 for ordinality,
@@ -65,7 +102,9 @@ create or replace package payload_pkg authid definer as
                   sku_size           varchar2(60)  path '$.SKU_SIZE',
                   sku_width          varchar2(60)  path '$.SKU_WIDTH',
                   sku_id             varchar2(30)  path '$.SKU_ID',
-                  sku_qty            number        path '$.SKU_QTY'
+                  sku_qty            number        path '$.SKU_QTY',
+                  item_number        varchar2(30)  path '$.ITEM_NUMBER',
+                  item_description   varchar2(250) path '$.ITEM_DESCRIPTION'
           );
 
     -- Barcodes hang off a size-curve row, so they cannot ride in c_size_curve
@@ -78,7 +117,7 @@ create or replace package payload_pkg authid definer as
     -- nested column null. Without the filter a SKU without barcodes would build a
     -- level-3 item whose item number is null and send it to the tenant.
     cursor c_sku_upcs(cp_payload clob) is
-        select rn, source_variant_ref, sku_id, sku_size, sku_width,
+        select rn, source_variant_ref, sku_id, sku_size, sku_width, item_description,
                upc_rn, upc, upc_type, primary_yn
           from json_table(cp_payload, '$.SIZE_CURVE_DETAIL[*]'
               columns
@@ -87,6 +126,7 @@ create or replace package payload_pkg authid definer as
                   sku_id             varchar2(30)  path '$.SKU_ID',
                   sku_size           varchar2(60)  path '$.SKU_SIZE',
                   sku_width          varchar2(60)  path '$.SKU_WIDTH',
+                  item_description   varchar2(250) path '$.ITEM_DESCRIPTION',
                   nested path '$.SKU_UPCS[*]'
                       columns (
                           upc_rn     for ordinality,
@@ -330,6 +370,49 @@ create or replace package body payload_pkg as
         return l_value;
     end;
 
+    function document_item_number(p_payload in clob) return varchar2 is
+        l_value varchar2(30);
+    begin
+        select trim(json_value(p_payload, '$.ITEM_NUMBER' returning varchar2(30) null on error))
+          into l_value
+          from dual;
+        return l_value;
+    end;
+
+    function document_item_number_type(p_payload in clob) return varchar2 is
+        l_type varchar2(10);
+    begin
+        select upper(trim(json_value(p_payload, '$.ITEM_NUMBER_TYPE' returning varchar2(10) null on error)))
+          into l_type
+          from dual;
+        -- Defaulted rather than required, so every document written before this
+        -- field existed still resolves to the type its numbers actually are.
+        return nvl(l_type, 'ITEM');
+    end;
+
+    function style_description(p_payload in clob) return varchar2 is
+        l_desc varchar2(250);
+    begin
+        select coalesce(
+                   trim(json_value(p_payload, '$.ITEM_DESCRIPTION' returning varchar2(250) null on error)),
+                   json_value(p_payload, '$.SOURCE_STYLE_REF' returning varchar2(250) null on error))
+          into l_desc
+          from dual;
+        return substr(l_desc, 1, 250);
+    end;
+
+    function sku_description(
+        p_payload          in clob,
+        p_item_description in varchar2,
+        p_sku_size         in varchar2
+    ) return varchar2 is
+    begin
+        if trim(p_item_description) is not null then
+            return substr(trim(p_item_description), 1, 250);
+        end if;
+        return substr(trim(style_description(p_payload) || ' ' || p_sku_size), 1, 250);
+    end;
+
     function source_order_ref(p_payload in clob) return varchar2 is
         l_value varchar2(120);
     begin
@@ -412,6 +495,7 @@ create or replace package body payload_pkg as
         select style_no into l_style
           from request
          where action_request_id = p_action_request_id;
+
         return l_style;
     end;
 
@@ -448,6 +532,7 @@ create or replace package body payload_pkg as
          where source_system = l_source_system
            and source_style_ref = l_source_style_ref
            and source_variant_ref = p_source_variant_ref;
+
         return l_sku;
     end;
 
@@ -475,7 +560,10 @@ create or replace package body payload_pkg as
         p_source_ref  in varchar2,
         p_color       in varchar2,
         -- Defaulted so a caller that has no brand to give does not have to say so.
-        p_brand       in varchar2 default null
+        p_brand       in varchar2 default null,
+        -- Defaulted to the reserve path's type, so a caller that chose no number
+        -- does not have to say which kind of number it did not choose.
+        p_item_number_type in varchar2 default 'ITEM'
     ) is
         l_cost_zone_group_id number :=
             to_number(config_pkg.get_config('MFCS_COST_ZONE_GROUP_ID', '2000'));
@@ -502,7 +590,7 @@ create or replace package body payload_pkg as
         -- Proven live, which is why it sits outside the create-only block.
         l_item.put('storeOrderMultiple', l_store_order_multiple);
         if not targets_existing_style(p_operation) then
-            l_item.put('itemNumberType', 'ITEM');
+            l_item.put('itemNumberType', p_item_number_type);
             l_item.put('itemLevel', 1);
             l_item.put('tranLevel', 2);
             l_item.put('dept', p_department);
@@ -543,19 +631,21 @@ create or replace package body payload_pkg as
             config_pkg.get_config('MFCS_STORE_ORDER_MULTIPLE', 'E');
         l_item json_object_t;
         l_sku varchar2(30);
+        l_item_number_type varchar2(10) := document_item_number_type(p_payload);
     begin
         for v in c_size_curve(p_payload) loop
             l_sku := resolve_sku(p_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
-            l_item.put('itemDescription', substr(p_source_ref || ' ' || v.sku_size, 1, 250));
+            l_item.put('itemDescription',
+                sku_description(p_payload, v.item_description, v.sku_size));
             l_item.put('shortDescription', substr(p_source_ref, 1, 120));
             l_item.put('dataLoadingDestination', 'RMS');
             -- Required on update as well as create; see append_parent_item.
             l_item.put('storeOrderMultiple', l_store_order_multiple);
             if not targets_existing_style(p_operation) then
                 l_item.put('itemParent', p_style);
-                l_item.put('itemNumberType', 'ITEM');
+                l_item.put('itemNumberType', l_item_number_type);
                 l_item.put('itemLevel', 2);
                 l_item.put('tranLevel', 2);
                 l_item.put('dept', p_department);
@@ -599,10 +689,15 @@ create or replace package body payload_pkg as
                json_value(o_payload, '$.CLASS' returning number),
                json_value(o_payload, '$.SUBCLASS' returning number),
                json_value(o_payload, '$.RETAIL_PRICE' returning number),
-               json_value(o_payload, '$.SOURCE_STYLE_REF' returning varchar2(120)),
                json_value(o_payload, '$.COLOUR' returning varchar2(10))
-          into o_operation, o_department, o_class, o_subclass, o_retail, o_source_ref, o_color
+          into o_operation, o_department, o_class, o_subclass, o_retail, o_color
           from dual;
+
+        -- The description the items are created with, which is the document's own
+        -- ITEM_DESCRIPTION when it sent one and SOURCE_STYLE_REF when it did not.
+        -- Resolved here so the parent create, the child create and the approve
+        -- step cannot disagree about what a style is called.
+        o_source_ref := style_description(o_payload);
     end;
 
     function parent_item_create_request(p_action_request_id in varchar2) return clob is
@@ -620,7 +715,8 @@ create or replace package body payload_pkg as
     begin
         item_create_context(p_action_request_id, l_payload, l_operation, l_style, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color);
         append_parent_item(l_items, l_operation, l_style, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color,
-            json_value(l_payload, '$.BRAND' returning varchar2(120) null on error));
+            json_value(l_payload, '$.BRAND' returning varchar2(120) null on error),
+            document_item_number_type(l_payload));
         l_root.put('collectionSize', l_items.get_size);
         l_root.put('items', l_items);
         return l_root.to_clob;
@@ -672,7 +768,8 @@ create or replace package body payload_pkg as
           from dual;
 
         append_parent_item(l_items, l_operation, l_style, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color,
-            json_value(l_payload, '$.BRAND' returning varchar2(120) null on error));
+            json_value(l_payload, '$.BRAND' returning varchar2(120) null on error),
+            document_item_number_type(l_payload));
         append_child_items(l_items, l_payload, l_operation, l_style, l_department, l_class, l_subclass, l_retail, l_source_ref, l_color);
 
         l_root.put('collectionSize', l_items.get_size);
@@ -1113,7 +1210,8 @@ create or replace package body payload_pkg as
             l_item.put('itemNumberType', nvl(u.upc_type, l_default_type));
             l_item.put('primaryReferenceItemInd', nvl(upper(u.primary_yn), 'N'));
             l_item.put('dataLoadingDestination', 'RMS');
-            l_item.put('itemDescription', substr(l_source_ref || ' ' || u.sku_size, 1, 250));
+            l_item.put('itemDescription',
+                sku_description(l_payload, u.item_description, u.sku_size));
             l_item.put('shortDescription', substr(l_source_ref, 1, 120));
             l_item.put('dept', l_department);
             l_item.put('class', l_class);
@@ -1203,18 +1301,23 @@ create or replace package body payload_pkg as
 
         l_item := json_object_t();
         l_item.put('item', request_style(p_action_request_id));
-        l_item.put('itemDescription', substr(l_source_ref, 1, 250));
+        l_item.put('itemDescription', style_description(l_payload));
         l_item.put('shortDescription', substr(l_source_ref, 1, 120));
         l_item.put('status', 'A');
         l_item.put('approveInd', 'Y');
         l_item.put('storeOrderMultiple', l_store_order_multiple);
         l_item.put('dataLoadingDestination', 'RMS');
         l_items.append(l_item);
+        -- Each child keeps the description it was created with. This step used to
+        -- send SOURCE_STYLE_REF for every item, which quietly overwrote every SKU
+        -- description with the style's - so a size that had been captured, sent
+        -- and stored was lost at the last step of the run.
         for v in c_size_curve(l_payload) loop
             l_sku := resolve_sku(l_payload, v.source_variant_ref, v.sku_id);
             l_item := json_object_t();
             l_item.put('item', l_sku);
-            l_item.put('itemDescription', substr(l_source_ref, 1, 250));
+            l_item.put('itemDescription',
+                sku_description(l_payload, v.item_description, v.sku_size));
             l_item.put('shortDescription', substr(l_source_ref, 1, 120));
             l_item.put('status', 'A');
             l_item.put('approveInd', 'Y');

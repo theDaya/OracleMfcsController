@@ -173,6 +173,28 @@ create or replace package body request_pkg as
             when others then
                 null;
         end;
+
+        -- ITEM_NUMBER_TYPE is an MFCS code and reaches MFCS as one, so it is
+        -- settled here for the same reason the numeric keys are: the stored
+        -- document is what resume replays and what validation reports against.
+        -- A caller sending "manl" should not be refused for a difference in case
+        -- that carries no meaning, and should not be refused in one operation and
+        -- accepted in another because two readers upper-cased differently.
+        procedure upper_key(p_key in varchar2) is
+            l_raw varchar2(120);
+        begin
+            if not l_doc.has(p_key) then
+                return;
+            end if;
+            l_raw := upper(trim(l_doc.get_string(p_key)));
+            if l_raw is null then
+                return;
+            end if;
+            l_doc.put(p_key, l_raw);
+        exception
+            when others then
+                null;
+        end;
     begin
         l_doc := json_object_t.parse(p_payload);
 
@@ -190,6 +212,7 @@ create or replace package body request_pkg as
         numeric_key('DEPARTMENT');
         numeric_key('CLASS');
         numeric_key('SUBCLASS');
+        upper_key('ITEM_NUMBER_TYPE');
 
         return l_doc.to_clob;
     exception

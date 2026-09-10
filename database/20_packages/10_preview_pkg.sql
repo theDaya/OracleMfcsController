@@ -138,6 +138,15 @@ create or replace package body preview_pkg as
             l_resolution := orchestrator_pkg.resolve_step(s.step_code, l_operation);
             l_endpoint_key := l_resolution.endpoint_key;
 
+            -- A document that brought its own item numbers reserves none, so the
+            -- plan must not show a reservation call. Preview exists to say what
+            -- execution would do; a call listed here that will never be made is
+            -- exactly the drift this package is meant not to have.
+            if s.step_code = 'RESERVE_ITEM_NUMBERS'
+               and payload_pkg.document_item_number(p_payload) is not null then
+                l_endpoint_key := null;
+            end if;
+
             l_call := json_object_t();
             l_call.put('sequence', s.step_sequence);
             l_call.put('stepCode', s.step_code);
@@ -162,6 +171,12 @@ create or replace package body preview_pkg as
                         || 'a number, create the child, add sourcing and country of manufacture, '
                         || 'approve - then the style is read again to confirm it took. The calls '
                         || 'depend on what the tenant already has, so they cannot be planned ahead.');
+                elsif s.step_code = 'RESERVE_ITEM_NUMBERS' then
+                    l_call.put('description',
+                        'Nothing is reserved: the document carries its own ITEM_NUMBER for the '
+                        || 'style and every SKU, so the numbers are simply recorded against the '
+                        || 'request and used as they stand. MFCS is told they are '
+                        || payload_pkg.document_item_number_type(p_payload) || ' numbers.');
                 else
                     l_call.put('description', 'Performed inside the integration layer; no MFCS call.');
                 end if;

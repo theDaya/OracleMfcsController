@@ -63,6 +63,142 @@ create or replace package body validation_pkg as
         return config_pkg.get_config(p_key) is not null;
     end;
 
+    -- ITEM_NUMBER / ITEM_NUMBER_TYPE: the caller choosing its own MFCS item
+    -- numbers instead of taking reserved ones.
+    --
+    -- The rules exist because every one of them is a caller mistake that MFCS
+    -- would either accept silently or refuse far downstream, after other records
+    -- had been made. A style whose number is 26 characters fails at items/create
+    -- with the style already half built; two SKUs sharing a number produce one
+    -- SKU and a confusing success.
+    --
+    -- MANL is the only type a caller can supply. ITEM demands exactly nine
+    -- characters with a valid Oracle check digit, so a chosen ITEM number is
+    -- refused as "Invalid Check Digit" - verified live on STG, 2026-09-10.
+    procedure validate_item_numbers(
+        p_payload   in clob,
+        p_operation in varchar2,
+        p_errors    in out nocopy json_array_t
+    ) is
+        c_max_length constant pls_integer := 25;
+        l_item_number varchar2(4000);
+        l_type varchar2(4000);
+        l_rows number;
+        l_numbered number;
+        l_distinct number;
+        l_too_long number;
+    begin
+        select trim(json_value(p_payload, '$.ITEM_NUMBER' returning varchar2(4000) null on error)),
+               upper(trim(json_value(p_payload, '$.ITEM_NUMBER_TYPE' returning varchar2(4000) null on error)))
+          into l_item_number, l_type
+          from dual;
+
+        -- The pair travels together or not at all. A type without a number is the
+        -- case worth naming: the caller believes it is choosing the number, and
+        -- something upstream dropped it. Accepting that would reserve a number
+        -- and create a style nobody asked for under a number nobody expects.
+        if l_type is not null and l_item_number is null then
+            add_error(p_errors, 'ITEM_NUMBER', 'REQUIRED_WITH_TYPE',
+                'ITEM_NUMBER is required when ITEM_NUMBER_TYPE is supplied.');
+        end if;
+
+        if l_item_number is not null and l_type is null then
+            add_error(p_errors, 'ITEM_NUMBER_TYPE', 'REQUIRED_WITH_ITEM_NUMBER',
+                'ITEM_NUMBER_TYPE is required when ITEM_NUMBER is supplied.');
+        end if;
+
+        if l_type is not null and l_type <> 'MANL' then
+            add_error(p_errors, 'ITEM_NUMBER_TYPE', 'UNSUPPORTED_ITEM_NUMBER_TYPE',
+                'ITEM_NUMBER_TYPE must be MANL. MFCS refuses a caller-chosen number of any other type.');
+        end if;
+
+        select count(*),
+               count(item_number),
+               count(distinct item_number),
+               count(case when lengthb(item_number) > c_max_length then 1 end)
+          into l_rows, l_numbered, l_distinct, l_too_long
+          from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
+              columns item_number varchar2(4000) path '$.ITEM_NUMBER' null on error
+          );
+
+        if l_item_number is not null and lengthb(l_item_number) > c_max_length then
+            add_error(p_errors, 'ITEM_NUMBER', 'ITEM_NUMBER_TOO_LONG',
+                'ITEM_NUMBER must be ' || c_max_length || ' characters or fewer.');
+        end if;
+
+        if l_too_long > 0 then
+            add_error(p_errors, 'SIZE_CURVE_DETAIL.ITEM_NUMBER', 'ITEM_NUMBER_TOO_LONG',
+                'Every SIZE_CURVE_DETAIL.ITEM_NUMBER must be ' || c_max_length || ' characters or fewer.');
+        end if;
+
+        -- All or nothing across the request. A style numbered by the caller whose
+        -- SKUs are numbered by MFCS is legal at the tenant and almost certainly
+        -- not what anyone meant, and it leaves a style nobody can reason about
+        -- later: half its identifiers mean something to the caller, half do not.
+        if l_item_number is not null and l_rows > 0 and l_numbered < l_rows then
+            add_error(p_errors, 'SIZE_CURVE_DETAIL.ITEM_NUMBER', 'ITEM_NUMBER_REQUIRED_FOR_ALL',
+                'When ITEM_NUMBER is supplied for the style, every SIZE_CURVE_DETAIL row must supply one too.');
+        end if;
+
+        if l_item_number is null and l_numbered > 0 then
+            add_error(p_errors, 'ITEM_NUMBER', 'REQUIRED_WITH_SKU_ITEM_NUMBERS',
+                'ITEM_NUMBER is required for the style when SIZE_CURVE_DETAIL rows supply one.');
+        end if;
+
+        -- Two SKUs sharing a number is one SKU, and MFCS would not say so.
+        if l_numbered > 0 and l_distinct < l_numbered then
+            add_error(p_errors, 'SIZE_CURVE_DETAIL.ITEM_NUMBER', 'DUPLICATE_ITEM_NUMBER',
+                'SIZE_CURVE_DETAIL.ITEM_NUMBER must be unique within the request.');
+        end if;
+
+        if l_item_number is not null and l_numbered > 0 then
+            select count(*)
+              into l_distinct
+              from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
+                  columns item_number varchar2(4000) path '$.ITEM_NUMBER' null on error
+              )
+             where item_number = l_item_number;
+
+            if l_distinct > 0 then
+                add_error(p_errors, 'SIZE_CURVE_DETAIL.ITEM_NUMBER', 'DUPLICATE_ITEM_NUMBER',
+                    'A SKU cannot carry the same ITEM_NUMBER as its style.');
+            end if;
+        end if;
+
+        -- Only the operations that create the items. On a modify the style and its
+        -- SKUs already exist and are addressed by STYLE and SKU_ID; a number
+        -- offered here would be an assignment MFCS has no service to honour.
+        if l_item_number is not null and p_operation not in ('CREATE_STYLE', 'CREATE_ALL') then
+            add_error(p_errors, 'ITEM_NUMBER', 'ITEM_NUMBER_NOT_ALLOWED',
+                'ITEM_NUMBER is only accepted for CREATE_STYLE and CREATE_ALL.');
+        end if;
+
+        -- ITEM_DESCRIPTION travels the same way as ITEM_NUMBER and is checked the
+        -- same way: optional, and refused when it is longer than the field it is
+        -- going into. MFCS truncates silently, which would leave two SKUs sharing
+        -- a description that differed only past the 250th character.
+        select trim(json_value(p_payload, '$.ITEM_DESCRIPTION' returning varchar2(4000) null on error))
+          into l_item_number
+          from dual;
+
+        if l_item_number is not null and lengthb(l_item_number) > 250 then
+            add_error(p_errors, 'ITEM_DESCRIPTION', 'ITEM_DESCRIPTION_TOO_LONG',
+                'ITEM_DESCRIPTION must be 250 characters or fewer.');
+        end if;
+
+        select count(*)
+          into l_too_long
+          from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
+              columns item_description varchar2(4000) path '$.ITEM_DESCRIPTION' null on error
+          )
+         where lengthb(item_description) > 250;
+
+        if l_too_long > 0 then
+            add_error(p_errors, 'SIZE_CURVE_DETAIL.ITEM_DESCRIPTION', 'ITEM_DESCRIPTION_TOO_LONG',
+                'Every SIZE_CURVE_DETAIL.ITEM_DESCRIPTION must be 250 characters or fewer.');
+        end if;
+    end;
+
     -- Whether the tenant holds this reference value.
     --
     -- These checks used to read MAP.* config, a list maintained alongside master
@@ -274,6 +410,8 @@ create or replace package body validation_pkg as
                 add_error(l_errors, 'STYLE', 'REQUIRED', 'STYLE is required for MODIFY_STYLE.');
             end if;
         end if;
+
+        validate_item_numbers(p_payload, l_operation, l_errors);
 
         select count(*), count(distinct sku_size || '|' || sku_width)
           into l_count, l_distinct_count

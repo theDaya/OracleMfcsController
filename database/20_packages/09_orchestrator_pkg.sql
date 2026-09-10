@@ -167,6 +167,63 @@ create or replace package body orchestrator_pkg as
         return l_item;
     end;
 
+    -- Records the item numbers the document brought with it, in place of asking
+    -- MFCS for numbers. Makes no outbound call: the numbers are already decided,
+    -- and itemNumbers/reserve would only issue different ones.
+    --
+    -- Nothing about the numbers is checked here. Validation has already run - it
+    -- is the step before this one - and it is the place that knows the rules and
+    -- can report a breach against the field that broke it. Re-checking here would
+    -- be a second opinion able to disagree with the first.
+    procedure assign_supplied_item_numbers(
+        p_action_request_id in varchar2,
+        p_payload           in clob,
+        p_style_no          in varchar2
+    ) is
+        l_source_system varchar2(60) := payload_pkg.source_system(p_payload);
+        l_source_style_ref varchar2(120) := payload_pkg.source_style_ref(p_payload);
+        l_type varchar2(10) := payload_pkg.document_item_number_type(p_payload);
+    begin
+        event_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'ASSIGN_SUPPLIED_START',
+            p_step_code => 'RESERVE_ITEM_NUMBERS',
+            p_message => 'Recording caller-supplied MFCS item numbers; no reservation needed.',
+            p_detail_payload => '{"sourceSystem":"' || event_pkg.escape_json(l_source_system)
+                || '","sourceStyleRef":"' || event_pkg.escape_json(l_source_style_ref)
+                || '","itemNumberType":"' || event_pkg.escape_json(l_type)
+                || '","mfcsStyleNo":"' || event_pkg.escape_json(p_style_no) || '"}'
+        );
+
+        request_pkg.save_generated_identifier(
+            p_action_request_id => p_action_request_id,
+            p_source_system => l_source_system,
+            p_source_style_ref => l_source_style_ref,
+            p_mfcs_style_no => p_style_no
+        );
+
+        for v in payload_pkg.c_size_curve(p_payload) loop
+            request_pkg.save_generated_identifier(
+                p_action_request_id => p_action_request_id,
+                p_source_system => l_source_system,
+                p_source_style_ref => l_source_style_ref,
+                p_mfcs_style_no => p_style_no,
+                p_source_variant_ref => v.source_variant_ref,
+                p_mfcs_sku_no => v.item_number,
+                p_sku_size => v.sku_size,
+                p_sku_width => v.sku_width
+            );
+        end loop;
+
+        event_pkg.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'ASSIGN_SUPPLIED_COMPLETE',
+            p_step_code => 'RESERVE_ITEM_NUMBERS',
+            p_message => 'Caller-supplied MFCS item numbers recorded.',
+            p_detail_payload => '{"mfcsStyleNo":"' || event_pkg.escape_json(p_style_no) || '"}'
+        );
+    end;
+
     procedure reserve_item_numbers_chunked(
         p_action_request_id in varchar2,
         p_user_id           in varchar2
@@ -276,6 +333,64 @@ create or replace package body orchestrator_pkg as
             p_message => 'Chunked item-number reservation completed.',
             p_detail_payload => '{"mfcsStyleNo":"' || event_pkg.escape_json(l_style_no) || '"}'
         );
+    end;
+
+    -- One reserve call for the whole style: the style's number plus one per
+    -- child, in a single request. Resolution goes through resolve_step and
+    -- payload_for_step rather than naming the endpoint here, so this path cannot
+    -- drift from what the step graph says the step is.
+    procedure reserve_item_numbers_bulk(
+        p_action_request_id in varchar2,
+        p_user_id           in varchar2
+    ) is
+        l_resolution t_step_resolution :=
+            resolve_step('RESERVE_ITEM_NUMBERS', operation_name(p_action_request_id));
+        l_response clob;
+    begin
+        l_response := client_pkg.call_service(
+            p_action_request_id => p_action_request_id,
+            p_step_code => 'RESERVE_ITEM_NUMBERS',
+            p_http_method => l_resolution.http_method,
+            p_endpoint_key => l_resolution.endpoint_key,
+            p_request_payload => payload_for_step(p_action_request_id, 'RESERVE_ITEM_NUMBERS'),
+            p_user_id => p_user_id
+        );
+        persist_item_numbers(p_action_request_id, l_response);
+    end;
+
+    -- Where this style's item numbers come from. One question, one place.
+    --
+    -- There are three answers and they used to be decided in three: the document
+    -- inside the chunked reserve, the chunk size in the step loop, and the bulk
+    -- reserve nowhere at all - it was whatever happened when neither of the other
+    -- two matched. That left a trap: because "the caller supplied them" was
+    -- reachable only through the chunk-size branch, changing
+    -- MFCS_ITEM_NUMBER_RESERVATION_CHUNK_SIZE away from 1 would have silently
+    -- reserved numbers for a document that had brought its own.
+    --
+    -- The payload is read once here and the branch is made on it. Whether the
+    -- caller chose the numbers is a property of the request; how many numbers a
+    -- reservation asks for at a time is a property of this deployment. Both are
+    -- answered before anything is sent.
+    procedure assign_item_numbers(
+        p_action_request_id in varchar2,
+        p_user_id           in varchar2
+    ) is
+        l_payload clob := request_payload(p_action_request_id);
+        l_supplied_style varchar2(30) := payload_pkg.document_item_number(l_payload);
+        l_chunk_size number :=
+            to_number(config_pkg.get_config('MFCS_ITEM_NUMBER_RESERVATION_CHUNK_SIZE', '1'));
+    begin
+        if l_supplied_style is not null then
+            -- Nothing to ask MFCS for. The numbers still land in ENTITY_MAP by the
+            -- same call the reserve paths use, so no mapper downstream knows or
+            -- cares which of these three branches ran.
+            assign_supplied_item_numbers(p_action_request_id, l_payload, l_supplied_style);
+        elsif l_chunk_size = 1 then
+            reserve_item_numbers_chunked(p_action_request_id, p_user_id);
+        else
+            reserve_item_numbers_bulk(p_action_request_id, p_user_id);
+        end if;
     end;
 
     procedure persist_po_number(
@@ -1115,6 +1230,7 @@ create or replace package body orchestrator_pkg as
         l_budget_seconds number := to_number(config_pkg.get_config('INTERNAL_TIME_BUDGET_SECONDS', '240'));
         l_verify_retry_count number := to_number(config_pkg.get_config('MFCS_ORDER_VERIFY_RETRY_COUNT', '12'));
         l_verify_retry_sleep number := to_number(config_pkg.get_config('MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS', '10'));
+        l_collection_size number;
     begin
         if l_operation = 'CREATE_ALL'
            and config_pkg.get_config('BATCH_WINDOW_ACTIVE_YN', 'N') = 'Y'
@@ -1189,6 +1305,25 @@ create or replace package body orchestrator_pkg as
             l_method := l_resolution.http_method;
             l_request_payload := payload_for_step(p_action_request_id, l_step);
 
+            -- Asked here, against the payload as just built, and not later.
+            --
+            -- The mappers return a temporary CLOB, and both calls below this one
+            -- commit. Reading that locator after a commit is the kind of thing
+            -- that works almost every time: an intermittent run of
+            -- CREATE_ITEM_SEASONS failures was traced to this guard answering
+            -- null for a payload whose bytes were provably intact - the
+            -- STEP_START journal recorded its 31 bytes moments earlier. Because
+            -- the guard says `null on error`, a null does not raise; it just
+            -- reads as "not empty", and the empty array goes to MFCS, which
+            -- rejects it and leaves the request PARTIALLY_COMPLETED for a
+            -- document that was never wrong.
+            --
+            -- One read, at the point the payload exists, removes the window.
+            -- Null still means "no collectionSize key", which is the honest
+            -- answer for the reserve payload and correctly does not skip.
+            l_collection_size :=
+                json_value(l_request_payload, '$.collectionSize' returning number null on error);
+
             step_pkg.set_step_status(p_action_request_id, l_step, 'IN_PROGRESS');
             event_pkg.log_event(
                 p_action_request_id => p_action_request_id,
@@ -1209,8 +1344,7 @@ create or replace package body orchestrator_pkg as
             -- document with no SKU_UPCS builds collectionSize 0, and the step
             -- succeeds without a call rather than being skipped from the graph -
             -- so the journal still shows it was considered.
-            if l_request_payload is not null
-               and json_value(l_request_payload, '$.collectionSize' returning number null on error) = 0 then
+            if l_collection_size = 0 then
                 step_pkg.set_step_status(p_action_request_id, l_step, 'SUCCEEDED');
                 event_pkg.log_event(
                     p_action_request_id => p_action_request_id,
@@ -1221,9 +1355,8 @@ create or replace package body orchestrator_pkg as
                 continue;
             end if;
 
-            if l_step = 'RESERVE_ITEM_NUMBERS'
-               and to_number(config_pkg.get_config('MFCS_ITEM_NUMBER_RESERVATION_CHUNK_SIZE', '1')) = 1 then
-                reserve_item_numbers_chunked(p_action_request_id, l_user_id);
+            if l_step = 'RESERVE_ITEM_NUMBERS' then
+                assign_item_numbers(p_action_request_id, l_user_id);
                 step_pkg.set_step_status(p_action_request_id, l_step, 'SUCCEEDED');
                 event_pkg.log_event(
                     p_action_request_id => p_action_request_id,
@@ -1275,9 +1408,9 @@ create or replace package body orchestrator_pkg as
                 );
             end if;
 
-            if l_step = 'RESERVE_ITEM_NUMBERS' then
-                persist_item_numbers(p_action_request_id, l_response);
-            elsif l_step = 'RESERVE_ORDER_NUMBER' then
+            -- RESERVE_ITEM_NUMBERS never reaches here: assign_item_numbers owns
+            -- that step in full, including its bulk branch's own persist.
+            if l_step = 'RESERVE_ORDER_NUMBER' then
                 persist_po_number(p_action_request_id, l_response);
             end if;
 
