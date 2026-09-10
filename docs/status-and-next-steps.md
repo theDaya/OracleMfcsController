@@ -1,6 +1,239 @@
 # Status and next steps
 
-Written so work can stop and resume without losing the thread. Current as of **2026-09-01**.
+Written so work can stop and resume without losing the thread. Current as of **2026-09-10**.
+
+## Session of 2026-09-10 — caller-supplied item numbers
+
+Driven by an Office POC that wants MFCS style numbers composed from a Style/Model number and a
+Supplier Colour number, rather than taken from `itemNumbers/reserve`.
+
+**`itemNumberType: MANL` lets a caller choose the item number, and nothing needs reserving.** Proven
+live on STG: an arbitrary alphanumeric style created and read back, a SKU created under it, 25-character
+and punctuated numbers accepted. `ITEM` is unusable for a chosen number - it wants nine characters and a
+valid Oracle check digit. Reserving a chosen number through `itemNumbers/manage` changes nothing either
+way. The full detail is in `CLAUDE.md`'s tenant-behaviour list.
+
+**And a `MANL` item behaves like any other.** Also live on STG, against style `TWA10134116` and SKU
+`TWL10134402`: both approve, the SKU ranges, it takes a level-3 EAN13 barcode, and purchase order
+`40003` was created against it with the line carrying the alphanumeric item. A duplicate number is
+refused loudly - `Item already exists`, HTTP 400 - which is what makes a derived scheme safe to
+collide on. That was the open risk under the POC and it is now closed.
+
+**The document now accepts `ITEM_NUMBER` and `ITEM_NUMBER_TYPE`** - contract and rules in `CLAUDE.md`'s
+inbound-document section. The deliberate decision, after some argument, is that **this layer does not
+compose item numbers**: it accepts them. A composition rule here would have to know every caller's
+numbering scheme, which is what `MAP.*` was and why it was retired.
+
+Implemented and verified, 22 of 22 contract assertions passing, both numbering paths previewed:
+
+| Change | Where |
+| --- | --- |
+| `ITEM_NUMBER` per size-curve row | `payload_pkg.c_size_curve`, the one projection |
+| `ITEM_NUMBER` / `ITEM_NUMBER_TYPE` readers | `payload_pkg.document_item_number*` |
+| Type sent to MFCS on parent and child create | `payload_pkg.append_parent_item`, `append_child_items` |
+| Record rather than reserve | `orchestrator_pkg.assign_supplied_item_numbers` |
+| Where numbers come from, decided in one place | `orchestrator_pkg.assign_item_numbers` |
+| The whole rule set | `validation_pkg.validate_item_numbers` |
+| `ITEM_NUMBER_TYPE` upper-cased at intake | `request_pkg.normalise_payload` |
+| Preview stops advertising a reserve call that will not be made | `preview_pkg` |
+
+**The empty-write-set guard could fail intermittently, and it is not this work's bug.** Worth reading
+before trusting any single coverage run.
+
+`CREATE_ITEM_SEASONS` built its usual 31-byte `{"collectionSize":0,"items":[]}` and the guard
+`json_value(l_request_payload, '$.collectionSize' returning number null on error) = 0` stopped being
+true, so the empty array went to MFCS, which answered `collection must have atleast one element`. The
+request ended `PARTIALLY_COMPLETED` for a document that was never wrong. The same payload skipped
+correctly on the next execution. It applies to every optional step - seasons, images, HTS and
+reference items - on any request, and predates the item-number work.
+
+**An earlier version of this section blamed a helper called `handles_own_item_numbers` and was wrong.**
+It failed four runs in a row with that helper and passed two without, which looked conclusive and was
+not: the same code shape later passed four runs in a row. The failure is intermittent, and four
+consecutive occurrences were mistaken for determinism. Do not trust a single run of this suite to
+attribute a cause.
+
+The mechanism was then instrumented rather than guessed at. The guard was reading a **temporary** CLOB
+(`dbms_lob.istemporary` confirms it) **two commits after it was built** - `set_step_status` and
+`log_event` both commit between the mapper returning and the guard asking. `null on error` means a
+failed read does not raise; it reads as "not empty" and the call goes out.
+
+The fix is to ask once, against the payload as just built, before anything commits, and use the
+answer:
+
+```plsql
+l_request_payload := payload_for_step(p_action_request_id, l_step);
+l_collection_size := json_value(l_request_payload, '$.collectionSize' returning number null on error);
+```
+
+That is simpler than what it replaced and removes the window regardless of whether the temp-LOB
+reading is the whole story. Null still means "no `collectionSize` key", which is the honest answer for
+the reserve payload and correctly does not skip.
+
+### Phase two - the review and approval gate, 2026-09-10
+
+**App 103 is now the intended pipeline.** App 102 stays installed and checked in as reference and
+fallback; nothing has been retired.
+
+**Nothing reaches MFCS without two people.** A draft is worked on, submitted for review, then
+approved, and only approval sends:
+
+```
+DRAFT --submit--> SUBMITTED --approve--> APPROVED --> MFCS --> COMPLETED / FAILED
+```
+
+Submitting validates, builds the document and **freezes it** on the draft. Approving replays that
+frozen document rather than rebuilding it, so what the approver saw is what the tenant receives -
+rebuilding at approval would make the approval decorative, and it is the same reasoning that makes
+resume replay a stored payload. A submitted draft cannot be edited; `reopen_draft` takes it back to
+DRAFT and discards the review, which is deliberately explicit because a change made behind an
+approval is a change nobody approved.
+
+**The review stage is semi-frozen.** Order quantities stay editable on the submit modal - they are
+what a review is usually about - and everything else is fixed. The modal's grid saves the quantities
+*before* `submit_for_review` builds, so the frozen document carries the reviewed numbers. Proven:
+a draft submitted after changing 6 to 12 froze `SKU_QTY 12`.
+
+Nine pages. **Capture** (page 2) replaced Create Style: a mode at the top chooses *Style only* or
+*Order and Style*, the order section appears only for the latter, and five grids beneath capture
+UDAs, barcodes, seasons, images and tariff codes. **Drafts and Approvals** (5) lists every draft with
+its status. **Submit for Review** (6) and **Approve** (7) are modal dialogs showing the same tabs -
+style, order, SKUs and quantities, UDAs, barcodes, seasons and tariffs - with a frozen-document tab
+on the approve side. **Execution** (8) is app 102's page 4 ported: every step, its status, the
+endpoint, the HTTP status and both payloads, read from `STEP`, `ATTEMPT` and `EVENT_LOG`. **Amend
+Order** (9) reads an order from MFCS and seeds an editable draft from it.
+
+New tables: `POC_DRAFT_UDA`, `POC_DRAFT_SKU_UPC`, `POC_DRAFT_SEASON`, `POC_DRAFT_IMAGE`,
+`POC_DRAFT_HTS`, and `POC_APPROVER` for the submitter and approver lists (invented data). Drafts
+gained an `OPERATION_NAME`, an `ORIGIN` and the order fields.
+
+**`ORIGIN` is why an amended draft does not get recomposed.** A draft seeded from MFCS carries
+numbers the tenant assigned; `refresh_composition` returns immediately for `AMENDED`, because
+recomposing them would invent a different style than the one being amended.
+
+**Proven live on STG, all through the gate:**
+
+| Flow | Result |
+| --- | --- |
+| Style only | `31551120` from CLARKS DESERT CROSBY + Burgundy 120, submitted by Priya Naidoo, approved by Tom Fletcher, COMPLETED |
+| Order and Style | `31566090` + **order 40004**, quantities adjusted at review, COMPLETED |
+| Amend Order | order 40004 read back and seeded as draft 83 with its two lines, real size diffs and descriptions |
+| Gate | approving a DRAFT is refused: `ORA-20960: Draft 61 is DRAFT, and this action needs it to be SUBMITTED` |
+
+**The SKU description gap is closed.** The contract gained `ITEM_DESCRIPTION` at the root and per
+size-curve row, `payload_pkg` resolves it in one place, and `APPROVE_ITEMS` no longer overwrites
+every child description with the style's. `31551120`'s SKUs read back from MFCS as
+*CLARKS DESERT CROSBY Burgundy **S*** and ***M*** - the size description the specification asks for,
+where before the size was lost entirely.
+
+Coverage 20 of 20, contract 22 of 22, zero invalid objects.
+
+### The Office POC console - app 103, `Office Style Composer`
+
+Four pages: **Home** (reference counts as cards, a worked example of the composition, recent drafts
+with the item number linking through to the viewer), **Create Style** (the capture), **Style Viewer**
+and **Reference Data** (colours and codes editable, styles read-only with a search).
+
+**Style Viewer** reads a style live from MFCS through `browse_pkg.get_style(item, 'Y')` - once, in a
+before-header process, into the `MFCS_STYLE` APEX collection - and every region then queries that
+collection rather than calling the tenant again. Style attributes sit in display-only page items;
+SKUs, sourcing, barcodes, seasons/images/tariffs and the raw document are tabs beneath. The header
+shows `resolved.source`, which distinguishes "this style has no SKUs" from "the feed had not
+published them yet". Verified live against `31550080`: 3 SKUs, sourcing, and the header fields all
+render, with the style read back as `MANL`.
+
+Its tables and its composition package are the **calling system**, not the integration layer:
+
+| Object | Holds |
+| --- | --- |
+| `POC_STYLE_MODEL` | 13,693 styles, generated from `docs/dataSamples/uat_uda.json` (UAT UDA 66040) |
+| `POC_SUPPLIER_COLOUR` | 29 invented colours - UDA 56038 is free-form, so the list is ours |
+| `POC_SUPPLIER_COLOUR_CODE` | 38 codes, each belonging to a colour, so the screen cascades |
+| `POC_STYLE_DRAFT` / `_SKU` | one capture and its size curve, with the composed values stored |
+| `poc_style_pkg` | the composition rule, and the call to `api_pkg` |
+
+`poc_style_pkg` composes and `api_pkg` accepts. The document carries `ITEM_NUMBER` and
+`ITEM_NUMBER_TYPE: MANL`, which is the whole point of the split.
+
+**Proven live on STG.** Draft 1 composed `31550080` from style `31550` *CLARKS DESERT BOOT* and
+colour code `080` *Sky Blue*, submitted through the same package path the page's button uses, and
+completed all 14 steps. `itemDetail` reads the style back approved at level 1 with three approved
+level-2 SKUs `31550080992/993/994`, diff1 `08610`, diff2 the size differentiator.
+
+**A gap between the specification and what actually reaches MFCS, found by reading the payloads
+back.** The SKU *number* is caller-composed and arrives intact. The SKU *description* is not:
+
+- The document has no per-SKU description field, so `payload_pkg.append_child_items` builds one as
+  `SOURCE_STYLE_REF || ' ' || SKU_SIZE`. That sends `CLARKS DESERT BOOT Sky Blue 992` - the size
+  *differentiator id*, where the specification asks for the size *description*, `S`.
+- `APPROVE_ITEMS` then sends the style's description for every item, so the child description is
+  overwritten with `CLARKS DESERT BOOT Sky Blue` and the size is lost entirely.
+
+`poc_style_pkg.compose_sku_desc` already builds the right string and stores it on the draft, where
+the console displays it. Nothing carries it to MFCS. Closing this is the same architectural move as
+`ITEM_NUMBER`: give the contract an `ITEM_DESCRIPTION` at the root and one per `SIZE_CURVE_DETAIL`
+row, have the mappers prefer them when present, and stop `APPROVE_ITEMS` overwriting a description it
+was not asked to change. Until then, do not report the SKU description rule as working.
+
+### Still to do before the POC rests on this
+
+**The SKU description rule is now honoured end to end** and no longer belongs on this list.
+
+**Preview shows `"item": null` for a caller-numbered request.** The numbers are in the document and
+could be shown. Making `payload_pkg.resolve_sku` and `request_style` fall back to the document does
+it, and was written and working - but it puts a `json_table` query per SKU per mapper into the shared
+execution path, which wants its own coverage runs rather than one. Preview-local substitution avoids
+the execution path entirely and is the safer shape. Not a regression: the reserve path has always
+previewed as `null`.
+
+
+**The UDAs the Office rules assume exist on UAT, and STG is missing exactly four.** Both tenants read
+live on 2026-09-10. STG publishes **23** UDAs; UAT publishes **27** and is a strict superset - nothing
+on STG is absent from UAT. The four to have loaded onto STG:
+
+| UDA | Display | Data type | Description | Values |
+| --- | --- | --- | --- | --- |
+| **66040** | `LV` | ALPHA | **Style** | **13,693** |
+| **56038** | `FF` | ALPHA | **Supplier Colour** | 0, free-form |
+| **61038** | `FF` | ALPHA | **Supplier Colour Code** | 0, free-form |
+| 56039 | `DT` | DATE | Launch Date | 0, date |
+
+`Launch Date` is not in the Office rules but belongs to the same set and is free to carry along.
+
+**Style is exactly the LV UDA the rules described**, and its values settle the numbering question: all
+13,693 are numeric, all **exactly five digits** (`10000`-`99999`), all distinct, each with a description
+that reads like a model name (`CLARKS DESERT BOOT`, `ENDEAVOUR CHELSEA BOOT`). A fixed-width model
+component therefore needs no padding - it already is one.
+
+**Supplier Colour is `FF`, not `LV`, and that is why the rules put it in RDS.** A free-form UDA has no
+value list in MFCS, so there is nothing there to maintain and nothing to validate against - which is
+exactly what makes "let the planner create one on the fly" workable. It also comes as a **pair**:
+`Supplier Colour` for the name and `Supplier Colour Code` for the number, matching the rules' split
+between what composes the item *number* and what composes the *description*. Both are written to the
+item as text: per the UDA-write note in `CLAUDE.md`, `FF` carries `udaText`, `LV` carries `udaValue`
+and `DT` carries `udaDate`, all of which the existing mapper already sends.
+
+**Nothing here can create a UDA.** The 323-path spec has `foundation/uda` as **GET only**; `item/uda/*`
+associates an existing UDA with an item and cannot define one or add a value. So these four have to be
+loaded inside MFCS - spreadsheet upload or the UI - by whoever owns the tenant. That is the ask.
+
+**Loading Style onto STG has a size consequence worth knowing about.** UAT's UDA feed is **2.2MB**
+against STG's 112KB, almost all of it UDA 66040's values. `master_pkg.load_udas` parses the whole
+document in memory and stores each UDA's raw JSON in `MASTER_DATA.ATTRIBUTES`, so the Style row alone
+will hold roughly 2MB. `ATTRIBUTES` is a `CLOB`, so this stores rather than fails, and the default
+`p_limit` of 500 covers 27 UDAs - but the refresh will gain about 14,000 `UDA_VALUE` rows and should be
+watched the first time it runs.
+
+**What is left of the ambiguity problem is the colour half.** The model component is a fixed five
+digits, but `Supplier Colour Code` is free-form, so its width is whatever RDS decides. Fix it there, and
+keep a non-numeric character in the composed number so a derived style number can never collide with
+one of the tenant's own 9-digit auto-generated ones.
+
+**Supplier Colour is not the MFCS colour diff.** A style would carry both: the diff that *defines* its
+SKUs, which must be a real diff in the parent's `RMS_ALL_C` group, and the supplier colour that
+composes the number and description. Conflating them would be easy and expensive.
+
+
 
 ## Where things stand
 

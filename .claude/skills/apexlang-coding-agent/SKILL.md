@@ -12,9 +12,27 @@ editing an `.apx` file; most of it is not discoverable from the files themselves
 
 ## The loop
 
-Edit the checked-in export, validate, import, then **check the dictionary**. Never skip
-the last step: validation and import both pass on several mistakes that break the page
-at render.
+Edit the checked-in export, validate, import, **check the dictionary**, then **run every region's
+SQL**. Never skip the last two: validation and import both pass on several mistakes that break the
+page at render.
+
+Running the SQL is the step most easily talked out of, and it is the one that catches a whole class
+of error the other three cannot see. On 2026-09-10 a card report's outer select named four columns
+its own inner subquery did not provide. APEXlang validated it, APEX imported it, the dictionary
+showed the region and all nine of its columns, and the page would have failed with `ORA-00904` on
+open. Pull the query out of the `.apx` and run it:
+
+```bash
+sed -n '/^                select card_title/,/^                 order by seq$/p' pages/p00001-home.apx > /tmp/q.sql
+```
+
+Bind variables are the catch. `execute immediate` does **not** bind APEX page items, so a harness
+that wraps the query reports `ORA-01008` for every region and tells you nothing. Either substitute
+real values into the text before running it, or create a session first and let APEX bind:
+
+```sql
+apex_session.create_session(p_app_id => <APP ID>, p_page_id => <PAGE>, p_username => '<PARSING SCHEMA>');
+```
 
 ```powershell
 # SQLcl on this Windows host. -thin avoids needing an Oracle client.
@@ -22,16 +40,40 @@ at render.
 ```
 
 ```sql
-apex validate -input "<abs path>\apexlang\<app-folder>" -workspace TW_TEST
-apex import   -input "<abs path>\apexlang\<app-folder>" -workspace TW_TEST -id 102 \
-              -schema MFCS_INTEGRATION -name "MFCS Controller"
+apex validate -input "<abs path>\apexlang\<app-folder>" -workspace <WORKSPACE>
+apex import   -input "<abs path>\apexlang\<app-folder>" -workspace <WORKSPACE> -id <APP ID> \
+              -schema <PARSING SCHEMA> -name "<App Name>"
 ```
 
-For this repo the connection is `deploy/mdutils/sql.sh` and the app is 102 `MFCS Controller`
-in workspace `TW_TEST`, parsing schema `MFCS_INTEGRATION`.
+The app ids, workspace, schema and connection wrapper for a given repository belong in that
+repository's own documentation, not here.
 
-`apex export` and `apex generate` throw a Java `Path.of(null)` in this shell. Do not rely
-on them; treat the checked-in files as the source of truth and edit them directly.
+**`apex export` works. This file said it did not, and that was wrong.** It is the fastest way to
+settle any question about a block's shape, and it is how the tabs entry below finally got its right
+answer. The flag is `-exptype APEXLANG`:
+
+```sql
+apex export -applicationid <APP ID> -exptype APEXLANG -dir "<abs path>\_export_<APP ID>"
+```
+
+The `Path.of(null)` this file used to warn about comes from a **mangled path argument**, not from the
+command. `printf` in Git Bash eats backslashes - `\U` and `\a` become escapes - and hands SQLcl a path
+with characters missing, which it reports as `InvalidPathException: Illegal char`. Write the script
+with a quoted heredoc so backslashes survive:
+
+```bash
+cat > /tmp/exp.sql <<'EOF'
+apex export -applicationid 1234 -exptype APEXLANG -dir "C:\full\path\_export_1234"
+exit
+EOF
+```
+
+Export lands under `<dir>/<app alias><id>/`. Diffing a fresh export against the checked-in copy is
+also how you pick up changes someone made in Builder:
+
+```bash
+diff -rq apexlang/<checked-in-app> <export dir>/<app alias><id>
+```
 
 **Validation is a good oracle for syntax and a poor one for behaviour.** It caught every
 invalid property listed below on the first try. It caught none of the four render-time
@@ -69,7 +111,7 @@ the lever you have.
 With `target_type: REGION_SOURCE` (the default), the generated update is:
 
 ```sql
-update (select … from t where draft_id = :P3_DRAFT_ID) set … where "PK" = :APEX$PK2
+update (select … from t where parent_id = :P3_PARENT_ID) set … where "PK" = :APEX$PK2
 ```
 
 If that bind is undefined the inline view filters to nothing and **the update silently
@@ -127,7 +169,7 @@ column MGR (
 ### Popup LOV, for a list too long to be a select list
 
 Same shape as above minus the cascade, plus `columnFilter { lovType: useLov }`. Use it for
-anything in the thousands — a colour picker over 48,000 differentiators is not a select
+anything in the thousands — a picker over 48,000 rows is not a select
 list.
 
 ### Template references differ between exports
@@ -152,8 +194,33 @@ region details (
 )
 ```
 
-Sub-regions join it with `layout { parentRegion: @details, slot: subRegions }`. Note
-`templateOptions` is rejected on this region.
+**`slot: tabs` is the whole fix.** Sub-regions join the container with
+`layout { parentRegion: @details, slot: tabs }` and that is what turns them into tabs. The container
+also takes template options, `t-TabsRegion-mod--pill` being the look worth having. Confirmed by
+exporting an app whose tabs had been fixed by hand in Builder and reading what APEX wrote:
+
+```apex
+region detail-tabs (
+    name: Detail
+    type: staticContent
+    appearance {
+        template: @tabs-container
+        templateOptions: [
+            #DEFAULT#
+            t-TabsRegion-mod--pill
+        ]
+    }
+)
+```
+
+**This entry was wrong twice.** It said `slot: subRegions`, which the validator rejects; corrected to
+`regionBody`, which validates and imports and then stacks the regions down the page instead of
+making them tabs. The right answer is `tabs`. Note the failure mode: `regionBody` produced **no
+error at all**, so nothing told you it was wrong except looking at the page.
+
+The general lesson is worth more than the specific one. **When you are unsure of a block's shape,
+stop guessing and ask APEX.** Make the change in Builder, export, and read what it wrote - that is
+the canonical form by definition, and it costs one round trip instead of five.
 
 ### Blocks must be multi-line
 
@@ -178,7 +245,7 @@ then the collection and any `json_table` over `apex_collections` behave exactly 
 the page:
 
 ```sql
-apex_session.create_session(p_app_id => 102, p_page_id => 20, p_username => 'MFCS_INTEGRATION');
+apex_session.create_session(p_app_id => <APP ID>, p_page_id => <PAGE>, p_username => '<PARSING SCHEMA>');
 ```
 
 That is the fastest way to prove a region's query before importing it.
@@ -203,6 +270,321 @@ simplest way to get a submit button.
 There is no donor for an item-change dynamic action; a submit button is usually simpler
 and has one.
 
+## Block shapes that validate
+
+Building three pages from scratch on 2026-09-10 took roughly a dozen validate rounds, almost all of
+them rediscovering the exact shape of a block. Copy these instead. Every one is from a build that
+validated, imported and rendered.
+
+**There are no comments in `.apx`.** A `--` line outside a fenced code block is a syntax error, and
+the parser reports it as a cascade of "token recognition error" on each fragment of the sentence,
+which reads like a corrupt file. Inside ` ```sql ` and ` ```plsql ` fences they are ordinary
+comments. Put the reasoning in the PL/SQL package or the docs.
+
+**The app identifier must be upper case**: `app MY_APP_NAME (`, not `app myAppName (`
+(`INVALID_EXTERNAL_IDENTIFIER`).
+
+**Numbers are `numberField`**, never `number` - as a page item type and as a grid column type.
+
+```apex
+    pageItem P2_CHILD_ID (
+        type: selectList
+        label {
+            label: Child
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select child_code as d, child_id as r
+                  from child_lookup
+                 where parent_id = :P2_PARENT_ID
+                 order by child_code
+                ```
+        }
+        cascadingLov {
+            parentItems: [
+                P2_PARENT_ID
+            ]
+        }
+        layout {
+            sequence: 40
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @form
+            column: CHILD_ID
+            dataType: number
+        }
+    )
+```
+
+`parentItems` is a list, and more than one is fine - a subclass cascading on department *and* class
+takes both. Use `@required` / `@optional`, not the `-above` variants: floating labels read better on
+recent APEX. `default { }` is the block name, not `defaultValue { }`. A page item slot is
+`regionBody`; `aboveRegionContent` is rejected.
+
+**A `staticContent` region with HTML takes no `location`:**
+
+```apex
+        source {
+            htmlCode:
+                ```html
+                <p>Anything.</p>
+                ```
+        }
+```
+
+**Interactive grid columns** carry their database binding in `source`, not as bare properties, and
+every grid needs a `savedReport` child or the import fails with `MINIMUM_COMPONENTS_ERROR`:
+
+```apex
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @LINE_SIZE
+                layout {
+                    sequence: 1
+                }
+            )
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 5
+            }
+        )
+
+        column LINE_ID (
+            type: hidden
+            layout {
+                sequence: 10
+            }
+            source {
+                databaseColumn: LINE_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+        )
+```
+
+Grid columns reject `settings { displayNullValue }` and `settings { displayExtraValues }`.
+
+**Classic report columns** need a type and a sequence, and there is no way to hide one:
+
+```apex
+        column CARD_TITLE (
+            type: plainText
+            heading {
+                heading: Title
+            }
+            layout {
+                sequence: 10
+            }
+        )
+```
+
+`appearance { displayAs: hidden }` is rejected. To order by a column you do not want to show, wrap
+the query and order the outer select - `select a, b from ( select a, b, seq from … ) order by seq`.
+
+**A classic report column can be a drill-in link.** Neither donor app has one, so this was written by
+hand and validated on 2026-09-10 - `type: link`, with `linkText` deciding what the cell shows:
+
+```apex
+        column COMPOSED_ITEM_NO (
+            type: link
+            heading {
+                heading: Item number
+            }
+            layout {
+                sequence: 20
+            }
+            link {
+                target: {
+                    page: 4
+                    itemNames: [
+                        P4_ITEM
+                    ]
+                    itemValues: [
+                        &COMPOSED_ITEM_NO.
+                    ]
+                }
+                linkText: &COMPOSED_ITEM_NO.
+            }
+        )
+```
+
+**A report template's substitutions must all be columns.** The Cards template names `#CARD_TITLE#`,
+`#CARD_SUBTITLE#`, `#CARD_TEXT#`, `#CARD_ICON#`, `#CARD_COLOR#`, `#CARD_SUBTEXT#`,
+`#CARD_INITIALS#`, `#CARD_LINK#` and `#CARD_MODIFIERS#`. Any one you do not select is printed on the
+page **literally**, as the string `#CARD_SUBTEXT#`. Select them all, `null as card_initials` where
+you have nothing to say. Check the template file for the list:
+
+```bash
+grep -oE "#[A-Z_]+#" shared-components/themes/universal-theme/classic-report-templates/cards.apx | sort -u
+```
+
+**Auto row processing takes no table.** `target { }` accepts `returnPksAfterInsert` and nothing
+else - no `type: table`, no `tableName` - so grid DML is always `REGION_SOURCE` and always runs
+through the region query as an inline view. Keep those queries plain projections. A scalar subquery
+in the select list (`(select count(*) …) as code_count`) makes the view unreliable to update
+through; move the count somewhere else.
+
+## Showing live data from an API on a page
+
+Read once into an APEX collection in a **before header** process, then let every region query the
+collection. The alternative - each region calling the API in its own query - makes one HTTP round
+trip per region on every page view, and the regions can disagree with each other because each one
+read the remote system at a different moment.
+
+```plsql
+l_json := my_api_pkg.get_thing(:P4_ID);
+apex_collection.create_or_truncate_collection('THING');
+apex_collection.add_member(p_collection_name => 'THING', p_clob001 => l_json);
+```
+
+```sql
+select t.child_id, t.child_desc
+  from apex_collections c,
+       json_table(c.clob001, '$.items[0].children[*]'
+           columns child_id   varchar2(30)  path '$.id',
+                   child_desc varchar2(250) path '$.description') t
+ where c.collection_name = 'THING'
+```
+
+**Guard every `json_table` branch with `is not null`.** A path that matches nothing still yields one
+all-null row, so a document with no seasons renders a blank season row. This bites on top-level paths
+over a collection as readily as on nested ones.
+
+Header fields read better as `displayOnly` page items than as another report - a viewer never posts,
+so the fact that display-only items are not submitted costs nothing there. Set them with a single
+`select … into :P4_A, :P4_B …  from dual` of `json_value` calls in the same process that fetches.
+
+If the API reports *how* it resolved something - which of two endpoints answered, whether a list came
+from a live read or a cached feed - put that on the page. It is usually the difference between "there
+is no data" and "the data has not published yet".
+
+## Layout that looks right
+
+Two settings, applied consistently, do most of the work:
+
+- **`columnSpan: 3` on every item of a capture screen.** The grid is twelve columns, so threes
+  divide evenly into four per row and nothing is stranded. Mixing 2, 3 and 6 - which is what
+  "whatever suits each field" produces - leaves ragged rows and items that collide.
+- **`@required-floating` / `@optional-floating`.** Floating labels are the current Universal Theme
+  look and read better than `@required-above`, which stacks a label over every field and doubles the
+  vertical space a form takes.
+
+## Modal dialog pages
+
+A modal page is not `pageTemplate: @modal-dialog` - that fails with
+`Conditions not met for reference: @modal-dialog`, because the template requires the page itself to
+be a dialog. Declare the mode, and then the template property changes name:
+
+```apex
+    appearance {
+        pageMode: modalDialog
+        dialogTemplate: @modal-dialog
+    }
+```
+
+`pageMode` lives inside `appearance`, not at page level, and with it set `pageTemplate` becomes
+invalid while `dialogTemplate` becomes required. The validator says so in as many words - it named
+`dialogTemplate` as the missing required parameter - which is the fastest route through this kind of
+question: make the change it complains about and read the next complaint.
+
+**A modal's buttons cannot sit in `slot: edit` or `slot: close` of an `@alert` region.** Alert regions
+have neither. Put them in `regionBody`.
+
+## Conditional regions on an item's value
+
+The condition type is `itemIsInColonDelimitedList`, and its property is `list`, not `value`:
+
+```apex
+        serverSideCondition {
+            type: itemIsInColonDelimitedList
+            item: P2_OPERATION_NAME
+            list: CREATE_ALL:MODIFY_ORDER
+        }
+```
+
+`itemInList` is not a type. When a `type:` is rejected the validator prints every valid one, which is
+worth reading in full - the list includes `item=value`, `item!=value`, `currentPageInList` and a dozen
+others that are hard to guess.
+
+## Navigation that carries context
+
+A **button** passes items as a map:
+
+```apex
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 6
+                items: {
+                    P6_PARENT_ID: &P2_PARENT_ID.
+                }
+            }
+        }
+```
+
+A **classic report column link** uses parallel arrays instead, `itemNames` and `itemValues`. Both
+validate; they are not interchangeable, and the button form is the one APEX's own export writes.
+
+
+## Identity primary keys need `on null`
+
+`generated by default as identity` is not enough. Form and grid automatic row processing sends the
+primary key **explicitly as NULL** on insert, and Oracle rejects that rather than generating a
+value:
+
+```
+ORA-01400: cannot insert NULL into ("SCHEMA"."TABLE"."ID")
+```
+
+The page looks completely correct and fails the moment you press Create. Declare every identity
+column the console inserts into as:
+
+```sql
+parent_id number generated by default on null as identity
+```
+
+## Creating a new app
+
+Derive it, the same way you derive a page. Copy the whole export folder, then change exactly four
+things: the `app` identifier in `application.apx` (upper case), its `name` / logo `text` /
+`APP_NAME` substitution, the `id` in `deployments/default.json`, and the navigation list in
+`shared-components/lists.apx`. Delete the pages you do not want and add your own. Everything else -
+theme, templates, authentication, plugins - comes across working, which is most of the app.
+
 ## Checking your work after an import
 
 The dictionary view column names are not what you would guess, and guessing them costs
@@ -210,25 +592,28 @@ round trips. These are correct:
 
 ```sql
 -- pages and regions
-select page_id, page_name from apex_application_pages where application_id = 102;
+select page_id, page_name from apex_application_pages where application_id = :app;
 select region_name, source_type, template, region_source, parent_region_id
-  from apex_application_page_regions where application_id = 102 and page_id = :p;
+  from apex_application_page_regions where application_id = :app and page_id = :p;
 
 -- grid columns: the column is NAME, not COLUMN_NAME
 select region_name, name, item_type, lov_type, lov_source, lov_cascade_parent_items,
        is_primary_key, is_query_only, default_type, default_expression, source_type
-  from apex_appl_page_ig_columns where application_id = 102 and page_id = :p;
+  from apex_appl_page_ig_columns where application_id = :app and page_id = :p;
 
 -- processes: settings are JSON in ATTRIBUTES, not the ATTRIBUTE_nn columns
 select process_name, process_type, attributes
-  from apex_application_page_proc where application_id = 102 and page_id = :p;
+  from apex_application_page_proc where application_id = :app and page_id = :p;
 
--- items: MAINTAIN_SESSION_STATE shows the storage trap
-select item_name, display_as, maintain_session_state
-  from apex_application_page_items where application_id = 102 and page_id = :p;
+-- items: MAINTAIN_SESSION_STATE shows the storage trap, and the layout columns
+-- are ITEM_LABEL_TEMPLATE and GRID_COLUMN_SPAN - not FIELD_TEMPLATE or COLUMN_SPAN,
+-- both of which exist on other views and cost a round trip each to guess
+select item_name, display_as, maintain_session_state,
+       grid_column_span, item_label_template, lov_cascade_parent_items
+  from apex_application_page_items where application_id = :app and page_id = :p;
 
 -- available region templates
-select template_name from apex_application_temp_region where application_id = 102;
+select template_name from apex_application_temp_region where application_id = :app;
 ```
 
 Also worth running: `select object_name, object_type from user_objects where status <> 'VALID'`.
@@ -256,9 +641,9 @@ built by hand.
 
 ## Deriving a page from an existing one
 
-Copying a proven page and reworking it beats writing a second one from scratch. Page 3
-here is 2,754 lines whose form region, tabs, six grids and save processes are all proven
-live. To derive:
+Copying a proven page and reworking it beats writing a second one from scratch - a large page whose
+form region, tabs, grids and save processes already work is worth far more as a starting point than
+as a reference. To derive:
 
 1. Copy the file, change `page N (`, `name:` and `title:`
 2. Rename every `PN_` item prefix to the new page number — item names are page-scoped, region
@@ -290,44 +675,12 @@ javaScript {
   grid column; a two-value select list is usually better.
 - When adding buttons that run PL/SQL, keep long-running work out of the page submit.
   Enqueue a scheduler job or call a package designed for quick validation or preview.
-
-## MFCS Controller Conventions
-
-- Do not copy StyleMan behaviour blindly. StyleMan is visual inspiration only; MFCS flow
-  rules come from this repo's backend packages.
-- **Lists of values read `MASTER_DATA`, which is what the tenant holds.** `MAP.*` config was
-  retired on 2026-09-01: it was a whitelist maintained alongside master data and free to
-  disagree with it, which is how a colour the tenant would reject came to be offered.
-  Validation checks the same master data the lists read, so the console cannot offer a
-  choice the backend then refuses.
-- `SKU_SIZE` is a differentiator ID, not a display size. The list shows `7 - 070` and returns
-  `070`. Sending a description would be ambiguous - eight size descriptions on this tenant
-  map to more than one differentiator.
-- `COLOUR` is style/colourway level. Do not add SKU-level colour unless the backend contract
-  changes to support several colourways per request.
-- The delivery-location list offers **virtual** warehouses only. MFCS refuses ranging against
-  a physical location at hierarchy level W, so offering one offers a choice that fails
-  several steps later.
-- For order creates, expose and default `NOT_BEFORE_DATE`, `NOT_AFTER_DATE`, `OTB_EOW_DATE`,
-  `EARLIEST_SHIP_DATE` and `LATEST_SHIP_DATE`. `OTB_EOW_DATE` must fall on the configured
-  retail week-ending day.
-- Style-level detail is captured once and written to the style and every SKU by the backend:
-  UDAs, seasons, tariff codes. Images are the exception - MFCS cascades those itself and
-  rejects the child's copy. There is no SKU-level capture for any of them.
 - Scheduler job actions can only call procedures visible in the package specification. A
   private package-body helper cannot be invoked from a `DBMS_SCHEDULER` anonymous block.
 
-## Where state lives
+## What does not belong in this file
 
-- `UI_DRAFT` and its children (`UI_DRAFT_SKU`, `UI_DRAFT_SKU_UPC`, `UI_DRAFT_UDA`,
-  `UI_DRAFT_SEASON`, `UI_DRAFT_IMAGE`, `UI_DRAFT_HTS`) - what the console captured
-- `REQUEST` - the registered integration request and its stored document
-- `STEP` - the ordered step graph and each status
-- `ATTEMPT` - endpoint, method, request and response payloads, HTTP status per MFCS call
-- `EVENT_LOG` - an autonomous trail that survives a failure
-
-Page 20 (Style Explorer) reads the last four and is the quickest way to see what a request
-actually did.
-
-MFCS list and browse endpoints lag newly created records, and `foundation/item` is served
-from a cache that can be a minute behind. Do not use them as the only success signal.
+This skill is about APEXlang and Oracle APEX, and nothing else. Application ids, workspace and schema
+names, table names, business rules, which list of values reads what - all of that belongs in the
+repository being worked on, not here. If you learn something while building one app that would only
+ever be true for that app, write it in that repository's documentation and leave this file generic.
