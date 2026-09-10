@@ -1,0 +1,231 @@
+page 9 (
+    name: Amend Order
+    alias: AMEND-ORDER
+    title: Amend Order
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+
+    region intro (
+        name: Amend an order that already exists
+        type: staticContent
+        source {
+            htmlCode:
+                ```html
+                <p>Give an order number and this reads it from MFCS - the order, its lines, and the
+                style behind them - then writes a draft you can edit. The draft is marked
+                <strong>AMENDED</strong>, which stops the composer rebuilding its item numbers: those
+                belong to the tenant and recomposing them would invent a different style than the
+                one being amended.</p>
+                ```
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @hero
+            templateOptions: #DEFAULT#
+            icon: fa-pencil-square-o
+        }
+    )
+
+    region existing (
+        name: Orders this console has amended
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select d.draft_id,
+                       d.order_no,
+                       d.style,
+                       d.composed_item_desc,
+                       d.draft_status,
+                       to_char(d.created_at, 'YYYY-MM-DD HH24:MI') as created_at,
+                       (select count(*) from poc_style_draft_sku s
+                         where s.draft_id = d.draft_id) as lines
+                  from poc_style_draft d
+                 where d.origin = 'AMENDED'
+                 order by d.draft_id desc
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column DRAFT_ID (
+            type: link
+            heading {
+                heading: Draft
+            }
+            layout {
+                sequence: 10
+            }
+            link {
+                target: {
+                    page: 2
+                    items: {
+                        P2_DRAFT_ID: &DRAFT_ID.
+                    }
+                }
+                linkText: &DRAFT_ID.
+            }
+        )
+
+        column ORDER_NO (
+            type: plainText
+            heading {
+                heading: Order
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column STYLE (
+            type: plainText
+            heading {
+                heading: Style
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column COMPOSED_ITEM_DESC (
+            type: plainText
+            heading {
+                heading: Description
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column DRAFT_STATUS (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column LINES (
+            type: plainText
+            heading {
+                heading: Lines
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column CREATED_AT (
+            type: plainText
+            heading {
+                heading: Created
+            }
+            layout {
+                sequence: 70
+            }
+        )
+    )
+
+    pageItem P9_ORDER_NO (
+        type: textField
+        label {
+            label: Order number
+            alignment: left
+        }
+        layout {
+            sequence: 10
+            region: @intro
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        help {
+            helpText: An MFCS purchase order number. Order line changes take about thirty seconds to appear in the procurement read, so an order amended moments ago may still show its previous quantities.
+        }
+    )
+
+    pageItem P9_NEW_DRAFT_ID (
+        type: hidden
+        layout {
+            sequence: 20
+            region: @intro
+            slot: regionBody
+        }
+    )
+
+    button retrieve (
+        buttonName: RETRIEVE
+        label: Retrieve and Create Draft
+        layout {
+            sequence: 10
+            region: @intro
+            slot: regionBody
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    process seed-draft (
+        name: Read the order and seed a draft
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                    :P9_NEW_DRAFT_ID := poc_style_pkg.seed_from_order(
+                        :P9_ORDER_NO, :APP_USER);
+                exception
+                    when others then
+                        apex_error.add_error(
+                            p_message => substr(sqlerrm, 1, 900),
+                            p_display_location => apex_error.c_inline_in_notification);
+                end;
+                ```
+        }
+        execution {
+            sequence: 10
+        }
+        successMessage {
+            successMessage: Draft created from the order. Open it from the list below to edit it.
+        }
+        serverSideCondition {
+            whenButtonPressed: @retrieve
+        }
+    )
+
+)

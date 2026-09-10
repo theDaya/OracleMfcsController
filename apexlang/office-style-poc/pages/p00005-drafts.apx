@@ -1,0 +1,269 @@
+page 5 (
+    name: Drafts and Approvals
+    alias: DRAFTS
+    title: Drafts and Approvals
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+
+    region intro (
+        name: Drafts and Approvals
+        type: staticContent
+        source {
+            htmlCode:
+                ```html
+                <p>Nothing reaches MFCS until a draft has been submitted for review and then
+                approved. Submitting freezes the document; approving sends the frozen one, so what
+                the approver saw is what the tenant receives.</p>
+                ```
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @hero
+            templateOptions: #DEFAULT#
+            icon: fa-check-square-o
+        }
+    )
+
+    region drafts (
+        name: Drafts
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select d.draft_id,
+                       d.operation_name,
+                       d.origin,
+                       d.composed_item_no,
+                       d.composed_item_desc,
+                       d.draft_status,
+                       d.submitted_by,
+                       d.approved_by,
+                       d.http_status,
+                       to_char(d.created_at, 'YYYY-MM-DD HH24:MI') as created_at,
+                       (select count(*) from poc_style_draft_sku s
+                         where s.draft_id = d.draft_id) as skus
+                  from poc_style_draft d
+                 where :P5_STATUS is null
+                    or d.draft_status = :P5_STATUS
+                 order by d.draft_id desc
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column DRAFT_ID (
+            type: plainText
+            heading {
+                heading: Draft
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column COMPOSED_ITEM_NO (
+            type: link
+            heading {
+                heading: Item number
+            }
+            layout {
+                sequence: 20
+            }
+            link {
+                target: {
+                    page: 2
+                    items: {
+                        P2_DRAFT_ID: &DRAFT_ID.
+                    }
+                }
+                linkText: &COMPOSED_ITEM_NO.
+            }
+        )
+
+        column COMPOSED_ITEM_DESC (
+            type: plainText
+            heading {
+                heading: Description
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column OPERATION_NAME (
+            type: plainText
+            heading {
+                heading: Operation
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column ORIGIN (
+            type: plainText
+            heading {
+                heading: Origin
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column DRAFT_STATUS (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column SKUS (
+            type: plainText
+            heading {
+                heading: SKUs
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column SUBMITTED_BY (
+            type: plainText
+            heading {
+                heading: Submitted by
+            }
+            layout {
+                sequence: 80
+            }
+        )
+
+        column APPROVED_BY (
+            type: plainText
+            heading {
+                heading: Approved by
+            }
+            layout {
+                sequence: 90
+            }
+        )
+
+        column HTTP_STATUS (
+            type: plainText
+            heading {
+                heading: HTTP
+            }
+            layout {
+                sequence: 100
+            }
+        )
+
+        column CREATED_AT (
+            type: plainText
+            heading {
+                heading: Created
+            }
+            layout {
+                sequence: 110
+            }
+        )
+
+    )
+
+    pageItem P5_STATUS (
+        type: selectList
+        label {
+            label: Status
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_status as d, draft_status as r
+                  from poc_style_draft
+                 group by draft_status
+                 order by 1
+                ```
+        }
+        layout {
+            sequence: 10
+            region: @drafts
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    button filter (
+        buttonName: FILTER
+        label: Apply
+        layout {
+            sequence: 10
+            region: @drafts
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button new-draft (
+        buttonName: NEW_DRAFT
+        label: New Capture
+        layout {
+            sequence: 20
+            region: @drafts
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 2
+                clearCache: 2
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+)

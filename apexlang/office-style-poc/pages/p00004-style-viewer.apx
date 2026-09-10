@@ -1,0 +1,970 @@
+page 4 (
+    name: Style Viewer
+    alias: STYLE-VIEWER
+    title: Style Viewer
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        pageAccessProtection: unrestricted
+        formAutoComplete: false
+    }
+
+    region search (
+        name: Read a style from MFCS
+        type: staticContent
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @hero
+            templateOptions: #DEFAULT#
+            icon: fa-search
+        }
+    )
+
+    region header (
+        name: Style
+        type: staticContent
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P4_ITEM_DESC
+        }
+    )
+
+    region grp-identity (
+        name: Identity
+        type: staticContent
+        layout {
+            sequence: 5
+            parentRegion: @header
+            slot: regionBody
+        }
+        appearance {
+            template: @content-block
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region grp-hierarchy (
+        name: Hierarchy and Differentiators
+        type: staticContent
+        layout {
+            sequence: 6
+            parentRegion: @header
+            slot: regionBody
+        }
+        appearance {
+            template: @content-block
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region tabs (
+        name: Detail
+        type: staticContent
+        layout {
+            sequence: 30
+            slot: contentBody
+        }
+        appearance {
+            template: @tabs-container
+            templateOptions: [
+                #DEFAULT#
+                t-TabsRegion-mod--pill
+            ]
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P4_ITEM_DESC
+        }
+    )
+
+    region skus (
+        name: SKUs
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select s.sku, s.sku_desc, s.status, s.diff1, s.diff2,
+                       s.original_retail, s.unit_retail
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].resolved.skus[*]'
+                           columns
+                               sku             varchar2(30)  path '$.item',
+                               sku_desc        varchar2(250) path '$.itemDescription',
+                               status          varchar2(4)   path '$.status',
+                               diff1           varchar2(30)  path '$.diff1',
+                               diff2           varchar2(30)  path '$.diff2',
+                               original_retail number        path '$.originalRetail',
+                               unit_retail     number        path '$.unitRetail'
+                       ) s
+                 where c.collection_name = 'MFCS_STYLE'
+                 order by s.diff2, s.sku
+                ```
+        }
+        layout {
+            sequence: 10
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column SKU (
+            type: plainText
+            heading {
+                heading: SKU
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column SKU_DESC (
+            type: plainText
+            heading {
+                heading: Description
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column STATUS (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column DIFF1 (
+            type: plainText
+            heading {
+                heading: Colour diff
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column DIFF2 (
+            type: plainText
+            heading {
+                heading: Size diff
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column ORIGINAL_RETAIL (
+            type: plainText
+            heading {
+                heading: Original retail
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column UNIT_RETAIL (
+            type: plainText
+            heading {
+                heading: Unit retail
+            }
+            layout {
+                sequence: 70
+            }
+        )
+    )
+
+    region sourcing (
+        name: Sourcing
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select s.supplier, s.primary_supplier_ind, s.direct_ship_ind,
+                       s.origin_country, s.unit_cost, s.supplier_pack_size,
+                       s.cost_uom, s.purchase_type
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].itemSupplier[*]'
+                           columns
+                               supplier             number       path '$.supplier',
+                               primary_supplier_ind varchar2(1)  path '$.primarySupplierInd',
+                               direct_ship_ind      varchar2(1)  path '$.directShipInd',
+                               nested path '$.itemSupplierCountry[*]'
+                                   columns (
+                                       origin_country     varchar2(3)  path '$.originCountry',
+                                       unit_cost          number       path '$.unitCost',
+                                       supplier_pack_size number       path '$.supplierPackSize',
+                                       cost_uom           varchar2(10) path '$.costUom',
+                                       purchase_type      varchar2(10) path '$.purchaseType'
+                                   )
+                       ) s
+                 where c.collection_name = 'MFCS_STYLE'
+                ```
+        }
+        layout {
+            sequence: 20
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column SUPPLIER (
+            type: plainText
+            heading {
+                heading: Supplier
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column PRIMARY_SUPPLIER_IND (
+            type: plainText
+            heading {
+                heading: Primary
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column DIRECT_SHIP_IND (
+            type: plainText
+            heading {
+                heading: Direct ship
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column ORIGIN_COUNTRY (
+            type: plainText
+            heading {
+                heading: Origin
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column UNIT_COST (
+            type: plainText
+            heading {
+                heading: Unit cost
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column SUPPLIER_PACK_SIZE (
+            type: plainText
+            heading {
+                heading: Pack size
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column COST_UOM (
+            type: plainText
+            heading {
+                heading: Cost UOM
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column PURCHASE_TYPE (
+            type: plainText
+            heading {
+                heading: Purchase type
+            }
+            layout {
+                sequence: 80
+            }
+        )
+    )
+
+    region barcodes (
+        name: Barcodes
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select b.sku, b.barcode, b.primary_ind, b.item_no_type
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].resolved.skus[*]'
+                           columns
+                               sku varchar2(30) path '$.item',
+                               nested path '$.referenceItem[*]'
+                                   columns (
+                                       barcode      varchar2(30) path '$.referenceItem',
+                                       primary_ind  varchar2(1)  path '$.primaryInd',
+                                       item_no_type varchar2(10) path '$.itemNoType'
+                                   )
+                       ) b
+                 where c.collection_name = 'MFCS_STYLE'
+                   and b.barcode is not null
+                 order by b.sku, b.primary_ind desc
+                ```
+        }
+        layout {
+            sequence: 30
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column SKU (
+            type: plainText
+            heading {
+                heading: SKU
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column BARCODE (
+            type: plainText
+            heading {
+                heading: Barcode
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column PRIMARY_IND (
+            type: plainText
+            heading {
+                heading: Primary
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column ITEM_NO_TYPE (
+            type: plainText
+            heading {
+                heading: Type
+            }
+            layout {
+                sequence: 40
+            }
+        )
+    )
+
+    region attributes (
+        name: Seasons, Images and Tariffs
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select 'Season' as kind,
+                       to_char(s.season_id) as ref,
+                       'phase ' || s.phase_id || ', sequence ' || s.sequence_no as detail
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].itemSeason[*]'
+                           columns
+                               season_id   number path '$.seasonId',
+                               phase_id    number path '$.phaseId',
+                               sequence_no number path '$.sequenceNo'
+                       ) s
+                 where c.collection_name = 'MFCS_STYLE'
+                   and s.season_id is not null
+                union all
+                select 'Image',
+                       i.image_name,
+                       i.image_address
+                           || case when i.primary_image_ind = 'Y' then '  (primary)' else '' end
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].itemImage[*]'
+                           columns
+                               image_name        varchar2(250) path '$.imageName',
+                               image_address     varchar2(250) path '$.imageAddress',
+                               primary_image_ind varchar2(1)   path '$.primaryImageInd'
+                       ) i
+                 where c.collection_name = 'MFCS_STYLE'
+                   and i.image_name is not null
+                union all
+                select 'Tariff code',
+                       h.hts,
+                       'import ' || h.import_country || ', origin ' || h.origin_country
+                           || ', status ' || h.status
+                  from apex_collections c,
+                       json_table(c.clob001, '$.items[0].hts[*]'
+                           columns
+                               hts            varchar2(30) path '$.hts',
+                               import_country varchar2(3)  path '$.importCountry',
+                               origin_country varchar2(3)  path '$.originCountry',
+                               status         varchar2(10) path '$.status'
+                       ) h
+                 where c.collection_name = 'MFCS_STYLE'
+                   and h.hts is not null
+                ```
+        }
+        layout {
+            sequence: 40
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column KIND (
+            type: plainText
+            heading {
+                heading: Kind
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column REF (
+            type: plainText
+            heading {
+                heading: Reference
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column DETAIL (
+            type: plainText
+            heading {
+                heading: Detail
+            }
+            layout {
+                sequence: 30
+            }
+        )
+    )
+
+    region raw (
+        name: Raw MFCS Document
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select dbms_lob.substr(c.clob001, 3800, 1) as document,
+                       dbms_lob.getlength(c.clob001) as bytes
+                  from apex_collections c
+                 where c.collection_name = 'MFCS_STYLE'
+                ```
+        }
+        layout {
+            sequence: 50
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column DOCUMENT (
+            type: plainText
+            heading {
+                heading: First 3800 bytes as returned by MFCS
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column BYTES (
+            type: plainText
+            heading {
+                heading: Total bytes
+            }
+            layout {
+                sequence: 20
+            }
+        )
+    )
+
+    pageItem P4_ITEM (
+        type: textField
+        label {
+            label: Item number
+            alignment: left
+        }
+        layout {
+            sequence: 10
+            region: @search
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        help {
+            helpText: Any MFCS item number. The style is read live through browse_pkg, which uses RmsReSTServices itemDetail to find the children and then reads each one in full.
+        }
+    )
+
+    pageItem P4_ITEM_NO (
+        type: displayOnly
+        label {
+            label: Item
+            alignment: left
+        }
+        layout {
+            sequence: 10
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_ITEM_DESC (
+        type: displayOnly
+        label {
+            label: Description
+            alignment: left
+        }
+        layout {
+            sequence: 20
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 6
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_STATUS (
+        type: displayOnly
+        label {
+            label: Status
+            alignment: left
+        }
+        layout {
+            sequence: 30
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_NUMBER_TYPE (
+        type: displayOnly
+        label {
+            label: Item number type
+            alignment: left
+        }
+        layout {
+            sequence: 40
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_ITEM_LEVEL (
+        type: displayOnly
+        label {
+            label: Level
+            alignment: left
+        }
+        layout {
+            sequence: 50
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_SKU_COUNT (
+        type: displayOnly
+        label {
+            label: SKUs found
+            alignment: left
+        }
+        layout {
+            sequence: 60
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_SOURCE (
+        type: displayOnly
+        label {
+            label: Children read via
+            alignment: left
+        }
+        layout {
+            sequence: 70
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_DEPT (
+        type: displayOnly
+        label {
+            label: Department
+            alignment: left
+        }
+        layout {
+            sequence: 10
+            region: @grp-hierarchy
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_CLASS (
+        type: displayOnly
+        label {
+            label: Class
+            alignment: left
+        }
+        layout {
+            sequence: 20
+            region: @grp-hierarchy
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_SUBCLASS (
+        type: displayOnly
+        label {
+            label: Subclass
+            alignment: left
+        }
+        layout {
+            sequence: 30
+            region: @grp-hierarchy
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_RETAIL (
+        type: displayOnly
+        label {
+            label: Original retail
+            alignment: left
+        }
+        layout {
+            sequence: 40
+            region: @grp-hierarchy
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_DIFF1 (
+        type: displayOnly
+        label {
+            label: Differentiator 1
+            alignment: left
+        }
+        layout {
+            sequence: 50
+            region: @grp-hierarchy
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_DIFF2 (
+        type: displayOnly
+        label {
+            label: Differentiator 2
+            alignment: left
+        }
+        layout {
+            sequence: 60
+            region: @grp-hierarchy
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_COST_ZONE (
+        type: displayOnly
+        label {
+            label: Cost zone group
+            alignment: left
+        }
+        layout {
+            sequence: 70
+            region: @grp-hierarchy
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    pageItem P4_UOM (
+        type: displayOnly
+        label {
+            label: Standard UOM
+            alignment: left
+        }
+        layout {
+            sequence: 80
+            region: @grp-hierarchy
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    button read (
+        buttonName: READ
+        label: Read from MFCS
+        layout {
+            sequence: 10
+            region: @search
+            slot: regionBody
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    process fetch-style (
+        name: Read the style from MFCS
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                declare
+                    l_json clob;
+                    l_style_path constant varchar2(30) := '$.items[0]';
+                begin
+                    if :P4_ITEM is null then
+                        return;
+                    end if;
+
+                    l_json := browse_pkg.get_style(:P4_ITEM, 'Y');
+
+                    apex_collection.create_or_truncate_collection('MFCS_STYLE');
+                    apex_collection.add_member(
+                        p_collection_name => 'MFCS_STYLE',
+                        p_clob001 => l_json);
+
+                    select json_value(l_json, '$.items[0].item' returning varchar2(30) null on error),
+                           json_value(l_json, '$.items[0].itemDescription' returning varchar2(250) null on error),
+                           json_value(l_json, '$.items[0].status' returning varchar2(10) null on error),
+                           json_value(l_json, '$.items[0].itemNumberType' returning varchar2(10) null on error),
+                           json_value(l_json, '$.items[0].itemLevel' returning varchar2(10) null on error),
+                           json_value(l_json, '$.items[0].resolved.skuCount' returning varchar2(10) null on error),
+                           json_value(l_json, '$.items[0].resolved.source' returning varchar2(60) null on error),
+                           json_value(l_json, '$.items[0].dept' returning varchar2(20) null on error)
+                               || ' - ' || json_value(l_json, '$.items[0].deptName' returning varchar2(120) null on error),
+                           json_value(l_json, '$.items[0].class' returning varchar2(20) null on error)
+                               || ' - ' || json_value(l_json, '$.items[0].className' returning varchar2(120) null on error),
+                           json_value(l_json, '$.items[0].subclass' returning varchar2(20) null on error)
+                               || ' - ' || json_value(l_json, '$.items[0].subclassName' returning varchar2(120) null on error),
+                           json_value(l_json, '$.items[0].originalRetail' returning varchar2(30) null on error),
+                           json_value(l_json, '$.items[0].diff1' returning varchar2(30) null on error)
+                               || ' (' || json_value(l_json, '$.items[0].diff1Type' returning varchar2(4) null on error) || ')',
+                           json_value(l_json, '$.items[0].diff2' returning varchar2(30) null on error)
+                               || ' (' || json_value(l_json, '$.items[0].diff2Type' returning varchar2(4) null on error) || ')',
+                           json_value(l_json, '$.items[0].costZoneGroupId' returning varchar2(30) null on error),
+                           json_value(l_json, '$.items[0].standardUom' returning varchar2(10) null on error)
+                      into :P4_ITEM_NO, :P4_ITEM_DESC, :P4_STATUS, :P4_NUMBER_TYPE, :P4_ITEM_LEVEL,
+                           :P4_SKU_COUNT, :P4_SOURCE, :P4_DEPT, :P4_CLASS, :P4_SUBCLASS,
+                           :P4_RETAIL, :P4_DIFF1, :P4_DIFF2, :P4_COST_ZONE, :P4_UOM
+                      from dual;
+
+                    if :P4_ITEM_DESC is null then
+                        apex_error.add_error(
+                            p_message => 'MFCS returned no item for ' || :P4_ITEM
+                                || '. A style created moments ago may not be in the '
+                                || 'foundation/item cache yet - it lags about a minute.',
+                            p_display_location => apex_error.c_inline_in_notification);
+                    end if;
+                end;
+                ```
+        }
+        execution {
+            sequence: 10
+            point: beforeHeader
+        }
+    )
+
+)

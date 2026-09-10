@@ -1,0 +1,1031 @@
+plugin pretiusApexEnhancedLovItem (
+    name: Pretius APEX Enhanced LOV item
+    staticId: PRETIUS_APEX_ENHANCED_LOV_ITEM
+    type: item
+    component {
+        supports: pageItems
+        standardAttributes: [
+            visibleWidget
+            sessionStateChangeable
+            readOnlyAttr
+            quickPickAttrs
+            sourceAttrs
+            elementAttrs
+            widthAttrs
+            elementOptionAttr
+            listOfValues
+            lovDisplayNullAttrs
+            cascadingLovAttrs
+        ]
+    }
+    source {
+        plsqlCode:
+            ```plsql
+            /*
+              author: ostrowski.bartosz@gmail.com bostrowski@pretius.com
+              www: http://ostrowskibartosz.pl
+              Company: http://pretius.com
+              v. 2.2.1.
+            */
+            
+            e_temp exception;
+            e_no_data_found exception;
+            e_temp_msg varchar2(4000);
+            
+            g_translation_dict boolean := true;
+            g_translation varchar2(4000) := '{
+              ''PAELI_AUTOFILTER_NDF'': ''No data found for:'',
+              ''PAELI_PASTED_LENGTH'': ''Pasted content exceeds maximum length of #limit# characters for this input. '',
+              ''PAELI_POPUP_LENGTH'': ''Length of selected values exceeds #limit# characters. Please select less values.'',
+              ''PAELI_POPUP_WARNING'': ''Warning!'',
+              ''PAELI_POPUP_WARNINGINFO'': ''Confirming this dialog will overwrite all pasted values with selected below. No matches found for given values:'',
+              ''PAELI_BTN_SELECT'': ''Select'',
+              ''PAELI_POPUP_NDF_AUTOFILTER'': ''No records found for given string "#SEARCH_STRING#".'',
+              ''PAELI_POPUP_NDF'': ''Dictionary has no values.'',
+              ''PAELI_POPUP_NDF_SELECTED'': ''Within selected rows there is no result for "#SEARCH_STRING#". If you wanted to search in all values, please deselect "Select all" checkbox. '',
+              ''PAELI_POPUP_SELECT_ALL'': ''Select all'',
+              ''PAELI_POPUP_SHOW_SELECTED'': ''Show selected'',
+              ''PAELI_SELECT_ALL_WARNING'': ''You want to select values that exceeds limit of #LIMIT# characters. Inserting to many values may result with error. Would you like to proceed?'',
+              ''PAELI_SELECT_ALL_AUTOFILTER'': ''Select all values'',
+              ''PAELI_POPUP_SUFIX'': '' - POPUP''
+            }';
+            
+            ------------
+            -- trim_json
+            ------------
+            function trim_json(
+              p_string in clob,
+              p_escape in boolean default true
+            ) return clob
+            is 
+              v_result clob;
+            begin
+              v_result := replace(p_string, chr(9), '');
+              v_result := replace(v_result, chr(160), '');
+              v_result := replace(p_string, chr(10), '');
+              v_result := replace(v_result, chr(13), '');
+              v_result := replace(v_result, chr(92), chr(92)||chr(92));
+              v_result := rtrim(v_result, ' ');
+              v_result := rtrim(v_result, ',');
+              
+              if p_escape then
+                v_result := htf.escape_sc(v_result);
+              end if;
+            
+              return v_result;
+            exception 
+              when others then
+                htp.p('{"error": 1,"SQLERRM": "'||SQLERRM||'","func_name": "trim_json"}');
+            
+            end trim_json;
+            
+            ------------------
+            -- current_time_ms
+            ------------------
+            function current_time_ms
+              return number
+            is
+              out_result number;
+            begin
+              select 
+                extract(day from(systimestamp - to_timestamp('1970-01-01', 'YYYY-MM-DD'))) * 86400000 + to_number(to_char(sys_extract_utc(systimestamp), 'SSSSSFF3'))
+              into 
+                out_result
+              from 
+                dual;
+                
+              return out_result;
+            end current_time_ms;
+            ----------------
+            -- perform_binds
+            ----------------
+            function perform_binds(
+              p_query in varchar2
+            ) return varchar2 
+            is
+              v_item_names DBMS_SQL.VARCHAR2_TABLE;
+              v_item_value varchar2(100);
+              v_af_query varchar2(32000);
+            begin
+              v_af_query := p_query;
+              v_item_names := WWV_FLOW_UTILITIES.GET_BINDS(v_af_query); 
+              
+              for i in 1..v_item_names.count loop
+              
+                v_item_value := APEX_UTIL.GET_SESSION_STATE (
+                  p_item => ltrim(v_item_names(i), ':')
+                );
+                
+                v_item_value := APEX_PLUGIN_UTIL.ESCAPE (
+                  p_value  => v_item_value,
+                  p_escape => true
+                );
+              
+                if REGEXP_LIKE (v_item_value, '^\d*$') then
+                  v_af_query := replace(v_af_query, v_item_names(i), v(ltrim(v_item_names(i), ':')));
+                else
+                  v_af_query := replace(v_af_query, v_item_names(i), chr(39)||v(ltrim(v_item_names(i), ':'))||chr(39));
+                end if;
+              
+              end loop;
+              
+              v_af_query := apex_plugin_util.replace_substitutions (
+                p_value => v_af_query,
+                p_escape => true 
+              );
+              
+              return v_af_query;
+              
+            end perform_binds;
+            
+            -------------
+            -- force_delete_collection
+            -------------
+            procedure force_delete_collection(
+              p_collection_name in varchar2
+            ) is
+            BEGIN
+              APEX_COLLECTION.DELETE_COLLECTION( p_collection_name );
+              APEX_COLLECTION.DELETE_COLLECTION( p_collection_name );
+            exception
+              when others then
+                null;
+            end;
+            
+            -------------
+            -- render_pal
+            -------------
+            function render_pal (
+              p_item in apex_plugin.t_page_item,
+              p_plugin in apex_plugin.t_plugin,
+              p_value in varchar2,
+              p_is_readonly in boolean,
+              p_is_printer_friendly in boolean
+            ) return apex_plugin.t_page_item_render_result
+            is
+              l_name varchar2(30);
+              l_result apex_plugin.t_page_item_render_result;
+              l_item_html varchar2(32000);
+              v_item_mask_attr varchar2(4000);
+             
+              v_translation_JSON varchar2(32000) := g_translation; 
+            
+              v_autofilter varchar2(1)           := NVL(p_item.attribute_01, 'N');
+              v_is_lov_avail varchar2(1)         := NVL(p_item.attribute_02, 'N');
+              v_multiple varchar2(1)             := NVL(p_item.attribute_03, 'N');
+              v_separator varchar2(1)            := NVL(p_item.attribute_05, ':');
+              v_debounce_ms varchar2(4)          := NVL(p_item.attribute_06, 300);
+              v_is_paste_allowed varchar2(1)     := NVL(p_item.attribute_08, 'N');
+              v_max_chars varchar2(5)            := NVL(p_item.attribute_11, 4000);
+              v_returnCollumn varchar2(1)        := NVL(p_item.attribute_12, 'N'); 
+              v_submit_page varchar2(1)          := NVL(p_item.attribute_13, 'N'); 
+              v_show_processing varchar2(1)      := NVL(p_item.attribute_14, 'N'); 
+              v_recreate_coll varchar2(1)        := NVL(p_item.attribute_15, 'N'); 
+             
+              v_translation_dict varchar2(32000);  
+              v_options varchar2(32000);
+              v_lang varchar2(20);
+              
+              v_collection_name varchar2(100) := p_item.name;
+              v_sql varchar2(4000);
+            
+              v_lov_display_extra varchar2(5); 
+              v_lov_display_null varchar2(5); 
+              v_lov_exists varchar2(1);
+              v_apex_version number;
+            begin
+            
+              select substr(VERSION_NO, 1, 1) into v_apex_version from apex_release;
+            
+              v_sql := perform_binds(p_item.lov_definition);
+            
+              if v_sql is not null then
+                v_lov_exists := 'Y';
+              else
+                v_lov_exists := 'N';
+              end if;
+            
+              if :REQUEST = 'PAELI_CLEAR' then
+                --wyczysci kolekcje kazdego itemu typu ten plugin
+                force_delete_collection( v_collection_name );
+            
+              elsif instr(:REQUEST, 'PAELI_CLEAR') > 0 then
+                --wyczyscie kolekcjie dla konkretnego itemu
+                force_delete_collection( substr( :REQUEST,  13, length(:request)) );
+              end if;
+            
+              if g_translation_dict then
+                select APPLICATION_PRIMARY_LANGUAGE into v_lang from APEX_APPLICATIONS where application_id = :APP_ID;
+                
+                for i in (
+                  select 
+                    TRANSLATABLE_MESSAGE,
+                    MESSAGE_TEXT
+                  from
+                    APEX_APPLICATION_TRANSLATIONS 
+                  where
+                    APPLICATION_ID = :APP_ID
+                    and LANGUAGE_CODE = v_lang
+                    and TRANSLATABLE_MESSAGE like 'PAELI%'
+                ) loop
+                  v_translation_dict := v_translation_dict||apex_javascript.add_attribute(i.TRANSLATABLE_MESSAGE, i.MESSAGE_TEXT, false);
+                end loop;
+                
+                v_translation_dict := '{'||rtrim(v_translation_dict, ',')||'}';
+              
+              else
+                v_translation_dict := '{}';
+              end if;
+            
+              if v_recreate_coll = 'Y' then
+                
+                force_delete_collection( v_collection_name );
+            
+                APEX_COLLECTION.CREATE_COLLECTION_FROM_QUERY_B  (
+                  p_collection_name => v_collection_name,
+                  p_query => v_sql
+                );
+                  
+              end if;
+            
+              l_name := apex_plugin.get_input_name_for_page_item(p_is_multi_value => false);
+              
+              v_item_mask_attr := 'size="'||p_item.element_width||'" maxlength="'||p_item.element_max_length||'" '||p_item.element_attributes||' '||p_item.element_option_attributes;
+            
+              if p_is_readonly then
+                v_item_mask_attr := v_item_mask_attr||' readonly="readonly"';
+              end if;
+              
+              l_item_html := '
+                <div class="palv2_pluginContainer" id="P'||p_item.id||'">
+                  <input type="hidden" name="'||l_name||'" id="'||p_item.name||'"  value="'||htf.escape_sc(p_value)||'" >
+                  <input type="text" autocomplete="off" class="palv2_pluginMask" value="'||htf.escape_sc(p_value)||'" id="'||p_item.name||'_DISPLAY" for="'||p_item.name||'" '||v_item_mask_attr||'>
+                  <span class="icons">
+                    <i class="palv2_iconLoader palv2_iconHidden"></i>
+              ';
+              
+              if not p_is_readonly then
+              
+                if v_is_lov_avail = 'Y' then
+                  l_item_html := l_item_html||'
+                    <i class="palv2_iconTrigger"></i>
+                  ';
+                elsif v_is_lov_avail = 'N' and v_is_paste_allowed = 'Y' then
+                  l_item_html := l_item_html||'
+                    <i class="palv2_iconTrigger" style="display: none"></i>
+                  ';
+            
+                else
+                  l_item_html := l_item_html||'
+                    <i class="palv2_iconTrigger" style="visibility: hidden"></i>
+                  ';
+                end if;
+              end if;
+              
+              l_item_html := l_item_html||'
+                    <i class="palv2_iconPasted palv2_iconHidden"></i>
+                  </span>
+                </div>
+              ';
+              
+              htp.p(l_item_html);
+            
+              if p_item.lov_display_extra then
+                v_lov_display_extra := 'true';
+              else
+                v_lov_display_extra := 'false';
+              end if;
+            
+              if p_item.lov_display_null then
+                v_lov_display_null := 'true';
+              else
+                v_lov_display_null := 'false';
+              end if;
+            
+              v_options :=           
+                apex_javascript.add_attribute('_allowPaste', v_is_paste_allowed)||
+                apex_javascript.add_attribute('_maxChars', v_max_chars)||
+                apex_javascript.add_attribute('_showProcessing', v_show_processing)||
+                apex_javascript.add_attribute('_submitPage', v_submit_page)||
+                apex_javascript.add_attribute('_multiple', v_multiple)||
+                apex_javascript.add_attribute('_debounce_ms', v_debounce_ms)||
+                apex_javascript.add_attribute('_separator', v_separator)||
+                '"_translation_DICT":'||v_translation_dict||','||
+                '"_translation_ITEM":'||trim_json(v_translation_JSON, false)||','||
+                apex_javascript.add_attribute('_returnCollumn', v_returnCollumn)||    
+                apex_javascript.add_attribute('_lov', v_is_lov_avail)||
+                apex_javascript.add_attribute('_lov_sql_exists', v_lov_exists)||
+                apex_javascript.add_attribute('_autofilter', v_autofilter)||
+                apex_javascript.add_attribute('itemApexId', p_item.id)||
+                apex_javascript.add_attribute('label', p_item.plain_label)||
+                apex_javascript.add_attribute('ajaxIdentifier', apex_plugin.get_ajax_identifier)||
+                apex_javascript.add_attribute('dependingOnSelector', apex_plugin_util.page_item_names_to_jquery(p_item.lov_cascade_parent_items))||
+                replace(replace(apex_javascript.add_attribute('lov_display_extra', v_lov_display_extra), '"true"', 'true'), '"false"', 'false')||
+                replace(replace(apex_javascript.add_attribute('lov_display_null', v_lov_display_null), '"true"', 'true'), '"false"', 'false')||
+                replace(apex_javascript.add_attribute('lov_null_text', nvl(p_item.lov_null_text, 'null')), '"null"', 'null')||
+                replace(apex_javascript.add_attribute('lov_null_value', nvl(p_item.lov_null_value, 'null')), '"null"', 'null')||
+                apex_javascript.add_attribute('optimizeRefresh', p_item.ajax_optimize_refresh)||
+                apex_javascript.add_attribute('pageItemsToSubmit', apex_plugin_util.page_item_names_to_jquery(p_item.ajax_items_to_submit))||
+                apex_javascript.add_attribute('nullValue', p_item.lov_null_value, false, false)
+              ;
+            
+              apex_javascript.add_onload_code (
+                p_code => 'palv2_init("'||p_item.name||'",{'||v_options||'});',
+                p_key => 'palv2_init'||p_item.name
+              );
+            
+              apex_javascript.add_library(
+                p_name => 'jquery1.11', 
+                p_directory => p_plugin.file_prefix, 
+                p_version => null 
+              );
+            
+              apex_javascript.add_library(
+                p_name => 'mustache', 
+                p_directory => p_plugin.file_prefix, 
+                p_version => null 
+              );
+            
+              apex_css.add_file (  
+                p_name => 'style',
+                p_directory => p_plugin.file_prefix, 
+                p_version => null
+              );
+            
+              apex_css.add_file (  
+                p_name => 'style'||v_apex_version,
+                p_directory => p_plugin.file_prefix, 
+                p_version => null
+              );
+            
+            
+              apex_javascript.add_library(
+                p_name => 'bootstrap.min-popover', 
+                p_directory => p_plugin.file_prefix, 
+                p_version => null 
+              );
+            
+              apex_css.add_file (  
+                p_name => 'bootstrap.min-popover',
+                p_directory => p_plugin.file_prefix, 
+                p_version => null
+              );
+            
+              apex_javascript.add_library(
+                p_name => 'jquery-catchpaste-1.0.0', 
+                p_directory => p_plugin.file_prefix, 
+                p_version => null 
+              );
+            
+              apex_javascript.add_library(
+                p_name => 'jquery.caret.1.02.min2', 
+                p_directory => p_plugin.file_prefix, 
+                p_version => null 
+              );
+            
+              apex_javascript.add_library(
+                p_name => 'onload', 
+                p_directory => p_plugin.file_prefix, 
+                p_version => null 
+              );
+            
+            
+              return l_result;
+            end render_pal;
+            
+            ----------------
+            -- apex_ajax_pal
+            ----------------
+            function apex_ajax_pal (
+              p_item   in apex_plugin.t_page_item,
+              p_plugin in apex_plugin.t_plugin
+            ) return apex_plugin.t_page_item_ajax_result
+            is
+              v_autofilter_multiple varchar2(10) := 'false';
+              v_af_query varchar2(32000);
+              v_collection_name varchar2(100) := p_item.name;
+              v_get_mask varchar2(4000);
+              v_get_return_value varchar2(4000);
+            
+              v_sql varchar2(4000);
+            
+              v_temp_return_value varchar2(2000);
+              v_temp_display_value varchar2(2000);
+              v_time_start number;
+              v_time_end number;
+              v_time_diff number;
+              v_class number;
+              v_rownum_plus number := 0;
+              v_search_escape varchar2(120) := 'replace(replace( replace(v_search, chr(92), chr(92)||chr(92)), ''%'', chr(92)||''%''), ''_'', chr(92)||''_'')';
+              v_coll_getmask varchar2(200) := p_item.name||'MASKCOLL';
+              v_dict_length number :=0;
+            
+              v_column_seq_sort number := 1;
+            
+              v_mode varchar2(100) := apex_application.g_x01;
+              v_search varchar2(32000) := upper(apex_application.g_x02);
+            
+              v_column_seq number        := NVL(p_item.attribute_10, -1);  
+              v_separator varchar2(1)    := NVL(p_item.attribute_05, ':'); 
+              v_filter_columns number    := NVL(p_item.attribute_09, -1);  
+              v_prompt_like number       := NVL(p_item.attribute_04, -1);  
+              v_is_lov_avail varchar2(1) := NVL(p_item.attribute_02, 'N'); 
+              v_multiple varchar2(1)     := NVL(p_item.attribute_03, 'N'); 
+            
+            begin
+              v_time_start := current_time_ms();
+              
+              v_sql := perform_binds(p_item.lov_definition);
+              
+              begin
+                if v_mode = 'forceRefresh' then
+                  
+                  if APEX_COLLECTION.COLLECTION_EXISTS (v_collection_name) then
+                    force_delete_collection( v_collection_name );
+                  end if;
+                  
+                  APEX_COLLECTION.CREATE_COLLECTION_FROM_QUERY_B  (
+                    p_collection_name => v_collection_name,
+                    p_query => v_sql
+                  );
+                  
+                  return null;
+                end if;
+              exception
+                when others then
+                  e_temp_msg := 'Recreate collection:\n'||SQLERRM;
+                  raise e_temp;
+              end;
+            
+              begin
+                if NOT APEX_COLLECTION.COLLECTION_EXISTS (v_collection_name) then
+                  force_delete_collection( v_collection_name );
+            
+                  APEX_COLLECTION.CREATE_COLLECTION_FROM_QUERY_B  (
+                    p_collection_name => v_collection_name,
+                    p_query => v_sql
+                  );
+                end if;
+              exception
+                when others then
+                  e_temp_msg := 'Creating plugin collection:\n'||SQLERRM;
+                  raise e_temp;
+              end;
+              
+              v_dict_length := APEX_COLLECTION.COLLECTION_MEMBER_COUNT (v_collection_name);
+                
+              if v_dict_length = 0 then
+                e_temp_msg := 'Dictionary source returned 0 rows.\nPlease check dictionary source';
+                raise e_temp;
+              end if;
+              
+              if v_column_seq in (1, 4, 11) then
+                v_column_seq_sort := 1;
+              elsif v_column_seq in (2, 3, 7) then
+                v_column_seq_sort := 2;
+              elsif v_column_seq in (6, 12, 16) then
+                v_column_seq_sort := 3;
+              elsif v_column_seq in (8, 10, 14) then
+                v_column_seq_sort := 4;
+              elsif v_column_seq in (17, 21, 25) then
+                v_column_seq_sort := 5;
+              elsif v_column_seq in (18, 22, 26) then
+                v_column_seq_sort := 6;
+              elsif v_column_seq in (19, 23, 27) then
+                v_column_seq_sort := 7;
+              elsif v_column_seq in (20, 24, 28) then
+                v_column_seq_sort := 8;
+              end if;
+            
+              htp.p('
+                {
+                  "values": [
+              ');  
+            
+              if v_mode = 'autofilter' then
+                v_af_query := '
+                  select
+                ';
+            
+                if v_column_seq in (1,3,6,7,8,14,17,18,19,20,25,26) then
+                  v_af_query := v_af_query||'c001 as c001a,';
+                else
+                  v_af_query := v_af_query||'c002 as c001a,';
+                end if;
+            
+                if v_column_seq in (2,3,10,11,12,14,21,22,23,24,25,26) then
+                  v_af_query := v_af_query||'c001 as c002a,';
+                else
+                  v_af_query := v_af_query||'c002 as c002a,';
+                end if;
+            
+                v_af_query := v_af_query||'
+                    rownum rn,
+                    count(*) over (partition by 1) as cnt
+            
+                  from (
+                    select  
+                      c001,
+                      c002
+                    from
+                      apex_collections
+                    where
+                      collection_name = v_collection_name
+            
+                ';
+            
+                --sprwadz czy w ogole jest mozliwosc wybrania wielu wartosci w popup
+                if v_is_lov_avail = 'Y' and  v_multiple = 'Y' then
+                  if regexp_like( v_search, '^[0-9]*$' ) then
+                    v_autofilter_multiple := 'false';
+            
+                  elsif regexp_like( v_search, '^[0-9'||v_separator||']*$' ) then
+                    v_autofilter_multiple := 'true';
+            
+                    v_af_query := v_af_query ||'
+                      and (
+                        c001 in ('''||replace(v_search, v_separator, ''',''')||''')
+                        or c002 in ('''||replace(v_search, v_separator, ''',''')||''')
+                      )
+                    ';
+                  end if;
+                end if;
+            
+                if v_autofilter_multiple = 'false' then
+                  v_autofilter_multiple := 'false';
+            
+                  -- z lewej
+                  if v_filter_columns = 1 AND v_prompt_like = 1 then
+                    v_af_query := v_af_query ||'
+                      and upper(c001) like ''%''||v_search
+                    ';
+                  end if;
+            
+                  if v_filter_columns = 1 AND v_prompt_like = 4 then
+                    v_af_query := v_af_query ||'
+                      and upper(c001) like ''%''||'||v_search_escape||' escape chr(92)
+                    ';
+                  end if;
+            
+                  --z prawej
+                  if v_filter_columns = 1 AND v_prompt_like = 2 then
+                    v_af_query := v_af_query ||'
+                      and upper(c001) like v_search||''%''
+                    ';
+                  end if;
+                  
+                  if v_filter_columns = 1 AND v_prompt_like = 5 then
+                    v_af_query := v_af_query ||'
+                      and upper(c001) like '||v_search_escape||'||''%'' escape chr(92)
+                    ';
+                  end if;
+            
+                  -- z obu
+                  if v_filter_columns = 1 AND v_prompt_like in (3) then
+                    v_af_query := v_af_query ||' and upper(c001) like ''%''||v_search||''%''';
+                  end if;
+            
+                  if v_filter_columns = 1 AND v_prompt_like in (6) then
+                    v_af_query := v_af_query ||' and upper(c001) like ''%''||'||v_search_escape||'||''%'' escape chr(92)';
+                  end if;
+            
+                  --z zadnej
+                  if v_filter_columns = 1 AND v_prompt_like in (7) then
+                    v_af_query := v_af_query ||' and upper(c001) like v_search';
+                  end if;
+            
+                  if v_filter_columns = 1 AND v_prompt_like in (8) then
+                    v_af_query := v_af_query ||' and upper(c001) like '||v_search_escape||' escape chr(92)';
+                  end if;
+                  
+                  -- z lewej
+                  if v_filter_columns = 2 AND v_prompt_like in (1) then
+                    v_af_query := v_af_query ||' and upper(c002) like ''%''||v_search';
+                  end if;
+            
+                  if v_filter_columns = 2 AND v_prompt_like in (4) then
+                    v_af_query := v_af_query ||' and upper(c002) like ''%''||'||v_search_escape||' escape chr(92)';
+                  end if;
+                  
+                  --z prawej
+                  if v_filter_columns = 2 AND v_prompt_like in (2) then
+                    v_af_query := v_af_query ||' and upper(c002) like v_search||''%''';
+                  end if;
+            
+                  if v_filter_columns = 2 AND v_prompt_like in (5) then
+                    v_af_query := v_af_query ||' and upper(c002) like '||v_search_escape||'||''%'' escape chr(92)';
+                  end if;
+                  
+                  --z obu
+                  if v_filter_columns = 2 AND v_prompt_like in (3) then
+                    v_af_query := v_af_query ||' and upper(c002) like ''%''||v_search||''%''';
+                  end if;
+            
+                  if v_filter_columns = 2 AND v_prompt_like in (6) then
+                    v_af_query := v_af_query ||' and upper(c002) like ''%''||'||v_search_escape||'||''%'' escape chr(92)';
+                  end if;
+            
+                  --zadnej
+                  if v_filter_columns = 2 AND v_prompt_like in (7) then
+                    v_af_query := v_af_query ||' and upper(c002) like v_search';
+                  end if;
+            
+                  if v_filter_columns = 2 AND v_prompt_like in (8) then
+                    v_af_query := v_af_query ||' and upper(c002) like '||v_search_escape||' escape chr(92)';
+                  end if;
+                  
+                  --z lewej
+                  if v_filter_columns = 3 AND v_prompt_like in (1) then
+                    v_af_query := v_af_query ||'
+                      and (
+                        upper(c001) like ''%''||v_search
+                        OR upper(c002) like ''%''||v_search
+                      )
+                    ';
+                  end if;
+                  
+                  if v_filter_columns = 3 AND v_prompt_like in (4) then
+                    v_af_query := v_af_query ||'
+                      and (
+                        upper(c001) like ''%''||'||v_search_escape||' escape chr(92)
+                        OR upper(c002) like ''%''||'||v_search_escape||' escape chr(92)
+                      )
+                    ';
+                  end if;
+            
+                  
+                  --z prawej
+                  if v_filter_columns = 3 AND v_prompt_like in (2) then
+                    v_af_query := v_af_query ||'
+                      and (
+                        upper(c001) like v_search||''%''
+                        OR upper(c002) like v_search||''%''
+                      )
+                    ';
+                  end if;
+                  
+                  if v_filter_columns = 3 AND v_prompt_like in (5) then
+                    v_af_query := v_af_query ||'
+                      and (
+                        upper(c001) like '||v_search_escape||'||''%'' escape chr(92)
+                        OR upper(c002) like '||v_search_escape||'||''%'' escape chr(92)
+                      )
+                    ';
+                  end if;
+            
+                  --z obu
+                  if v_filter_columns = 3 AND v_prompt_like in (3) then
+                    v_af_query := v_af_query ||'
+                      and (
+                        upper(c001) like ''%''||v_search||''%''
+                        OR upper(c002) like ''%''||v_search||''%''
+                      )
+                    ';
+                  end if;
+                  
+                  if v_filter_columns = 3 AND v_prompt_like in (6) then
+                    v_af_query := v_af_query ||'
+                      and (
+                        upper(c001) like ''%''||'||v_search_escape||'||''%'' escape chr(92)
+                        OR upper(c002) like ''%''||'||v_search_escape||'||''%'' escape chr(92)
+                      )
+                    ';
+                  end if;
+            
+                  --z zadnej
+                  if v_filter_columns = 3 AND v_prompt_like in (7) then
+                    v_af_query := v_af_query ||'
+                      and (
+                        upper(c001) like v_search
+                        OR upper(c002) like v_search
+                      )
+                    ';
+                  end if;
+                  
+                  if v_filter_columns = 3 AND v_prompt_like in (8) then
+                    v_af_query := v_af_query ||'
+                      and (
+                        upper(c001) like '||v_search_escape||' escape chr(92)
+                        OR upper(c002) like '||v_search_escape||' escape chr(92)
+                      )
+                    ';
+                  end if;
+                end if;      
+            
+            
+                if v_column_seq_sort = 1 then
+                  v_af_query := v_af_query ||' order by c002 asc )';
+                elsif v_column_seq_sort = 2 then
+                  v_af_query := v_af_query ||' order by c001 asc )';
+                elsif v_column_seq_sort = 3 then
+                  v_af_query := v_af_query ||' order by c002 desc )';
+                elsif v_column_seq_sort = 4 then
+                  v_af_query := v_af_query ||' order by c001 desc )';
+                elsif v_column_seq_sort = 5 then
+                  v_af_query := v_af_query ||' order by to_number(c001) asc )';
+                elsif v_column_seq_sort = 6 then
+                  v_af_query := v_af_query ||' order by to_number(c001) desc )';
+                elsif v_column_seq_sort = 7 then
+                  v_af_query := v_af_query ||' order by to_number(c002) asc )';
+                elsif v_column_seq_sort = 8 then
+                  v_af_query := v_af_query ||' order by to_number(c002) desc )';
+            
+                end if;
+            
+            
+            
+                v_af_query := '
+                  declare
+                    v_temp_return_value varchar2(2000);
+                    v_temp_display_value varchar2(2000);
+                    v_search varchar2(2000) := :1;
+                    v_column_seq number := :2;
+                    v_collection_name varchar2(50) := :3;
+            
+                    function removeInvalidChars(
+                      p_string in varchar2
+                    ) return varchar2 
+                    is
+                      v_string varchar2(4000);
+                    begin
+                      v_string := htf.escape_sc( p_string );
+                      v_string := replace( v_string, chr(10),  ''  '' );
+                      v_string := replace( v_string, chr(13),  ''  '' );
+                      v_string := replace( v_string, chr(160),  ''  '' );
+                      v_string := replace( v_string, chr(9),  ''  '' );
+                      return v_string;
+                    end;
+                  begin
+                    for i in (  
+                      '||v_af_query||'
+                    ) loop
+                      v_temp_display_value := removeInvalidChars(i.c002a) ;
+                      v_temp_return_value :=  removeInvalidChars(i.c001a) ;
+                      
+                      if i.rn = i.cnt then
+                        htp.p(''{"r":"''|| v_temp_return_value  ||''","d":"''|| v_temp_display_value ||''","i":''||i.rn||''}'');
+                      else
+                        htp.p(''{"r":"''|| v_temp_return_value  ||''","d":"''|| v_temp_display_value ||''","i":''||i.rn||''},'');
+                      end if;
+                    
+                    end loop;
+                  end;
+                ';
+            
+                execute immediate v_af_query USING v_search, v_column_seq, v_collection_name;
+              elsif v_mode = 'getAllMask' then
+            
+                force_delete_collection( v_coll_getmask );
+            
+                APEX_COLLECTION.CREATE_COLLECTION( v_coll_getmask );
+                APEX_COLLECTION.ADD_MEMBERS( v_coll_getmask, APEX_UTIL.STRING_TO_TABLE(v_search, v_separator) );
+            
+                for i in (
+                  select 
+                    case
+                      when v_column_seq in (1,3,6,7,8,14,17,18,19,20,25,26) then p.c001
+                      when v_column_seq in (2,4,10,11,12,16,21,22,23,24,27,28) then p.c002
+                      else 'Wrong column seq'
+                    end c001,
+                    case 
+                      when v_column_seq in (2,3,10,11,12,14,21,22,23,24,25,26) then p.c001
+                      when v_column_seq in (1,4,6,7,8,16,17,18,19,20,27,28) then p.c002
+                      else 'Wrong column seq'
+                    end c002,
+                    count(*) over (partition by 1) as cnt, rownum as rn
+                  from (
+                    select
+                      SEQ_ID,
+                      c001
+                    from
+                      apex_collections 
+                    where
+                      collection_name = v_coll_getmask
+                  ) m
+                  left join (
+                    select 
+                      c001,
+                      c002
+                    from
+                      apex_collections 
+                    where
+                      collection_name = v_collection_name
+                  ) p
+                  on
+                    v_column_seq in (1,3,6,7,8,14,17,18,19,20,25,26) and m.c001 = p.c001
+                    or v_column_seq in (2,4,10,11,12,16,21,22,23,24,27,28) and m.c001 = p.c002
+                  order by 
+                    m.SEQ_ID
+                ) LOOP
+                  v_temp_display_value := trim_json(  i.c002 );
+                  v_temp_return_value := trim_json( i.c001 );
+            
+                  if i.rn = i.cnt then
+                    htp.p('{"r":"'|| v_temp_return_value  ||'","d":"'|| v_temp_display_value ||'"}');
+                  else
+                    htp.p('{"r":"'|| v_temp_return_value  ||'","d":"'|| v_temp_display_value ||'"},');
+                  end if;
+                end loop;
+            
+              elsif v_mode = 'popupLOV' then
+            
+                if p_item.lov_display_null then
+                  htp.p('{"r": "'||trim_json( p_item.lov_null_value )||'","d": "'|| trim_json( p_item.lov_null_text ) ||'","i": '||1||'},');
+            
+                  v_rownum_plus := 1;
+                end if;
+            
+                for i in (
+                  select
+                    case
+                      when v_column_seq in (1,3,6,7,8,14,17,18,19,20,25,26) then c001
+                      when v_column_seq in (2,4,10,11,12,16,21,22,23,24,27,28) then c002
+                      else 'Wrong column seq'
+                    end c001,
+                    case 
+                      when v_column_seq in (2,3,10,11,12,14,21,22,23,24,25,26) then c001
+                      when v_column_seq in (1,4,6,7,8,16,17,18,19,20,27,28) then c002
+                      else 'Wrong column seq'
+                    end c002,
+                    rownum rn,
+                    count(*) over (partition by 1) as cnt
+                  from (
+                    select  
+                      c001, c002
+                    from
+                      apex_collections
+                    where
+                      collection_name = v_collection_name
+                    order by
+                      decode(v_column_seq_sort, 1, c002) asc,
+                      decode(v_column_seq_sort, 2, c001) asc,
+                      decode(v_column_seq_sort, 3, c002) desc,
+                      decode(v_column_seq_sort, 4, c001) desc,
+                      decode(v_column_seq_sort, 5, to_number(c001)) asc,
+                      decode(v_column_seq_sort, 6, to_number(c001)) desc,
+                      decode(v_column_seq_sort, 7, to_number(c002)) asc,
+                      decode(v_column_seq_sort, 8, to_number(c002)) desc
+                  )
+                ) loop
+            
+                  v_temp_display_value := trim_json( i.c002 );
+                  v_temp_return_value := trim_json( i.c001 );
+                  
+                  if i.rn = i.cnt then
+                    htp.p('{"r":"'|| v_temp_return_value  ||'","d":"'|| v_temp_display_value ||'","i":'||(i.rn +v_rownum_plus)||'}');
+                  else
+                    htp.p('{"r":"'|| v_temp_return_value  ||'","d":"'|| v_temp_display_value ||'","i":'||(i.rn + v_rownum_plus)||'},');
+                  end if;
+            
+                  v_dict_length := v_dict_length +1;      
+                end loop;   
+                
+              elsif v_mode = 'getMask' then
+            
+                begin
+                  select
+                    case 
+                      when v_column_seq in (1,3,6,7,8,14,17,18,19,20,25,26) then c001
+                      when v_column_seq in (2,4,10,11,12,16,21,22,23,24,27,28) then c002
+                      else 'Wrong column seq'
+                    end return_value,
+                    case 
+                      when v_column_seq in (2,3,10,11,12,14,21,22,23,24,25,26) then c001
+                      when v_column_seq in (1,4,6,7,8,16,17,18,19,20,27,28) then c002
+                      else 'Wrong column seq'
+                    end mask
+                  into
+                    v_get_return_value,
+                    v_get_mask
+                  from
+                    apex_collections
+                  where
+                    rownum = 1
+                    and collection_name = v_collection_name
+                    and (
+                      upper(c001) = upper(v_search)
+                      OR upper(c002) = upper(v_search)
+                    );
+                  
+                  htp.p('{"r": "'||trim_json(v_get_return_value)||'","d": "'||trim_json(v_get_mask)||'","index": '||1||', "matched": true}');
+            
+                exception
+                  when no_data_found then
+                    htp.p('{"r": "'||trim_json(v_search) ||'","d": "'||trim_json(v_search)||'","index": '||1||', "matched": false}');
+                  when others then
+                    e_temp_msg := 'Error durring retrieving plugin mask: \n'||SQLERRM;
+                    raise e_temp;
+                end;
+                
+              end if;
+              
+              v_time_end := current_time_ms();
+              v_time_diff := v_time_end - v_time_start;
+              
+              htp.p('
+                  ],
+                  "time": {
+                    "ms": "'     ||replace(to_char( v_time_diff,          '999G999G999G999G990D0000'),' ', '')||'",
+                    "seconds": "'||replace(to_char((v_time_diff/1000),    '999G999G999G999G990D0000'),' ', '')||'",
+                    "minutes": "'||replace(to_char((v_time_diff/1000/60), '999G999G999G999G990D0000'),' ', '')||'"
+                  },
+                  "autofilter": {
+                    "searchMultiple": '||v_autofilter_multiple||'
+                  },
+                  "plugin": {
+                    "plugin_id": "'||p_item.id||'",
+                    "item_id": "'||p_item.name||'",
+                    "plain_label": "'||p_item.plain_label||'",
+                    "column_seq": "'|| v_column_seq ||'",
+                    "v_filter_columns": '|| v_filter_columns ||',
+                    "v_prompt_like": '|| v_prompt_like ||'
+                  },
+                  "input": {
+                    "mode": "'||trim_json(v_mode)||'",
+                    "p_search": "'||trim_json(v_search)||'"
+                  }, 
+                  "error": {
+                    "error": 0,
+                    "mode": "'|| v_mode ||'",
+                    "SQLERRM": "",
+                    "func_name": "apex_ajax_pal"
+                  }
+                }
+              ');  
+              
+              return null;
+              
+            exception 
+              when e_temp then
+                htp.p('
+                  {
+                    "values": [],
+                    "plugin": {
+                      "plugin_id": "'||p_item.id||'",
+                      "item_id": "'||p_item.name||'",
+                      "plain_label": "'||p_item.plain_label||'"
+                    },
+                    "input": {
+                      "mode": "'||htf.escape_sc(v_mode)||'",
+                      "p_search": "'||trim_json(v_search)||'"
+                    }, 
+                    "error": {
+                      "error": 1,
+                      "mode": "'|| v_mode ||'",
+                      "SQLERRM": "'||trim_json( e_temp_msg )||'",
+                      "func_name": "apex_ajax_pal"
+                    }
+                  }
+                ');  
+                return null;
+                
+              when others then
+                htp.p('
+                    ],
+                    "plugin": {
+                      "plugin_id": "'||p_item.id||'",
+                      "item_id": "'||p_item.name||'",
+                      "plain_label": "'||p_item.plain_label||'"
+                    },
+                    "input": {
+                      "mode": "'||trim_json(v_mode)||'",
+                      "p_search": "'||trim_json(v_search)||'"
+                    }, 
+                    "error": {
+                      "error": 1,
+                      "mode": "'|| v_mode ||'",
+                      "SQLERRM": "'||trim_json(SQLERRM )||'",
+                      "func_name": "apex_ajax_pal"
+                    }
+                  }    
+                ');  
+                return null;
+            end apex_ajax_pal;
+            ```
+    }
+    callbacks {
+        apiInterface: function
+        renderProcedureName: render_pal
+        ajaxProcedureName: apex_ajax_pal
+    }
+    advanced {
+        substituteAttributeValues: true
+    }
+    information {
+        version: 2.2.1.
+        aboutUrl: http://apex.pretius.com
+    }
+
+    standardAttributeConfig (
+        name: hasLov
+        validation {
+            required: true
+        }
+        sqlQuery {
+            minColumns: 2
+            maxColumns: 2
+        }
+    )
+
+)
+

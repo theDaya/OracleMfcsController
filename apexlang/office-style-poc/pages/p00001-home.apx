@@ -1,0 +1,340 @@
+page 1 (
+    name: Home
+    alias: HOME
+    title: Office Style Composer
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+
+    region banner (
+        name: Office Style Composer
+        type: staticContent
+        source {
+            htmlCode:
+                ```html
+                <p>Compose an MFCS style number from a style and a supplier colour, then create it.
+                The number is built here and sent as it stands - MFCS is told it is a
+                <strong>MANL</strong> number and accepts it without a reservation.</p>
+                ```
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @hero
+            templateOptions: #DEFAULT#
+            icon: fa-shopping-bag
+        }
+    )
+
+    region reference (
+        name: Reference Data
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select card_title, card_subtitle, card_text, card_icon, card_color,
+                       card_subtext, card_initials, card_link, card_modifiers
+                  from (
+                select 'Styles' as card_title,
+                       'MFCS UDA 66040' as card_subtitle,
+                       to_char(count(*), 'FM999G999') || ' style and model numbers, '
+                           || 'loaded from the tenant. Five digits each.' as card_text,
+                       'fa-tags' as card_icon,
+                       'u-color-1' as card_color,
+                       'Read-only - the tenant owns this list' as card_subtext,
+                       null as card_initials,
+                       null as card_link,
+                       null as card_modifiers,
+                       10 as seq
+                  from poc_style_model
+                union all
+                select 'Supplier Colours',
+                       'MFCS UDA 56038 - free-form',
+                       to_char(count(*)) || ' colours, maintained here. The tenant keeps no '
+                           || 'list to choose from, so this one is ours.',
+                       'fa-paint-brush',
+                       'u-color-4',
+                       'Maintained in Reference Data',
+                       null, null, null,
+                       20
+                  from poc_supplier_colour
+                union all
+                select 'Supplier Colour Codes',
+                       'MFCS UDA 61038 - free-form',
+                       to_char(count(*)) || ' codes across those colours. A code belongs to a '
+                           || 'colour, and it is the code that composes the number.',
+                       'fa-hashtag',
+                       'u-color-7',
+                       'Cascades from the colour',
+                       null, null, null,
+                       30
+                  from poc_supplier_colour_code
+                       )
+                 order by seq
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+            ]
+        }
+        componentAppearance {
+            template: @cards
+        }
+
+        column CARD_TITLE (
+            heading {
+                heading: Title
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column CARD_SUBTITLE (
+            heading {
+                heading: Subtitle
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column CARD_TEXT (
+            heading {
+                heading: Text
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column CARD_ICON (
+            heading {
+                heading: Icon
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column CARD_COLOR (
+            type: plainText
+            heading {
+                heading: Colour
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column CARD_SUBTEXT (
+            type: plainText
+            heading {
+                heading: Subtext
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column CARD_INITIALS (
+            type: plainText
+            heading {
+                heading: Initials
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column CARD_LINK (
+            type: plainText
+            heading {
+                heading: Link
+            }
+            layout {
+                sequence: 80
+            }
+        )
+
+        column CARD_MODIFIERS (
+            type: plainText
+            heading {
+                heading: Modifiers
+            }
+            layout {
+                sequence: 90
+            }
+        )
+    )
+
+    region how-it-works (
+        name: How a style number is composed
+        type: staticContent
+        source {
+            htmlCode:
+                ```html
+                <ul class="t-BadgeList t-BadgeList--circular t-BadgeList--fixed">
+                  <li class="t-BadgeList-item">
+                    <span class="t-BadgeList-value">1</span>
+                    <span class="t-BadgeList-label">Pick a style<br>26683 CLARKS DESERT BOOT</span>
+                  </li>
+                  <li class="t-BadgeList-item">
+                    <span class="t-BadgeList-value">2</span>
+                    <span class="t-BadgeList-label">Pick a supplier colour<br>Sky Blue</span>
+                  </li>
+                  <li class="t-BadgeList-item">
+                    <span class="t-BadgeList-value">3</span>
+                    <span class="t-BadgeList-label">Pick its code<br>080</span>
+                  </li>
+                  <li class="t-BadgeList-item">
+                    <span class="t-BadgeList-value">=</span>
+                    <span class="t-BadgeList-label">Item number<br>26683080</span>
+                  </li>
+                </ul>
+                <p>The description is composed the same way - <em>CLARKS DESERT BOOT Sky Blue</em> -
+                and each size in the curve extends both: <code>26683080992</code>,
+                <em>CLARKS DESERT BOOT Sky Blue S</em>.</p>
+                <p>A five-digit style and a three-digit colour code make eight characters. Every
+                number MFCS generates for itself is nine, so a composed number can never collide
+                with one of the tenant's own.</p>
+                ```
+        }
+        layout {
+            sequence: 30
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region drafts (
+        name: Recent Drafts
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select d.draft_id,
+                       d.composed_item_no,
+                       d.composed_item_desc,
+                       d.draft_status,
+                       d.http_status,
+                       to_char(d.created_at, 'YYYY-MM-DD HH24:MI') as created_at
+                  from poc_style_draft d
+                 order by d.draft_id desc
+                 fetch first 15 rows only
+                ```
+        }
+        layout {
+            sequence: 40
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column DRAFT_ID (
+            heading {
+                heading: Draft
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column COMPOSED_ITEM_NO (
+            heading {
+                heading: Item number
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column COMPOSED_ITEM_DESC (
+            heading {
+                heading: Description
+            }
+            layout {
+                sequence: 80
+            }
+        )
+
+        column DRAFT_STATUS (
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 90
+            }
+        )
+
+        column HTTP_STATUS (
+            heading {
+                heading: HTTP
+            }
+            layout {
+                sequence: 100
+            }
+        )
+
+        column CREATED_AT (
+            heading {
+                heading: Created
+            }
+            layout {
+                sequence: 110
+            }
+        )
+    )
+
+    button new-style (
+        buttonName: NEW_STYLE
+        label: Create a Style
+        layout {
+            sequence: 10
+            region: @drafts
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 2
+                clearCache: 2
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+)

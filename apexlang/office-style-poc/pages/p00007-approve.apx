@@ -1,0 +1,860 @@
+page 7 (
+    name: Approve
+    alias: APPROVE
+    title: Approve
+    appearance {
+        pageMode: modalDialog
+        dialogTemplate: @modal-dialog
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+        formAutoComplete: false
+    }
+
+    region intro (
+        name: Approve and send
+        type: staticContent
+        source {
+            htmlCode:
+                ```html
+                <p>This is the document frozen when the draft was submitted, exactly as it will
+                reach MFCS. Nothing here can be changed - a draft that needs a change has to be
+                reopened, which discards the review. Approving sends it.</p>
+                ```
+        }
+        layout {
+            sequence: 5
+            slot: contentBody
+        }
+        appearance {
+            template: @alert
+            templateOptions: [
+                #DEFAULT#
+                t-Alert--warning
+            ]
+        }
+    )
+
+    region tabs (
+        name: What will be sent
+        type: staticContent
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @tabs-container
+            templateOptions: [
+                #DEFAULT#
+                t-TabsRegion-mod--pill
+            ]
+        }
+    )
+
+    region p7-skus (
+        name: SKUs and Quantities
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select composed_sku_no, composed_sku_desc, sku_size, sku_qty
+                  from poc_style_draft_sku
+                 where draft_id = :P7_DRAFT_ID
+                 order by sku_size
+                ```
+        }
+        layout {
+            sequence: 30
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column COMPOSED_SKU_NO (
+            type: plainText
+            heading {
+                heading: SKU
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column COMPOSED_SKU_DESC (
+            type: plainText
+            heading {
+                heading: Description
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column SKU_SIZE (
+            type: plainText
+            heading {
+                heading: Size
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column SKU_QTY (
+            type: plainText
+            heading {
+                heading: Quantity
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+    )
+
+    region p7-style (
+        name: Style
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select d.composed_item_no as item,
+                       d.composed_item_desc as description,
+                       d.operation_name,
+                       d.department, d.class, d.subclass,
+                       d.supplier, d.origin_country, d.currency_code,
+                       d.unit_cost, d.retail_price, d.mfcs_colour
+                  from poc_style_draft d
+                 where d.draft_id = :P7_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 10
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column ITEM (
+            type: plainText
+            heading {
+                heading: Item number
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column DESCRIPTION (
+            type: plainText
+            heading {
+                heading: Description
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column OPERATION_NAME (
+            type: plainText
+            heading {
+                heading: Operation
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column DEPARTMENT (
+            type: plainText
+            heading {
+                heading: Dept
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column CLASS (
+            type: plainText
+            heading {
+                heading: Class
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column SUBCLASS (
+            type: plainText
+            heading {
+                heading: Subclass
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column SUPPLIER (
+            type: plainText
+            heading {
+                heading: Supplier
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column ORIGIN_COUNTRY (
+            type: plainText
+            heading {
+                heading: Origin
+            }
+            layout {
+                sequence: 80
+            }
+        )
+
+        column CURRENCY_CODE (
+            type: plainText
+            heading {
+                heading: Currency
+            }
+            layout {
+                sequence: 90
+            }
+        )
+
+        column UNIT_COST (
+            type: plainText
+            heading {
+                heading: Cost
+            }
+            layout {
+                sequence: 100
+            }
+        )
+
+        column RETAIL_PRICE (
+            type: plainText
+            heading {
+                heading: Retail
+            }
+            layout {
+                sequence: 110
+            }
+        )
+
+        column MFCS_COLOUR (
+            type: plainText
+            heading {
+                heading: Colour diff
+            }
+            layout {
+                sequence: 120
+            }
+        )
+
+    )
+
+    region p7-order (
+        name: Order
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select d.order_no, d.source_order_ref, d.delivery_loc, d.import_country,
+                       to_char(d.not_before_date, 'YYYY-MM-DD') as not_before,
+                       to_char(d.not_after_date, 'YYYY-MM-DD') as not_after,
+                       to_char(d.otb_eow_date, 'YYYY-MM-DD') as otb_eow,
+                       to_char(d.earliest_ship_date, 'YYYY-MM-DD') as earliest_ship,
+                       to_char(d.latest_ship_date, 'YYYY-MM-DD') as latest_ship
+                  from poc_style_draft d
+                 where d.draft_id = :P7_DRAFT_ID
+                   and d.operation_name in ('CREATE_ALL', 'MODIFY_ORDER')
+                ```
+        }
+        layout {
+            sequence: 20
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column ORDER_NO (
+            type: plainText
+            heading {
+                heading: Order
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column SOURCE_ORDER_REF (
+            type: plainText
+            heading {
+                heading: Reference
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column DELIVERY_LOC (
+            type: plainText
+            heading {
+                heading: Delivery
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column IMPORT_COUNTRY (
+            type: plainText
+            heading {
+                heading: Import
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column NOT_BEFORE (
+            type: plainText
+            heading {
+                heading: Not before
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column NOT_AFTER (
+            type: plainText
+            heading {
+                heading: Not after
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column OTB_EOW (
+            type: plainText
+            heading {
+                heading: OTB week end
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column EARLIEST_SHIP (
+            type: plainText
+            heading {
+                heading: Earliest ship
+            }
+            layout {
+                sequence: 80
+            }
+        )
+
+        column LATEST_SHIP (
+            type: plainText
+            heading {
+                heading: Latest ship
+            }
+            layout {
+                sequence: 90
+            }
+        )
+
+    )
+
+    region p7-udas (
+        name: UDAs
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select u.uda_id,
+                       (select max(m.description) from master_data m
+                         where m.data_type = 'UDA' and m.data_code = u.uda_id) as uda_name,
+                       u.uda_value, u.uda_text,
+                       to_char(u.uda_date, 'YYYY-MM-DD') as uda_date
+                  from poc_draft_uda u
+                 where u.draft_id = :P7_DRAFT_ID
+                 order by u.uda_id
+                ```
+        }
+        layout {
+            sequence: 40
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column UDA_ID (
+            type: plainText
+            heading {
+                heading: UDA
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column UDA_NAME (
+            type: plainText
+            heading {
+                heading: Name
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column UDA_VALUE (
+            type: plainText
+            heading {
+                heading: Value
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column UDA_TEXT (
+            type: plainText
+            heading {
+                heading: Text
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column UDA_DATE (
+            type: plainText
+            heading {
+                heading: Date
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+    )
+
+    region p7-barcodes (
+        name: Barcodes
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select s.composed_sku_no as sku, u.upc, u.upc_type, u.primary_yn
+                  from poc_draft_sku_upc u
+                  join poc_style_draft_sku s on s.draft_sku_id = u.draft_sku_id
+                 where s.draft_id = :P7_DRAFT_ID
+                 order by s.sku_size, u.primary_yn desc
+                ```
+        }
+        layout {
+            sequence: 50
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column SKU (
+            type: plainText
+            heading {
+                heading: SKU
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column UPC (
+            type: plainText
+            heading {
+                heading: Barcode
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column UPC_TYPE (
+            type: plainText
+            heading {
+                heading: Type
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column PRIMARY_YN (
+            type: plainText
+            heading {
+                heading: Primary
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+    )
+
+    region p7-attrs (
+        name: Seasons and Tariffs
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select 'Season' as kind, to_char(x.season_id) as ref,
+                       'phase ' || x.phase_id as detail
+                  from poc_draft_season x
+                 where x.draft_id = :P7_DRAFT_ID
+                union all
+                select 'Image', i.image_name, i.image_address
+                  from poc_draft_image i
+                 where i.draft_id = :P7_DRAFT_ID
+                union all
+                select 'Tariff', h.hts,
+                       'import ' || h.import_country || ', origin ' || h.origin_country
+                  from poc_draft_hts h
+                 where h.draft_id = :P7_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 60
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column KIND (
+            type: plainText
+            heading {
+                heading: Kind
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column REF (
+            type: plainText
+            heading {
+                heading: Reference
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column DETAIL (
+            type: plainText
+            heading {
+                heading: Detail
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+    )
+
+    region p7-document (
+        name: Frozen Document
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select dbms_lob.substr(request_payload, 3800, 1) as document,
+                       submitted_by, to_char(submitted_at, 'YYYY-MM-DD HH24:MI') as submitted_at
+                  from poc_style_draft
+                 where draft_id = :P7_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 70
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column DOCUMENT (
+            type: plainText
+            heading {
+                heading: Document as frozen at submit
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column SUBMITTED_BY (
+            type: plainText
+            heading {
+                heading: Submitted by
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column SUBMITTED_AT (
+            type: plainText
+            heading {
+                heading: Submitted at
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+    )
+
+    pageItem P7_DRAFT_ID (
+        type: hidden
+        layout {
+            sequence: 10
+            region: @intro
+            slot: regionBody
+        }
+    )
+
+    pageItem P7_APPROVED_BY (
+        type: selectList
+        label {
+            label: Approving as
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select full_name as d, full_name as r
+                  from poc_approver
+                 where active_yn = 'Y'
+                   and can_approve_yn = 'Y'
+                 order by full_name
+                ```
+        }
+        layout {
+            sequence: 20
+            region: @intro
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 4
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+    )
+
+    button cancel (
+        buttonName: CANCEL
+        label: Cancel
+        layout {
+            sequence: 10
+            region: @intro
+            slot: regionBody
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 5
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button reopen (
+        buttonName: REOPEN
+        label: Reopen for Editing
+        layout {
+            sequence: 20
+            region: @intro
+            slot: regionBody
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button approve (
+        buttonName: APPROVE
+        label: Approve and Send
+        layout {
+            sequence: 30
+            region: @intro
+            slot: regionBody
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    process do-approve (
+        name: Approve and send
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                declare
+                    l_status number;
+                    l_response clob;
+                begin
+                    poc_style_pkg.approve_draft(
+                        :P7_DRAFT_ID, :P7_APPROVED_BY, l_status, l_response);
+
+                    if l_status not between 200 and 299 then
+                        apex_error.add_error(
+                            p_message => 'MFCS returned HTTP ' || l_status || '. '
+                                || dbms_lob.substr(l_response, 800, 1),
+                            p_display_location => apex_error.c_inline_in_notification);
+                    end if;
+                end;
+                ```
+        }
+        execution {
+            sequence: 10
+        }
+        successMessage {
+            successMessage: Approved and sent to MFCS.
+        }
+        serverSideCondition {
+            whenButtonPressed: @approve
+        }
+    )
+
+    process do-reopen (
+        name: Reopen the draft
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                    poc_style_pkg.reopen_draft(:P7_DRAFT_ID);
+                end;
+                ```
+        }
+        execution {
+            sequence: 20
+        }
+        successMessage {
+            successMessage: Reopened. The review has been discarded and the draft is editable again.
+        }
+        serverSideCondition {
+            whenButtonPressed: @reopen
+        }
+    )
+
+)

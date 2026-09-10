@@ -1,0 +1,2423 @@
+page 2 (
+    name: Capture
+    alias: CAPTURE
+    title: Capture
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        pageAccessProtection: argumentsMustHaveChecksum
+        formAutoComplete: false
+    }
+
+    region draft (
+        name: Style Capture
+        type: form
+        source {
+            location: localDatabase
+            tableName: POC_STYLE_DRAFT
+        }
+        layout {
+            sequence: 10
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+    )
+
+    region grp-identity (
+        name: 1. Style and Supplier Colour
+        type: staticContent
+        layout {
+            sequence: 5
+            parentRegion: @draft
+            slot: regionBody
+        }
+        appearance {
+            template: @content-block
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region grp-merch (
+        name: 2. Merchandise and Commercials
+        type: staticContent
+        layout {
+            sequence: 6
+            parentRegion: @draft
+            slot: regionBody
+        }
+        appearance {
+            template: @content-block
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    region composed (
+        name: Composed MFCS Identity
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select attribute, value
+                  from (
+                select 'Item number' as attribute,
+                       nvl(d.composed_item_no, 'not yet composed') as value,
+                       10 as seq
+                  from poc_style_draft d
+                 where d.draft_id = :P2_DRAFT_ID
+                union all
+                select 'Item description',
+                       nvl(d.composed_item_desc, 'not yet composed'),
+                       20
+                  from poc_style_draft d
+                 where d.draft_id = :P2_DRAFT_ID
+                union all
+                select 'Composed from',
+                       m.style_no || ' ' || m.style_desc
+                           || '  +  ' || cc.colour_code || ' ' || c.colour_name,
+                       30
+                  from poc_style_draft d
+                  join poc_style_model m on m.style_no = d.style_no
+                  join poc_supplier_colour c on c.colour_id = d.colour_id
+                  join poc_supplier_colour_code cc on cc.colour_code_id = d.colour_code_id
+                 where d.draft_id = :P2_DRAFT_ID
+                union all
+                select 'MFCS request',
+                       nvl(d.action_request_id, 'not submitted')
+                           || case when d.http_status is null then ''
+                                   else ' - HTTP ' || d.http_status end,
+                       40
+                  from poc_style_draft d
+                 where d.draft_id = :P2_DRAFT_ID
+                       )
+                 order by seq
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @hero
+            templateOptions: #DEFAULT#
+        }
+        componentAppearance {
+            template: @value-attribute-pairs-row
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P2_DRAFT_ID
+        }
+
+        column ATTRIBUTE (
+            heading {
+                heading: Attribute
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column VALUE (
+            heading {
+                heading: Value
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+    )
+
+    region sizes (
+        name: 3. Size Curve
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_sku_id,
+                       draft_id,
+                       sku_size,
+                       sku_qty
+                  from poc_style_draft_sku
+                 where draft_id = :P2_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 30
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P2_DRAFT_ID
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @SKU_SIZE
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @SKU_QTY
+                layout {
+                    sequence: 2
+                }
+            )
+
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 5
+            }
+        )
+
+        column DRAFT_SKU_ID (
+            type: hidden
+            layout {
+                sequence: 10
+            }
+            source {
+                databaseColumn: DRAFT_SKU_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+        )
+
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 20
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+            default {
+                type: item
+                item: P2_DRAFT_ID
+            }
+        )
+
+        column SKU_SIZE (
+            type: selectList
+            heading {
+                heading: Size
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select description || ' - ' || data_code as d, data_code as r
+                      from master_data
+                     where data_type = 'DIFF_S'
+                       and data_code <> 'ALL'
+                     order by description
+                    ```
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: SKU_SIZE
+                dataType: varchar2
+            }
+        )
+
+        column SKU_QTY (
+            type: numberField
+            heading {
+                heading: Quantity
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: SKU_QTY
+                dataType: number
+            }
+            default {
+                type: static
+                staticValue: 1
+            }
+        )
+    )
+
+    region sku-preview (
+        name: Composed SKUs
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select s.sku_size,
+                       s.sku_qty,
+                       s.composed_sku_no,
+                       s.composed_sku_desc
+                  from poc_style_draft_sku s
+                 where s.draft_id = :P2_DRAFT_ID
+                   and s.composed_sku_no is not null
+                 order by s.sku_size
+                ```
+        }
+        layout {
+            sequence: 40
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: #DEFAULT#
+        }
+        componentAppearance {
+            template: @standard
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P2_DRAFT_ID
+        }
+
+        column SKU_SIZE (
+            heading {
+                heading: Size
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column SKU_QTY (
+            heading {
+                heading: Qty
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column COMPOSED_SKU_NO (
+            heading {
+                heading: MFCS SKU number
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column COMPOSED_SKU_DESC (
+            heading {
+                heading: MFCS SKU description
+            }
+            layout {
+                sequence: 60
+            }
+        )
+    )
+
+    region grp-order (
+        name: 3. Order
+        type: staticContent
+        layout {
+            sequence: 7
+            parentRegion: @draft
+            slot: regionBody
+        }
+        appearance {
+            template: @content-block
+            templateOptions: #DEFAULT#
+        }
+        serverSideCondition {
+            type: itemIsInColonDelimitedList
+            item: P2_OPERATION_NAME
+            list: CREATE_ALL:MODIFY_ORDER
+        }
+    )
+
+    region attribute-tabs (
+        name: Style and SKU Detail
+        type: staticContent
+        layout {
+            sequence: 50
+            slot: contentBody
+        }
+        appearance {
+            template: @tabs-container
+            templateOptions: [
+                #DEFAULT#
+                t-TabsRegion-mod--pill
+            ]
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P2_DRAFT_ID
+        }
+    )
+
+    region style-udas (
+        name: UDAs
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_uda_id, draft_id, uda_id, uda_value, uda_text, uda_date
+                  from poc_draft_uda
+                 where draft_id = :P2_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 10
+            parentRegion: @attribute-tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @UDA_ID
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @UDA_VALUE
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @UDA_TEXT
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @UDA_DATE
+                layout {
+                    sequence: 4
+                }
+            )
+
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 5
+            }
+        )
+
+        column DRAFT_UDA_ID (
+            type: hidden
+            layout {
+                sequence: 10
+            }
+            source {
+                databaseColumn: DRAFT_UDA_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+        )
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 20
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+        )
+        column UDA_ID (
+            type: selectList
+            heading {
+                heading: UDA
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select description || ' - ' || data_code as d, data_code as r
+                      from master_data
+                     where data_type = 'UDA'
+                     order by description
+                    ```
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: UDA_ID
+                dataType: varchar2
+            }
+        )
+        column UDA_VALUE (
+            type: textField
+            heading {
+                heading: Value (LV)
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: UDA_VALUE
+                dataType: varchar2
+            }
+        )
+        column UDA_TEXT (
+            type: textField
+            heading {
+                heading: Text (FF)
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: UDA_TEXT
+                dataType: varchar2
+            }
+        )
+        column UDA_DATE (
+            type: datePicker
+            heading {
+                heading: Date (DT)
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                databaseColumn: UDA_DATE
+                dataType: date
+            }
+        )
+    )
+
+    region sku-barcodes (
+        name: Barcodes
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select u.draft_upc_id, u.draft_sku_id, u.upc, u.upc_type, u.primary_yn
+                  from poc_draft_sku_upc u
+                  join poc_style_draft_sku s on s.draft_sku_id = u.draft_sku_id
+                 where s.draft_id = :P2_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 20
+            parentRegion: @attribute-tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @DRAFT_SKU_ID
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @UPC
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @UPC_TYPE
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @PRIMARY_YN
+                layout {
+                    sequence: 4
+                }
+            )
+
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 5
+            }
+        )
+
+        column DRAFT_UPC_ID (
+            type: hidden
+            layout {
+                sequence: 10
+            }
+            source {
+                databaseColumn: DRAFT_UPC_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+        )
+        column DRAFT_SKU_ID (
+            type: selectList
+            heading {
+                heading: SKU
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select nvl(composed_sku_no, sku_size) as d, draft_sku_id as r
+                      from poc_style_draft_sku
+                     where draft_id = :P2_DRAFT_ID
+                     order by sku_size
+                    ```
+            }
+            layout {
+                sequence: 20
+            }
+            source {
+                databaseColumn: DRAFT_SKU_ID
+                dataType: number
+            }
+        )
+        column UPC (
+            type: textField
+            heading {
+                heading: Barcode
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: UPC
+                dataType: varchar2
+            }
+        )
+        column UPC_TYPE (
+            type: textField
+            heading {
+                heading: Type
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: UPC_TYPE
+                dataType: varchar2
+            }
+            default {
+                type: static
+                staticValue: EAN13
+            }
+        )
+        column PRIMARY_YN (
+            type: selectList
+            heading {
+                heading: Primary
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select 'Yes' as d, 'Y' as r from dual
+                    union all select 'No', 'N' from dual
+                    ```
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: PRIMARY_YN
+                dataType: varchar2
+            }
+            default {
+                type: static
+                staticValue: N
+            }
+        )
+    )
+
+    region style-seasons (
+        name: Seasons
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_season_id, draft_id, season_id, phase_id, sequence_no
+                  from poc_draft_season
+                 where draft_id = :P2_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 30
+            parentRegion: @attribute-tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @SEASON_ID
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @PHASE_ID
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @SEQUENCE_NO
+                layout {
+                    sequence: 3
+                }
+            )
+
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 5
+            }
+        )
+
+        column DRAFT_SEASON_ID (
+            type: hidden
+            layout {
+                sequence: 10
+            }
+            source {
+                databaseColumn: DRAFT_SEASON_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+        )
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 20
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+        )
+        column SEASON_ID (
+            type: numberField
+            heading {
+                heading: Season
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: SEASON_ID
+                dataType: number
+            }
+        )
+        column PHASE_ID (
+            type: numberField
+            heading {
+                heading: Phase
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: PHASE_ID
+                dataType: number
+            }
+        )
+        column SEQUENCE_NO (
+            type: numberField
+            heading {
+                heading: Sequence
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: SEQUENCE_NO
+                dataType: number
+            }
+        )
+    )
+
+    region style-images (
+        name: Images
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_image_id, draft_id, image_name, image_address,
+                       image_type, primary_yn, display_priority
+                  from poc_draft_image
+                 where draft_id = :P2_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 40
+            parentRegion: @attribute-tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @IMAGE_NAME
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @IMAGE_ADDRESS
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @IMAGE_TYPE
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @PRIMARY_YN
+                layout {
+                    sequence: 4
+                }
+            )
+
+            displayColumn (
+                column: @DISPLAY_PRIORITY
+                layout {
+                    sequence: 5
+                }
+            )
+
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 5
+            }
+        )
+
+        column DRAFT_IMAGE_ID (
+            type: hidden
+            layout {
+                sequence: 10
+            }
+            source {
+                databaseColumn: DRAFT_IMAGE_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+        )
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 20
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+        )
+        column IMAGE_NAME (
+            type: textField
+            heading {
+                heading: File name
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: IMAGE_NAME
+                dataType: varchar2
+            }
+        )
+        column IMAGE_ADDRESS (
+            type: textField
+            heading {
+                heading: Address
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: IMAGE_ADDRESS
+                dataType: varchar2
+            }
+        )
+        column IMAGE_TYPE (
+            type: textField
+            heading {
+                heading: Type
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: IMAGE_TYPE
+                dataType: varchar2
+            }
+        )
+        column PRIMARY_YN (
+            type: selectList
+            heading {
+                heading: Primary
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select 'Yes' as d, 'Y' as r from dual
+                    union all select 'No', 'N' from dual
+                    ```
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                databaseColumn: PRIMARY_YN
+                dataType: varchar2
+            }
+            default {
+                type: static
+                staticValue: N
+            }
+        )
+        column DISPLAY_PRIORITY (
+            type: numberField
+            heading {
+                heading: Priority
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                databaseColumn: DISPLAY_PRIORITY
+                dataType: number
+            }
+        )
+    )
+
+    region style-hts (
+        name: Tariff Codes
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_hts_id, draft_id, hts, import_country,
+                       origin_country, effect_from, effect_to
+                  from poc_draft_hts
+                 where draft_id = :P2_DRAFT_ID
+                ```
+        }
+        layout {
+            sequence: 50
+            parentRegion: @attribute-tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @HTS
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @IMPORT_COUNTRY
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @ORIGIN_COUNTRY
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @EFFECT_FROM
+                layout {
+                    sequence: 4
+                }
+            )
+
+            displayColumn (
+                column: @EFFECT_TO
+                layout {
+                    sequence: 5
+                }
+            )
+
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 5
+            }
+        )
+
+        column DRAFT_HTS_ID (
+            type: hidden
+            layout {
+                sequence: 10
+            }
+            source {
+                databaseColumn: DRAFT_HTS_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+        )
+        column DRAFT_ID (
+            type: hidden
+            layout {
+                sequence: 20
+            }
+            source {
+                databaseColumn: DRAFT_ID
+                dataType: number
+            }
+        )
+        column HTS (
+            type: textField
+            heading {
+                heading: Code
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: HTS
+                dataType: varchar2
+            }
+        )
+        column IMPORT_COUNTRY (
+            type: textField
+            heading {
+                heading: Import
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: IMPORT_COUNTRY
+                dataType: varchar2
+            }
+        )
+        column ORIGIN_COUNTRY (
+            type: textField
+            heading {
+                heading: Origin
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: ORIGIN_COUNTRY
+                dataType: varchar2
+            }
+        )
+        column EFFECT_FROM (
+            type: datePicker
+            heading {
+                heading: From
+            }
+            layout {
+                sequence: 60
+            }
+            source {
+                databaseColumn: EFFECT_FROM
+                dataType: date
+            }
+        )
+        column EFFECT_TO (
+            type: datePicker
+            heading {
+                heading: To
+            }
+            layout {
+                sequence: 70
+            }
+            source {
+                databaseColumn: EFFECT_TO
+                dataType: date
+            }
+        )
+    )
+
+    pageItem P2_DRAFT_ID (
+        type: hidden
+        layout {
+            sequence: 10
+            region: @grp-identity
+            slot: regionBody
+        }
+        source {
+            formRegion: @draft
+            column: DRAFT_ID
+            dataType: number
+            primaryKey: true
+        }
+    )
+
+    pageItem P2_OPERATION_NAME (
+        type: selectList
+        label {
+            label: What is being captured
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select 'Style only' as d, 'CREATE_STYLE' as r from dual
+                union all select 'Order and Style', 'CREATE_ALL' from dual
+                union all select 'Amend an existing order', 'MODIFY_ORDER' from dual
+                ```
+        }
+        layout {
+            sequence: 5
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 6
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        default {
+            type: static
+            staticValue: CREATE_STYLE
+        }
+        source {
+            formRegion: @draft
+            column: OPERATION_NAME
+            dataType: varchar2
+        }
+        help {
+            helpText: Style only creates the style and its SKUs. Order and Style places an order on top of a style it creates in the same request - the backend sends the whole style write set either way, so an order is never a narrower operation than a style.
+        }
+    )
+
+    pageItem P2_STYLE_NO (
+        type: popupLov
+        label {
+            label: Style / Model
+            alignment: left
+        }
+        settings {
+            displayAs: modalDialog
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select style_no || '  -  ' || style_desc as d, style_no as r
+                  from poc_style_model
+                 where active_yn = 'Y'
+                 order by style_desc
+                ```
+        }
+        layout {
+            sequence: 20
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: STYLE_NO
+            dataType: varchar2
+        }
+        help {
+            helpText: The tenant's own style list - MFCS UDA 66040, 13,693 values. Its number begins the composed item number and its description begins the composed item description.
+        }
+    )
+
+    pageItem P2_COLOUR_ID (
+        type: selectList
+        label {
+            label: Supplier Colour
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select colour_name as d, colour_id as r
+                  from poc_supplier_colour
+                 where active_yn = 'Y'
+                 order by colour_name
+                ```
+        }
+        layout {
+            sequence: 30
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: COLOUR_ID
+            dataType: number
+        }
+        help {
+            helpText: Maintained here, not in MFCS. Supplier Colour is UDA 56038, which is free-form - the tenant holds no list to choose from, so this one is ours.
+        }
+    )
+
+    pageItem P2_COLOUR_CODE_ID (
+        type: selectList
+        label {
+            label: Supplier Colour Code
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select colour_code || ' - ' || nvl(code_desc, colour_code) as d,
+                       colour_code_id as r
+                  from poc_supplier_colour_code
+                 where active_yn = 'Y'
+                   and colour_id = :P2_COLOUR_ID
+                 order by colour_code
+                ```
+        }
+        cascadingLov {
+            parentItems: [
+                P2_COLOUR_ID
+            ]
+        }
+        layout {
+            sequence: 40
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: COLOUR_CODE_ID
+            dataType: number
+        }
+        help {
+            helpText: A code belongs to a colour, so this list follows the colour above. The code is what composes the item number; the colour name is what composes the description.
+        }
+    )
+
+    pageItem P2_MFCS_COLOUR (
+        type: selectList
+        label {
+            label: MFCS Colour Differentiator
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select data_code || ' - ' || description as d, data_code as r
+                  from master_data
+                 where data_type = 'DIFF_C'
+                 order by description
+                ```
+        }
+        layout {
+            sequence: 50
+            region: @grp-identity
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: MFCS_COLOUR
+            dataType: varchar2
+        }
+        help {
+            helpText: A different thing from the supplier colour above. The differentiator defines the SKU in MFCS and must be a colour the tenant holds; the supplier colour only composes the number and the description.
+        }
+    )
+
+    pageItem P2_DEPARTMENT (
+        type: selectList
+        label {
+            label: Department
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select data_code || ' - ' || description as d, data_code as r
+                  from master_data
+                 where data_type = 'DEPARTMENT'
+                 order by to_number(data_code)
+                ```
+        }
+        layout {
+            sequence: 60
+            region: @grp-merch
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        default {
+            type: static
+            staticValue: 1517
+        }
+        source {
+            formRegion: @draft
+            column: DEPARTMENT
+            dataType: number
+        }
+    )
+
+    pageItem P2_CLASS (
+        type: selectList
+        label {
+            label: Class
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select description || ' - ' || data_code as d, data_code as r
+                  from master_data
+                 where data_type = 'CLASS'
+                   and parent_code = :P2_DEPARTMENT
+                 order by description
+                ```
+        }
+        cascadingLov {
+            parentItems: [
+                P2_DEPARTMENT
+            ]
+        }
+        layout {
+            sequence: 70
+            region: @grp-merch
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: CLASS
+            dataType: number
+        }
+        help {
+            helpText: A class belongs to a department, so this list follows the department. MASTER_DATA holds the class under its department as the parent code.
+        }
+    )
+
+    pageItem P2_SUBCLASS (
+        type: selectList
+        label {
+            label: Subclass
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select description || ' - ' || data_code as d, data_code as r
+                  from master_data
+                 where data_type = 'SUBCLASS'
+                   and parent_code = :P2_DEPARTMENT || '.' || :P2_CLASS
+                 order by description
+                ```
+        }
+        cascadingLov {
+            parentItems: [
+                P2_DEPARTMENT
+                P2_CLASS
+            ]
+        }
+        layout {
+            sequence: 80
+            region: @grp-merch
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: SUBCLASS
+            dataType: number
+        }
+        help {
+            helpText: A subclass belongs to a department and class together - MASTER_DATA keys it as department.class, so this list follows both.
+        }
+    )
+
+    pageItem P2_SUPPLIER (
+        type: selectList
+        label {
+            label: Supplier
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select data_code || ' - ' || description as d, data_code as r
+                  from master_data
+                 where data_type = 'SUPPLIER_SVC'
+                 order by description
+                ```
+        }
+        layout {
+            sequence: 90
+            region: @grp-merch
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: SUPPLIER
+            dataType: number
+        }
+    )
+
+    pageItem P2_ORIGIN_COUNTRY (
+        type: selectList
+        label {
+            label: Origin Country
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select description || ' - ' || data_code as d, data_code as r
+                  from master_data
+                 where data_type = 'COUNTRY'
+                 order by description
+                ```
+        }
+        layout {
+            sequence: 100
+            region: @grp-merch
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        default {
+            type: static
+            staticValue: GB
+        }
+        source {
+            formRegion: @draft
+            column: ORIGIN_COUNTRY
+            dataType: varchar2
+        }
+    )
+
+    pageItem P2_CURRENCY_CODE (
+        type: selectList
+        label {
+            label: Currency
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select data_code || ' - ' || description as d, data_code as r
+                  from master_data
+                 where data_type = 'CURRENCY'
+                 order by data_code
+                ```
+        }
+        layout {
+            sequence: 110
+            region: @grp-merch
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        default {
+            type: static
+            staticValue: GBP
+        }
+        source {
+            formRegion: @draft
+            column: CURRENCY_CODE
+            dataType: varchar2
+        }
+    )
+
+    pageItem P2_UNIT_COST (
+        type: numberField
+        label {
+            label: Unit Cost
+            alignment: left
+        }
+        layout {
+            sequence: 120
+            region: @grp-merch
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        default {
+            type: static
+            staticValue: 48.49
+        }
+        source {
+            formRegion: @draft
+            column: UNIT_COST
+            dataType: number
+        }
+    )
+
+    pageItem P2_RETAIL_PRICE (
+        type: numberField
+        label {
+            label: Retail Price
+            alignment: left
+        }
+        layout {
+            sequence: 130
+            region: @grp-merch
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        default {
+            type: static
+            staticValue: 100
+        }
+        source {
+            formRegion: @draft
+            column: RETAIL_PRICE
+            dataType: number
+        }
+    )
+
+    button cancel (
+        buttonName: CANCEL
+        label: Cancel
+        layout {
+            sequence: 10
+            region: @draft
+            slot: close
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 1
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    button delete (
+        buttonName: DELETE
+        label: Delete
+        layout {
+            sequence: 20
+            region: @draft
+            slot: delete
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectUrl
+            targetUrl: javascript:apex.confirm(htmldb_delete_message,'DELETE');
+            executeValidations: false
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: delete
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P2_DRAFT_ID
+        }
+    )
+
+    button create (
+        buttonName: CREATE
+        label: Start Draft
+        layout {
+            sequence: 30
+            region: @draft
+            slot: create
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: insert
+        }
+        serverSideCondition {
+            type: itemIsNull
+            item: P2_DRAFT_ID
+        }
+    )
+
+    button save (
+        buttonName: SAVE
+        label: Save and Compose
+        layout {
+            sequence: 40
+            region: @draft
+            slot: change
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+            databaseAction: update
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P2_DRAFT_ID
+        }
+    )
+
+    button validate (
+        buttonName: VALIDATE
+        label: Validate
+        layout {
+            sequence: 50
+            region: @draft
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P2_DRAFT_ID
+        }
+    )
+
+    button submit (
+        buttonName: SUBMIT
+        label: Submit for Review
+        layout {
+            sequence: 60
+            region: @draft
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 6
+                items: {
+                    P6_DRAFT_ID: &P2_DRAFT_ID.
+                }
+            }
+            warnOnUnsavedChanges: doNotCheck
+        }
+        serverSideCondition {
+            type: itemIsNotNull
+            item: P2_DRAFT_ID
+        }
+    )
+
+    process initialize-form-draft (
+        name: Initialize form Style Capture
+        type: formInitialization
+        formRegion: @draft
+        execution {
+            sequence: 10
+            point: beforeHeader
+        }
+    )
+
+    process process-form-draft (
+        name: Process form Style Capture
+        type: formAutoRowProcessing
+        formRegion: @draft
+        execution {
+            sequence: 10
+        }
+    )
+
+    process save-sizes (
+        name: Save Size Curve
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @sizes
+        target {
+            returnPksAfterInsert: true
+        }
+        execution {
+            sequence: 20
+        }
+    )
+
+    process refresh-composition (
+        name: Refresh composition
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                    if :P2_DRAFT_ID is not null then
+                        poc_style_pkg.refresh_composition(:P2_DRAFT_ID);
+                    end if;
+                end;
+                ```
+        }
+        execution {
+            sequence: 30
+        }
+    )
+
+    process validate-draft (
+        name: Validate draft
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                declare
+                    l_status number;
+                    l_response clob;
+                begin
+                    poc_style_pkg.validate_draft(:P2_DRAFT_ID, l_status, l_response);
+                    apex_error.add_error(
+                        p_message => case when l_status between 200 and 299
+                                          then 'Validation passed. This document is ready to send.'
+                                          else 'Validation failed: '
+                                               || dbms_lob.substr(l_response, 900, 1) end,
+                        p_display_location => apex_error.c_inline_in_notification);
+                end;
+                ```
+        }
+        execution {
+            sequence: 40
+        }
+        serverSideCondition {
+            whenButtonPressed: @validate
+        }
+    )
+
+    process save-udas (
+        name: Save UDAs
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @style-udas
+        target {
+            returnPksAfterInsert: true
+        }
+        execution {
+            sequence: 21
+        }
+    )
+
+    process save-barcodes (
+        name: Save Barcodes
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @sku-barcodes
+        target {
+            returnPksAfterInsert: true
+        }
+        execution {
+            sequence: 22
+        }
+    )
+
+    process save-seasons (
+        name: Save Seasons
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @style-seasons
+        target {
+            returnPksAfterInsert: true
+        }
+        execution {
+            sequence: 23
+        }
+    )
+
+    process save-images (
+        name: Save Images
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @style-images
+        target {
+            returnPksAfterInsert: true
+        }
+        execution {
+            sequence: 24
+        }
+    )
+
+    process save-hts (
+        name: Save Tariff Codes
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @style-hts
+        target {
+            returnPksAfterInsert: true
+        }
+        execution {
+            sequence: 25
+        }
+    )
+
+    pageItem P2_SOURCE_ORDER_REF (
+        type: textField
+        label {
+            label: Order reference
+            alignment: left
+        }
+        layout {
+            sequence: 200
+            region: @grp-order
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: SOURCE_ORDER_REF
+            dataType: varchar2
+        }
+    )
+
+    pageItem P2_ORDER_NO (
+        type: textField
+        label {
+            label: MFCS order number
+            alignment: left
+        }
+        layout {
+            sequence: 210
+            region: @grp-order
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        source {
+            formRegion: @draft
+            column: ORDER_NO
+            dataType: varchar2
+        }
+        help {
+            helpText: Empty for a new order - MFCS issues the number. Populated when a draft was seeded from an order that already exists.
+        }
+    )
+
+    pageItem P2_DELIVERY_LOC (
+        type: selectList
+        label {
+            label: Delivery location
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select description || ' - ' || data_code as d, data_code as r
+                  from master_data
+                 where data_type = 'WAREHOUSE_SVC'
+                 order by description
+                ```
+        }
+        layout {
+            sequence: 220
+            region: @grp-order
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: DELIVERY_LOC
+            dataType: number
+        }
+        help {
+            helpText: Virtual warehouses only. MFCS refuses ranging against a physical location at hierarchy level W, so a physical one would fail several steps later.
+        }
+    )
+
+    pageItem P2_IMPORT_COUNTRY (
+        type: selectList
+        label {
+            label: Import country
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select description || ' - ' || data_code as d, data_code as r
+                  from master_data
+                 where data_type = 'COUNTRY'
+                 order by description
+                ```
+        }
+        layout {
+            sequence: 230
+            region: @grp-order
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        default {
+            type: static
+            staticValue: GB
+        }
+        source {
+            formRegion: @draft
+            column: IMPORT_COUNTRY
+            dataType: varchar2
+        }
+    )
+
+    pageItem P2_NOT_BEFORE_DATE (
+        type: datePicker
+        label {
+            label: Not before
+            alignment: left
+        }
+        layout {
+            sequence: 240
+            region: @grp-order
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: NOT_BEFORE_DATE
+            dataType: date
+        }
+    )
+
+    pageItem P2_NOT_AFTER_DATE (
+        type: datePicker
+        label {
+            label: Not after
+            alignment: left
+        }
+        layout {
+            sequence: 250
+            region: @grp-order
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: NOT_AFTER_DATE
+            dataType: date
+        }
+    )
+
+    pageItem P2_OTB_EOW_DATE (
+        type: datePicker
+        label {
+            label: OTB week ending
+            alignment: left
+        }
+        layout {
+            sequence: 260
+            region: @grp-order
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: OTB_EOW_DATE
+            dataType: date
+        }
+        help {
+            helpText: Must fall on a Sunday, the retail week end. MFCS only enforces this at order create, by which point a style exists and an order number is burned, so validation checks it up front.
+        }
+    )
+
+    pageItem P2_EARLIEST_SHIP_DATE (
+        type: datePicker
+        label {
+            label: Earliest ship
+            alignment: left
+        }
+        layout {
+            sequence: 270
+            region: @grp-order
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: EARLIEST_SHIP_DATE
+            dataType: date
+        }
+    )
+
+    pageItem P2_LATEST_SHIP_DATE (
+        type: datePicker
+        label {
+            label: Latest ship
+            alignment: left
+        }
+        layout {
+            sequence: 280
+            region: @grp-order
+            slot: regionBody
+            alignment: left
+            startNewRow: false
+            columnSpan: 3
+        }
+        appearance {
+            template: @required-floating
+            templateOptions: #DEFAULT#
+        }
+        validation {
+            valueRequired: true
+        }
+        source {
+            formRegion: @draft
+            column: LATEST_SHIP_DATE
+            dataType: date
+        }
+    )
+
+)

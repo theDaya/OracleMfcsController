@@ -1,0 +1,495 @@
+page 3 (
+    name: Reference Data
+    alias: REFERENCE-DATA
+    title: Reference Data
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+
+    region intro (
+        name: Reference Data
+        type: staticContent
+        source {
+            htmlCode:
+                ```html
+                <p>The three lists the composer draws on. Styles are the tenant's own - MFCS UDA
+                66040, read only here because MFCS owns that list and nothing in this integration
+                can add to it. Supplier colours and their codes are free-form UDAs with no list in
+                MFCS at all, so they are maintained here and can be added to as needed.</p>
+                ```
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @hero
+            templateOptions: #DEFAULT#
+            icon: fa-table
+        }
+    )
+
+    region tabs (
+        name: Lists
+        type: staticContent
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @tabs-container
+            templateOptions: [
+                #DEFAULT#
+                t-TabsRegion-mod--pill
+            ]
+        }
+    )
+
+    region colours (
+        name: Supplier Colours
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select colour_id,
+                       colour_name,
+                       active_yn
+                  from poc_supplier_colour
+                ```
+        }
+        layout {
+            sequence: 10
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @COLOUR_NAME
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @ACTIVE_YN
+                layout {
+                    sequence: 2
+                }
+            )
+
+
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 5
+            }
+        )
+
+        column COLOUR_ID (
+            type: hidden
+            layout {
+                sequence: 10
+            }
+            source {
+                databaseColumn: COLOUR_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+        )
+
+        column COLOUR_NAME (
+            type: textField
+            heading {
+                heading: Colour
+            }
+            layout {
+                sequence: 20
+            }
+            source {
+                databaseColumn: COLOUR_NAME
+                dataType: varchar2
+            }
+        )
+
+        column ACTIVE_YN (
+            type: selectList
+            heading {
+                heading: Active
+            }
+            lov {
+                type: staticValues
+                staticValues: STATIC:Yes;Y,No;N
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: ACTIVE_YN
+                dataType: varchar2
+            }
+            default {
+                type: static
+                staticValue: Y
+            }
+        )
+
+    )
+
+    region colour-codes (
+        name: Supplier Colour Codes
+        type: interactiveGrid
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select cc.colour_code_id,
+                       cc.colour_id,
+                       cc.colour_code,
+                       cc.code_desc,
+                       cc.active_yn
+                  from poc_supplier_colour_code cc
+                ```
+        }
+        layout {
+            sequence: 20
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--removeHeader
+                t-Region--scrollBody
+            ]
+        }
+        edit {
+            enabled: true
+            allowedOperations: [
+                add
+                update
+                delete
+            ]
+        }
+        componentAppearance {
+            showNullValuesAs: -
+        }
+
+        savedReport primary (
+            visibility: primary
+            view {
+                default: grid
+            }
+            singleRowView {
+                displayedColumns: true
+            }
+
+            displayColumn (
+                column: @APEX$ROW_ACTION
+                layout {
+                    sequence: 0
+                }
+            )
+
+            displayColumn (
+                column: @COLOUR_ID
+                layout {
+                    sequence: 1
+                }
+            )
+
+            displayColumn (
+                column: @COLOUR_CODE
+                layout {
+                    sequence: 2
+                }
+            )
+
+            displayColumn (
+                column: @CODE_DESC
+                layout {
+                    sequence: 3
+                }
+            )
+
+            displayColumn (
+                column: @ACTIVE_YN
+                layout {
+                    sequence: 4
+                }
+            )
+
+        )
+
+        column APEX$ROW_ACTION (
+            type: actionsMenu
+            layout {
+                sequence: 5
+            }
+        )
+
+        column COLOUR_CODE_ID (
+            type: hidden
+            layout {
+                sequence: 10
+            }
+            source {
+                databaseColumn: COLOUR_CODE_ID
+                dataType: number
+                queryOnly: true
+                primaryKey: true
+            }
+        )
+
+        column COLOUR_ID (
+            type: selectList
+            heading {
+                heading: Colour
+            }
+            lov {
+                type: sqlQuery
+                sqlQuery:
+                    ```sql
+                    select colour_name as d, colour_id as r
+                      from poc_supplier_colour
+                     order by colour_name
+                    ```
+            }
+            layout {
+                sequence: 20
+            }
+            source {
+                databaseColumn: COLOUR_ID
+                dataType: number
+            }
+        )
+
+        column COLOUR_CODE (
+            type: textField
+            heading {
+                heading: Code
+            }
+            layout {
+                sequence: 30
+            }
+            source {
+                databaseColumn: COLOUR_CODE
+                dataType: varchar2
+            }
+        )
+
+        column CODE_DESC (
+            type: textField
+            heading {
+                heading: Description
+            }
+            layout {
+                sequence: 40
+            }
+            source {
+                databaseColumn: CODE_DESC
+                dataType: varchar2
+            }
+        )
+
+        column ACTIVE_YN (
+            type: selectList
+            heading {
+                heading: Active
+            }
+            lov {
+                type: staticValues
+                staticValues: STATIC:Yes;Y,No;N
+            }
+            layout {
+                sequence: 50
+            }
+            source {
+                databaseColumn: ACTIVE_YN
+                dataType: varchar2
+            }
+            default {
+                type: static
+                staticValue: Y
+            }
+        )
+    )
+
+    region styles (
+        name: Styles
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select style_no,
+                       style_desc,
+                       source
+                  from poc_style_model
+                 where active_yn = 'Y'
+                   and (:P3_STYLE_SEARCH is null
+                        or upper(style_desc) like '%' || upper(:P3_STYLE_SEARCH) || '%'
+                        or style_no like :P3_STYLE_SEARCH || '%')
+                 order by style_desc
+                 fetch first 200 rows only
+                ```
+        }
+        layout {
+            sequence: 30
+            parentRegion: @tabs
+            slot: tabs
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column STYLE_NO (
+            heading {
+                heading: Style
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column STYLE_DESC (
+            heading {
+                heading: Model
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column SOURCE (
+            heading {
+                heading: Source
+            }
+            layout {
+                sequence: 30
+            }
+        )
+    )
+
+    pageItem P3_STYLE_SEARCH (
+        type: textField
+        label {
+            label: Search styles
+            alignment: left
+        }
+        layout {
+            sequence: 10
+            region: @styles
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 4
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+        help {
+            helpText: Matches a model name anywhere, or a style number from the start. The first 200 matches are shown - the full list is 13,693 rows, which is why the composer uses a popup search rather than a dropdown.
+        }
+    )
+
+    button search (
+        buttonName: SEARCH
+        label: Search
+        layout {
+            sequence: 20
+            region: @styles
+            slot: edit
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+    process save-colours (
+        name: Save Supplier Colours
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @colours
+        target {
+            returnPksAfterInsert: true
+        }
+        execution {
+            sequence: 10
+        }
+    )
+
+    process save-colour-codes (
+        name: Save Supplier Colour Codes
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @colour-codes
+        target {
+            returnPksAfterInsert: true
+        }
+        execution {
+            sequence: 20
+        }
+    )
+
+)

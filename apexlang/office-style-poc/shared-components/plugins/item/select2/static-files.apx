@@ -1,0 +1,16 @@
+file select2-apex.js (
+    mimeType: application/javascript
+)
+
+file select2-classic.css (
+    mimeType: text/css
+)
+
+file select2.full.min.js (
+    mimeType: application/javascript
+)
+
+file select2.min.css (
+    mimeType: text/css
+)
+

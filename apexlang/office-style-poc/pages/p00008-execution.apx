@@ -1,0 +1,325 @@
+page 8 (
+    name: Execution
+    alias: EXECUTION
+    title: Execution
+    appearance {
+        pageTemplate: @standard
+        templateOptions: #DEFAULT#
+    }
+    navigation {
+        cursorFocus: doNotFocusCursor
+    }
+    security {
+        formAutoComplete: false
+    }
+
+    region intro (
+        name: What the request actually did
+        type: staticContent
+        source {
+            htmlCode:
+                ```html
+                <p>Every step of the orchestration, with the endpoint it called, the HTTP status it
+                got back and both payloads. This reads STEP, ATTEMPT and EVENT_LOG, which the
+                orchestrator writes for every request whichever console started it.</p>
+                ```
+        }
+        layout {
+            sequence: 10
+            slot: breadcrumbBar
+        }
+        appearance {
+            template: @hero
+            templateOptions: #DEFAULT#
+            icon: fa-list-ol
+        }
+    )
+
+    region steps (
+        name: Endpoint Call Path
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select s.step_sequence,
+                       s.step_code,
+                       s.step_status,
+                       a.attempt_number,
+                       a.http_method,
+                       a.endpoint,
+                       a.http_status,
+                       to_char(a.started_at, 'HH24:MI:SS') as started_at,
+                       dbms_lob.substr(a.request_payload, 900, 1) as request_payload,
+                       dbms_lob.substr(a.response_payload, 900, 1) as response_payload,
+                       s.last_error_message
+                  from poc_style_draft d
+                  join step s on s.action_request_id = d.action_request_id
+                  left join attempt a on a.action_request_id = s.action_request_id
+                                     and a.step_code = s.step_code
+                 where d.draft_id = :P8_DRAFT_ID
+                 order by s.step_sequence, nvl(a.attempt_number, 0)
+                ```
+        }
+        layout {
+            sequence: 20
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column STEP_SEQUENCE (
+            type: plainText
+            heading {
+                heading: Seq
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column STEP_CODE (
+            type: plainText
+            heading {
+                heading: Step
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column STEP_STATUS (
+            type: plainText
+            heading {
+                heading: Status
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column ATTEMPT_NUMBER (
+            type: plainText
+            heading {
+                heading: Attempt
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column HTTP_METHOD (
+            type: plainText
+            heading {
+                heading: Method
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+        column ENDPOINT (
+            type: plainText
+            heading {
+                heading: Endpoint
+            }
+            layout {
+                sequence: 60
+            }
+        )
+
+        column HTTP_STATUS (
+            type: plainText
+            heading {
+                heading: HTTP
+            }
+            layout {
+                sequence: 70
+            }
+        )
+
+        column STARTED_AT (
+            type: plainText
+            heading {
+                heading: Started
+            }
+            layout {
+                sequence: 80
+            }
+        )
+
+        column REQUEST_PAYLOAD (
+            type: plainText
+            heading {
+                heading: Request
+            }
+            layout {
+                sequence: 90
+            }
+        )
+
+        column RESPONSE_PAYLOAD (
+            type: plainText
+            heading {
+                heading: Response
+            }
+            layout {
+                sequence: 100
+            }
+        )
+
+        column LAST_ERROR_MESSAGE (
+            type: plainText
+            heading {
+                heading: Error
+            }
+            layout {
+                sequence: 110
+            }
+        )
+
+    )
+
+    region events (
+        name: Event Log
+        type: classicReport
+        source {
+            location: localDatabase
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select e.step_code, e.event_phase, e.event_level, e.message,
+                       to_char(e.created_at, 'HH24:MI:SS') as created_at
+                  from event_log e
+                 where e.action_request_id = (select action_request_id
+                                                from poc_style_draft
+                                               where draft_id = :P8_DRAFT_ID)
+                 order by e.log_id
+                ```
+        }
+        layout {
+            sequence: 30
+            slot: contentBody
+        }
+        appearance {
+            template: @standard
+            templateOptions: [
+                #DEFAULT#
+                t-Region--scrollBody
+            ]
+        }
+        componentAppearance {
+            template: @standard
+        }
+
+        column STEP_CODE (
+            type: plainText
+            heading {
+                heading: Step
+            }
+            layout {
+                sequence: 10
+            }
+        )
+
+        column EVENT_PHASE (
+            type: plainText
+            heading {
+                heading: Phase
+            }
+            layout {
+                sequence: 20
+            }
+        )
+
+        column EVENT_LEVEL (
+            type: plainText
+            heading {
+                heading: Level
+            }
+            layout {
+                sequence: 30
+            }
+        )
+
+        column MESSAGE (
+            type: plainText
+            heading {
+                heading: Message
+            }
+            layout {
+                sequence: 40
+            }
+        )
+
+        column CREATED_AT (
+            type: plainText
+            heading {
+                heading: At
+            }
+            layout {
+                sequence: 50
+            }
+        )
+
+    )
+
+    pageItem P8_DRAFT_ID (
+        type: selectList
+        label {
+            label: Draft
+            alignment: left
+        }
+        lov {
+            type: sqlQuery
+            sqlQuery:
+                ```sql
+                select draft_id || ' - ' || nvl(composed_item_no, draft_status) as d,
+                       draft_id as r
+                  from poc_style_draft
+                 where action_request_id is not null
+                 order by draft_id desc
+                ```
+        }
+        layout {
+            sequence: 10
+            region: @intro
+            slot: regionBody
+            alignment: left
+            startNewRow: true
+            columnSpan: 3
+        }
+        appearance {
+            template: @optional-floating
+            templateOptions: #DEFAULT#
+        }
+    )
+
+    button show (
+        buttonName: SHOW
+        label: Show
+        layout {
+            sequence: 10
+            region: @intro
+            slot: regionBody
+        }
+        appearance {
+            buttonTemplate: @text
+            hot: true
+            templateOptions: #DEFAULT#
+        }
+        behavior {
+            warnOnUnsavedChanges: doNotCheck
+        }
+    )
+
+)

@@ -1,0 +1,53 @@
+/*apex 5*/
+i.palv2_iconLoader {
+  background-image: url(ajax-loader.gif);
+}
+
+i.palv2_iconPasted {
+  background-image: url(pasted-icon.gif);
+}
+
+.palv2_iconTrigger {
+  background-image: url(pal_status.gif);
+}
+
+.palv2_popupAjaxContainer td:first-child {
+  padding-left: 13px;
+}
+.palv2_divShowSelected input[type=checkbox],
+.palv2_popupAjaxContainer input[type=checkbox],
+.palv2_popupAjaxContainer input[type=radio] {
+  margin-top:5px;
+}
+
+.palv2_tableHeaderContainer {
+  background: #FFFFFF;
+  padding: 6px 12px !important;
+}
+
+.palv2_popupOuterContainer .ui-dialog-buttonpane {
+  background: #FFFFFF;
+  border-top: 1px solid #aaa !important;
+}
+
+.palv2_popupOuterContainer .ui-dialog-buttonpane button > span {
+  padding: 4px 6px;
+}
+
+.palv2_popupAjaxContainer tr:nth-child(even) {
+  background: #fcfcfc;
+}
+
+.palv2_divShowSelected {
+  padding: 0px !important;
+}
+.palv2_divSelectAll label,
+.palv2_divShowSelected label {
+  top: -2px;
+  position: relative;
+  padding-left: 8px;
+}
+
+.searchboxDiv {
+    padding: 6px 0px 12px 0px;
+}
