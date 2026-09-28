@@ -18,7 +18,7 @@ There is no runtime switch any more — the integration only ever talks to the r
 - Bearer token stored externally in `SECRET` under config ref `MFCS_BEARER_TOKEN_REF`
 - Item locations enabled with `FEATURE_ITEM_LOCATIONS_YN = Y`, ranging to virtual warehouse 19271
 - Initial retail disabled by default with `FEATURE_INITIAL_RETAIL_YN = N`
-- Purchase-order verification retry enabled with `MFCS_ORDER_VERIFY_RETRY_COUNT = 12` and `MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS = 10`
+- Order read-back retry set by `MFCS_ORDER_VERIFY_RETRY_COUNT = 12` and `MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS = 10`. Read by `SYNC_ORDER_LINES` only since 2026-09-21
 
 Item locations now work. Every item-location row in the tenant reads location 19271 / locationType W /
 physicalWarehouse 1927, so `MFCS_LOCATION_HIERARCHY_LEVEL = W` and the delivery location is mapped
@@ -598,7 +598,9 @@ For `CREATE_ALL`, the orchestrator runs every active `CREATE_STYLE` step first, 
 | --- | --- | --- | --- |
 | 90 | `RESERVE_ORDER_NUMBER` | `POST` | `/MerchIntegrations/services/purchaseOrder/preIssuedOrderNumber/create` |
 | 100 | `CREATE_PURCHASE_ORDER` | `POST` | `/MerchIntegrations/services/purchaseOrders/create` |
-| 110 | `VERIFY_PURCHASE_ORDER` | `GET` | `/MerchIntegrations/services/procurement/order/{orderNo}` |
+
+**There is no step 110.** `VERIFY_PURCHASE_ORDER` was removed on 2026-09-21; the live runs
+recorded further down still show it, because they ran before that.
 
 The purchase-order endpoint names and payload fields follow Oracle's published Purchase Order Upload and Download services.
 
@@ -716,9 +718,27 @@ MFCS response:
 }
 ```
 
-## Step 110: Verify Purchase Order
+## Step 110: Verify Purchase Order — removed 2026-09-21
 
-MFCS can accept `purchaseOrders/create` before the order is immediately visible through the procurement GET. To handle that publish delay, verification retries are controlled by `MFCS_ORDER_VERIFY_RETRY_COUNT` and `MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS`. Each failed verify attempt is logged, and the autonomous event log records `VERIFY_RETRY_WAIT` before sleeping.
+The step read the order back through the procurement GET rather than trusting the create's
+SUCCESS. It is gone, and the reasoning is worth keeping because it is the one place the
+project's verify-by-read-back rule did not pay.
+
+`purchaseOrders/create` is not one of the services that lies. It refuses a create it cannot
+make — loudly, with a 400 and a message — so its 200 is evidence on its own account. What the
+GET added was latency: the procurement feed lags the write, so the step slept through up to
+twelve ten-second retries to be told what the create response had already said. Up to two
+minutes on every order, inside the caller's request.
+
+Nothing is lost by removing it. `persist_po_number` records the order number the moment
+`RESERVE_ORDER_NUMBER` succeeds, so `REQUEST.ORDER_NO` and the status document carry it even
+when the create that follows fails — which is the case where knowing the number actually
+matters, since it has been burned either way.
+
+Two read-backs remain, and both are on services that *do* lie: `ENSURE_STYLE_SKUS`, where
+`items/create` can answer SUCCESS having created nothing, and `SYNC_ORDER_LINES`, where
+`purchaseOrders/update` answers SUCCESS while ignoring its details array outright. Those keep
+the `MFCS_ORDER_VERIFY_RETRY_*` settings alive.
 
 ```jsonc
 // GET /MerchIntegrations/services/procurement/order/25005
@@ -858,6 +878,9 @@ VALIDATE_REQUEST, ENSURE_STYLE_SKUS, CREATE_ITEM_HIERARCHY, CREATE_ITEM_SOURCING
 CREATE_ITEM_COUNTRIES_OF_MANUFACTURE, CREATE_ITEM_UDAS, CREATE_ITEM_LOCATIONS, APPROVE_ITEMS,
 RESERVE_ORDER_NUMBER, CREATE_PURCHASE_ORDER, VERIFY_PURCHASE_ORDER
 ```
+
+(`VERIFY_PURCHASE_ORDER` was removed from the graph on 2026-09-21. It ran here because this
+transcript predates that.)
 
 HTTP 200, `COMPLETED`, order `25012`. The style write set runs before the order because an order is a
 statement about the style — its cost, country and supplier — not only about the order.
@@ -1124,8 +1147,8 @@ These values are configurable and should be replaced with authoritative Office/M
 | `MFCS_ORDER_LOCATION_TYPE` | `W` | Purchase order currently targets warehouse location. |
 | `MFCS_ORDER_DEFAULT_LOCATION` | `19271` | Default MFCS virtual warehouse. |
 | `MAP.ORDER_LOCATION.1927` | `19271` | Maps Office physical delivery location to MFCS virtual warehouse. |
-| `MFCS_ORDER_VERIFY_RETRY_COUNT` | `12` | Allows for delayed visibility after successful PO create. |
-| `MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS` | `10` | Sleep between procurement GET verification attempts. |
+| `MFCS_ORDER_VERIFY_RETRY_COUNT` | `12` | Read-back attempts in `SYNC_ORDER_LINES`; order lines take ~30s to surface. |
+| `MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS` | `10` | Sleep between those attempts. |
 | `FEATURE_GENERATE_MISSING_SKUS_YN` | `Y` | Creates the children a style lacks instead of stopping the request. |
 | `MFCS_SKU_VERIFY_RETRY_COUNT` | `6` | Newly approved children take a moment to read back. |
 | `MFCS_SKU_VERIFY_RETRY_SLEEP_SECONDS` | `5` | Sleep between read-backs after creating children. |

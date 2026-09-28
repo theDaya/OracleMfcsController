@@ -99,6 +99,25 @@ create or replace package poc_style_pkg authid definer as
         p_order_no in varchar2,
         p_user_id  in varchar2
     ) return number;
+
+    -- Unpacks the controller's status document onto the draft: the MFCS style
+    -- number, the purchase order number, and each SKU number against the size
+    -- curve row that asked for it.
+    --
+    -- This is the whole of the POC's read side, and it deliberately parses a
+    -- response document rather than querying MFCS_INTEGRATION.REQUEST. The
+    -- controller's contract is that document; joining to its tables instead
+    -- would make every internal change of theirs a change here.
+    procedure apply_response(
+        p_draft_id in number,
+        p_response in clob
+    );
+
+    -- Re-asks the controller what became of this draft's request and applies the
+    -- answer. Sends nothing. Use it after a resume, or behind a Refresh button:
+    -- an order number is recorded the moment it is reserved, so a run that
+    -- stopped after that still has something worth collecting.
+    procedure refresh_from_controller(p_draft_id in number);
 end poc_style_pkg;
 /
 
@@ -517,6 +536,12 @@ create or replace package body poc_style_pkg as
                last_updated_at = systimestamp
          where draft_id = p_draft_id;
         commit;
+
+        -- Unconditionally, including on failure. A run that reserved an order
+        -- number and then failed to create the order has still burned that
+        -- number in MFCS, and the draft is the only place it can be tied back
+        -- to what asked for it.
+        apply_response(p_draft_id, o_response);
     end;
 
     procedure reopen_draft(p_draft_id in number) is
@@ -652,6 +677,94 @@ create or replace package body poc_style_pkg as
 
         commit;
         return l_draft_id;
+    end;
+
+    procedure apply_response(
+        p_draft_id in number,
+        p_response in clob
+    ) is
+        l_style varchar2(30);
+        l_order varchar2(30);
+    begin
+        if p_response is null then
+            return;
+        end if;
+
+        -- STYLE and ORDER_NO come from request_pkg.build_status_response, which
+        -- reads REQUEST rather than any one call's reply. ORDER_NO is therefore
+        -- present from RESERVE_ORDER_NUMBER onwards, whatever happened after it.
+        select json_value(p_response, '$.STYLE' returning varchar2(30) null on error),
+               json_value(p_response, '$.ORDER_NO' returning varchar2(30) null on error)
+          into l_style, l_order
+          from dual;
+
+        -- coalesce, never overwrite with null: a resume or a refresh that comes
+        -- back before the order number exists must not erase one already held,
+        -- and on a MODIFY_ORDER draft the order number was an input.
+        update poc_style_draft
+           set style = coalesce(l_style, style),
+               order_no = coalesce(l_order, order_no),
+               last_updated_at = systimestamp
+         where draft_id = p_draft_id;
+
+        -- SIZE_CURVE_DETAIL keys back on SOURCE_VARIANT_REF, which build_document
+        -- sets to the composed SKU number. That is what makes the match exact
+        -- rather than positional - a size curve can gain or lose rows between
+        -- one request and the next.
+        for r in (
+            select variant_ref, sku_id
+              from json_table(p_response, '$.SIZE_CURVE_DETAIL[*]'
+                  columns
+                      variant_ref varchar2(30) path '$.SOURCE_VARIANT_REF',
+                      sku_id      varchar2(30) path '$.SKU_ID')
+             where sku_id is not null
+        ) loop
+            update poc_style_draft_sku
+               set mfcs_sku_no = r.sku_id
+             where draft_id = p_draft_id
+               and composed_sku_no = r.variant_ref;
+        end loop;
+
+        commit;
+    exception
+        -- A draft that cannot read its response is still a draft that sent one.
+        -- Losing the identifiers is a reporting problem; raising here would turn
+        -- a completed MFCS run into a failed-looking one, which is worse.
+        when others then
+            rollback;
+    end;
+
+    procedure refresh_from_controller(p_draft_id in number) is
+        l_action_request_id varchar2(80);
+        l_status number;
+        l_response clob;
+    begin
+        select action_request_id into l_action_request_id
+          from poc_style_draft where draft_id = p_draft_id;
+
+        if l_action_request_id is null then
+            return;  -- Never submitted; there is nothing to ask about.
+        end if;
+
+        api_pkg.get_transaction(l_action_request_id, l_status, l_response);
+
+        if l_status = 200 then
+            update poc_style_draft
+               set response_payload = l_response,
+                   http_status = l_status,
+                   -- Promoted to COMPLETED, never demoted. A run that finished
+                   -- after a resume should say so; one still in progress must
+                   -- not be called failed just because it has not finished, and
+                   -- approve_draft already records a genuine failure.
+                   draft_status = case
+                       when json_value(l_response, '$.STATUS') = 'COMPLETED'
+                       then 'COMPLETED' else draft_status end,
+                   last_updated_at = systimestamp
+             where draft_id = p_draft_id;
+            commit;
+
+            apply_response(p_draft_id, l_response);
+        end if;
     end;
 end poc_style_pkg;
 /

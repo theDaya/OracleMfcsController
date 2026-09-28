@@ -534,8 +534,6 @@ create or replace package body orchestrator_pkg as
                 else
                     def('ENDPOINT.PURCHASE_ORDERS_CREATE', 'POST', 'build_purchase_order_request');
                 end if;
-            when 'VERIFY_PURCHASE_ORDER' then
-                def('ENDPOINT.PURCHASE_ORDER_GET', 'GET', 'build_purchase_order_verify_request');
             else
                 null;  -- Unknown step: local by construction, nothing to send.
         end case;
@@ -1228,8 +1226,6 @@ create or replace package body orchestrator_pkg as
         l_recovery_status varchar2(30);
         l_started_at timestamp with time zone := systimestamp;
         l_budget_seconds number := to_number(config_pkg.get_config('INTERNAL_TIME_BUDGET_SECONDS', '240'));
-        l_verify_retry_count number := to_number(config_pkg.get_config('MFCS_ORDER_VERIFY_RETRY_COUNT', '12'));
-        l_verify_retry_sleep number := to_number(config_pkg.get_config('MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS', '10'));
         l_collection_size number;
     begin
         if l_operation = 'CREATE_ALL'
@@ -1367,46 +1363,14 @@ create or replace package body orchestrator_pkg as
                 continue;
             end if;
 
-            if l_step = 'VERIFY_PURCHASE_ORDER' then
-                for i in 1 .. greatest(1, l_verify_retry_count) loop
-                    begin
-                        l_response := client_pkg.call_service(
-                            p_action_request_id => p_action_request_id,
-                            p_step_code => l_step,
-                            p_http_method => l_method,
-                            p_endpoint_key => l_endpoint_key,
-                            p_request_payload => l_request_payload,
-                            p_user_id => l_user_id
-                        );
-                        exit;
-                    exception
-                        when client_pkg.e_downstream_failure then
-                            if i >= greatest(1, l_verify_retry_count) then
-                                raise;
-                            end if;
-                            event_pkg.log_event(
-                                p_action_request_id => p_action_request_id,
-                                p_event_phase => 'VERIFY_RETRY_WAIT',
-                                p_step_code => l_step,
-                                p_event_level => 'WARN',
-                                p_message => 'Purchase order verification failed; waiting before retry.',
-                                p_detail_payload => '{"retryNumber":' || i
-                                    || ',"maxRetries":' || greatest(1, l_verify_retry_count)
-                                    || ',"sleepSeconds":' || l_verify_retry_sleep || '}'
-                            );
-                            dbms_session.sleep(l_verify_retry_sleep);
-                    end;
-                end loop;
-            else
-                l_response := client_pkg.call_service(
-                    p_action_request_id => p_action_request_id,
-                    p_step_code => l_step,
-                    p_http_method => l_method,
-                    p_endpoint_key => l_endpoint_key,
-                    p_request_payload => l_request_payload,
-                    p_user_id => l_user_id
-                );
-            end if;
+            l_response := client_pkg.call_service(
+                p_action_request_id => p_action_request_id,
+                p_step_code => l_step,
+                p_http_method => l_method,
+                p_endpoint_key => l_endpoint_key,
+                p_request_payload => l_request_payload,
+                p_user_id => l_user_id
+            );
 
             -- RESERVE_ITEM_NUMBERS never reaches here: assign_item_numbers owns
             -- that step in full, including its bulk branch's own persist.

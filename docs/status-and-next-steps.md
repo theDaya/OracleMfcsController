@@ -1,6 +1,84 @@
 # Status and next steps
 
-Written so work can stop and resume without losing the thread. Current as of **2026-09-10**.
+Written so work can stop and resume without losing the thread. Current as of **2026-09-28**.
+
+## Session of 2026-09-28 — the RMS16 comparison, a restructured tenant, and two silent failures
+
+**The RMS16 PLM controller was compared against this layer, and two of its rules were proven live here.**
+
+- `item/suppliers/update` **ignores unit cost on an approved item.** It answers SUCCESS, and the style
+  and SKUs read back unchanged (style `100300035`, 48.49 kept against 55 sent). Every cost change on
+  an existing style has been lost. `cost/costChange/immediate/create` at L1 level cascades to every SKU
+  (all three read back 55), but only in the **supplier's** currency: ZAR was refused and GBP accepted
+  for supplier 700087. RMS16 did the same. Not yet built.
+- **Zone-price level `CH` does not set retail.** Sent on a real create, it left `unitRetail: 0` while
+  `originalRetail: 299` was stored. Reverted. Retail is still the largest gap, and the question is now
+  with the consultant.
+
+**STG's diff model was restructured by the consultant.** L1 is a **style/colour**:
+
+- a company colour (type `C`, 100 of them) goes in `DIFF_1`, and a size **group** in `DIFF_2`
+- SKUs carry a size (type `S`, 237, now `S`-prefixed: `070` is `S070`)
+- `LL`/`HL` group the colours through `industryCode`
+- `SC` (48,624 supplier colours, and the only colour group, `RMS_ALL_C`) is marked for deletion and
+  must not be used
+
+Proven live: a SKU in another colour is refused under an L1, and `items/update` answers SUCCESS while
+leaving `DIFF_1` unchanged. **A colour change is therefore a new L1, not new SKUs.** Our config still
+sends `RMS_ALL_C`/`ALL` on every parent, and every test fixture uses `08610` and the old sizes, so
+**the live coverage suite cannot pass until step 1 of the plan lands.**
+
+**The master data refresh was quietly incomplete, and is fixed.**
+
+- `fetch_all` now follows every feed's pages. `diffid` had stopped at exactly 500.
+- UDAs no longer abort on the first free-form row (`udaListOfValues: null`).
+- Banners and channels parse their bare-array responses.
+- Diffs load as `DIFF_<type>`, and diff groups as `DIFF_GROUP` / `DIFF_GROUP_MEMBER`, with members
+  replaced per group.
+
+STG now yields 27 UDAs with 14,443 values, including the four it lacked, and 12 diff groups.
+`merchhier/*` is still empty. **Stale derived rows remain:** 215 colours and 32 sizes that validation
+still accepts.
+
+**Order CFAs:** no item or order on STG carries one. The front-end export defines 10 on orders and
+none on items.
+
+Test records left on STG: `100300001` (a worksheet L1 with no SKUs), `100300035` (approved),
+`CLC09280946` and `CLG09280946`.
+
+## Session of 2026-09-21 — credentials, and the end of the hourly token
+
+**The bearer token is no longer pasted in.** `MFCS_AUTH_MODE = OAUTH_CLIENT_CREDENTIALS` now means
+the client id and secret live in the **APEX credential store**, and `apex_web_service` fetches and
+refreshes the token itself. Proven live: a `foundation/item` read returned HTTP 200, and
+`tests/resume_coverage_tests.sql` passed 20/20 against the tenant with nothing pasted anywhere.
+
+What this replaced, and why each part mattered:
+
+- **A secret in a plain CLOB.** `SECRET.SECRET_VALUE` is readable by anything with SELECT and lands
+  in exports and backups. The credential store has no column that returns either the id or the
+  secret, and credentials are excluded from application exports.
+- **A token cached in a package global.** `client_pkg` held `g_access_token` while its own header
+  comment said it did not, and CLAUDE.md forbids it for a real reason: ORDS pools sessions, so the
+  cache outlives its request and survives a change of tenant — which surfaces as the documented 403,
+  never as anything naming a token. The cache now belongs to `apex_web_service`, in the database.
+- **A hand-rolled `client_credentials` POST**, now deleted along with `MFCS_CLIENT_ID` and
+  `MFCS_CLIENT_SECRET_REF`.
+
+**The trap worth remembering.** `apex_web_service` is a definer-rights package owned by the APEX
+engine schema, so its outbound calls carry **that schema's** network privileges, not the calling
+schema's. The IDCS token host needs an ACE for `MFCS_INTEGRATION` *and* one for `APEX_260100`.
+Granting only the first passes a `utl_http` test and still fails every real call — which is exactly
+what happened here, and why `deploy/mdutils/verify_token_host.sql` now tests both paths and says
+which is which. The MFCS host had carried both ACEs all along, which is why this never surfaced until
+the database had to reach a second host.
+
+`STATIC_BEARER` still works and is kept as a fallback for an environment without OAuth. The expired
+token in `SECRET` is now dead weight rather than the thing everything depends on.
+
+Scripts: `deploy/mdutils/oauth_credential.sql` (creates the credential, contains no secrets and must
+never contain any), `grant_token_host_acl.sql` (both ACEs, APEX owner derived not hardcoded),
+`verify_token_host.sql`, `show_network_acls.sql`.
 
 ## Session of 2026-09-10 — caller-supplied item numbers
 
@@ -316,17 +394,14 @@ largest functional gap** — a style in MFCS priced at zero is not a usable styl
 on what Office expects before it can be built.
 
 ### B. The differentiator group is not selectable
-The parent's `diff1`/`diff2` groups come from `MFCS_PARENT_DIFF1_GROUP` and
-`MFCS_PARENT_DIFF2_GROUP` config, hardcoded to `RMS_ALL_C` and `ALL`. Nobody chooses them per
-style. The group is what says which children are legal — CLAUDE.md already records that a colour
-outside the parent's group is rejected loudly at `items/create`, and sizes are no different. So
-today a style can be given sizes from two different curves and nothing stops it.
+The parent's `diff1`/`diff2` come from `MFCS_PARENT_DIFF1_GROUP` and `MFCS_PARENT_DIFF2_GROUP`
+config, hardcoded to `RMS_ALL_C` and `ALL`, and nobody chooses them per style.
 
-Blocked on data: `foundation/diffgroup` returns 13 groups with a `details` array naming each
-group's member diffs, **but only on UAT**. STG's is empty. One front-end export of Differentiator
-Groups, or one read against UAT, closes it. Then: `SIZE_GROUP` and `COLOUR_GROUP` on the document
-defaulting to the config values, a picker on the header, and validation that every SKU's diff
-belongs to the chosen group.
+No longer blocked on data: STG now publishes `foundation/diffgroup` (12 groups with their members,
+loaded 2026-09-28). And the fix is no longer a group picker. Under the consultant's style/colour
+model the L1 carries the document's colour itself in `DIFF_1` and a chosen size group in `DIFF_2`,
+so this item is replaced by the item-structure change: a `SIZE_GROUP` on the document, the colour
+in `DIFF_1`, and validation that every SKU's size belongs to the group.
 
 ### C. Non-merchandise costs have no capture
 `NON_MERCH_COSTS` is validated and previewed by the backend and maps to the order's `expenses`,
@@ -407,16 +482,6 @@ plus banners and channels. Each value is stored as `CODE_<codeType>` with the co
 What remains is using them: the console's fixed-value fields (order type, status, freight terms, cost
 basis, expense components) still read from `CONFIG` or free text. Point them at `CODE_*` instead.
 
-### 3. Exercise the remaining untested operations
-
-`MODIFY_ORDER` and `CREATE_ORDER` have never run live. The console's browse tab loads a real record
-straight into the modify form, which is the intended way to try them. Both now carry
-`ENSURE_STYLE_SKUS` at sequence 85, so a colour the style does not have will be created before the
-order is built rather than producing an order against nothing.
-
-Still untested, and the question the user raised: when a colour changes on an existing order, does
-the old colour's line need explicit cancellation, or is replacing the detail lines enough?
-
 ### 4. Non-merchandise costs, end to end
 
 The mapping is in and previews correctly. It has not been sent to MFCS, so the component codes
@@ -463,10 +528,6 @@ Office document has no room for. The MFCS-side work is mapper work in shapes we 
 the inbound contract is the critical path.
 
 ## Known gaps that are not our bugs
-
-**UDAs do not work because the tenant has none.** `foundation/uda` returns zero rows and `itemUda` is
-null on every item. The integration sends an empty array, which succeeds trivially. Wiring capture →
-master data → integration would build a pipe with nothing at either end. Resolve tenant-side first.
 
 **Most foundation services are empty publish queues.** `merchhier/*`, `diffid`, `difftype`,
 `diffgroup`, `supplier`, `store`, `warehouse`, `uda` all return HTTP 200 with zero rows, and

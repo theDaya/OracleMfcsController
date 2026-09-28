@@ -1839,7 +1839,6 @@ create or replace package body payload_pkg as
             when 'build_initial_retail_request' then return initial_retail_request(p_action_request_id);
             when 'build_po_number_request' then return po_number_request(p_action_request_id);
             when 'build_purchase_order_request' then return purchase_order_request(p_action_request_id);
-            when 'build_purchase_order_verify_request' then return '{}';
             else raise_application_error(-20820, 'Unsupported public mapper: ' || p_mapper_name);
         end case;
     end;

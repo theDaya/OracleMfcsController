@@ -4,9 +4,21 @@ set define off
 --
 -- The only package that resolves a credential or makes an outbound call.
 -- Keep it that way: a second HTTP path is how a stale token once survived in
--- one code path and not another. The token is read from SECRET on every call,
--- never cached in a package global - ORDS pools sessions, and a cached
--- credential outlives the request that read it.
+-- one code path and not another.
+--
+-- Credentials live in the APEX credential store, not in this schema. Under
+-- MFCS_AUTH_MODE = OAUTH_CLIENT_CREDENTIALS the client id and secret are set
+-- once with apex_credential.set_persistent_credentials and are then
+-- unreadable: no view returns either, and they are excluded from application
+-- exports. apex_web_service fetches the bearer token, caches it in the
+-- database and refetches it on expiry, so nothing here holds a token.
+--
+-- That last point is not only about secrecy. This package used to cache the
+-- token in a package global while the comment here claimed it did not, and
+-- the rule exists for a reason: ORDS pools sessions, so a cached token
+-- outlives the request that fetched it and survives a change of tenant -
+-- which surfaces as the 403 documented in CLAUDE.md rather than as anything
+-- that names a token.
 --
 -- Failure classification matters more than it looks. An HTTP error with a
 -- readable body is a failure (-20950); HTTP 503 and the tenant's nightly
@@ -61,8 +73,6 @@ end client_pkg;
 show errors
 
 create or replace package body client_pkg as
-    g_access_token varchar2(32767);
-    g_token_expires_at timestamp with time zone;
 
     function get_secret(p_secret_ref in varchar2) return varchar2 is
         l_secret varchar2(32767);
@@ -107,66 +117,69 @@ create or replace package body client_pkg as
         return config_pkg.get_config('MFCS_HTTPS_HOST', null);
     end;
 
+    -- True when credentials come from the APEX credential store. The alternative,
+    -- STATIC_BEARER, is a hand-pasted token in SECRET: kept because it needs no
+    -- IDCS round trip and is the fallback when the credential is not yet set, but
+    -- it expires hourly and is not the intended mode.
+    function credential_mode return boolean is
+    begin
+        return config_pkg.get_config('MFCS_AUTH_MODE', 'OAUTH_CLIENT_CREDENTIALS')
+               = 'OAUTH_CLIENT_CREDENTIALS';
+    end;
+
+    function credential_static_id return varchar2 is
+    begin
+        if not credential_mode then
+            return null;
+        end if;
+        return config_pkg.get_config('MFCS_CREDENTIAL_STATIC_ID', 'MFCS_OAUTH');
+    end;
+
+    function token_url return varchar2 is
+    begin
+        if not credential_mode then
+            return null;
+        end if;
+        return config_pkg.get_config('MFCS_TOKEN_URL');
+    end;
+
+    function oauth_scope return varchar2 is
+    begin
+        if not credential_mode then
+            return null;
+        end if;
+        return config_pkg.get_config('MFCS_SCOPE');
+    end;
+
+    -- An APEX credential is workspace-scoped, and PL/SQL invoked through ORDS is
+    -- not inside an APEX session, so the workspace has to be named before the
+    -- credential can be resolved. Without this the call goes out with no
+    -- Authorization header at all and MFCS answers 401 - a failure that looks
+    -- exactly like a bad secret and is not one.
+    procedure ensure_workspace is
+    begin
+        if not credential_mode then
+            return;
+        end if;
+        apex_util.set_workspace(
+            p_workspace => config_pkg.get_config('MFCS_APEX_WORKSPACE', 'TW_TEST'));
+    end;
+
+    -- The static-bearer token, or null in credential mode where apex_web_service
+    -- supplies the Authorization header itself.
     function access_token return varchar2 is
-        l_token_url varchar2(1000);
-        l_client_id varchar2(4000);
-        l_client_secret varchar2(4000);
-        l_secret_ref varchar2(200);
-        l_scope varchar2(4000);
-        l_response clob;
-        l_expires_in number;
         l_static_token varchar2(32767);
     begin
-        if config_pkg.get_config('MFCS_AUTH_MODE', 'OAUTH_CLIENT_CREDENTIALS') = 'STATIC_BEARER' then
-            l_static_token := trim(get_secret(config_pkg.get_config('MFCS_BEARER_TOKEN_REF', 'MFCS_BEARER_TOKEN')));
-            if lower(substr(l_static_token, 1, 7)) = 'bearer ' then
-                return trim(substr(l_static_token, 8));
-            end if;
-            return l_static_token;
+        if credential_mode then
+            return null;
         end if;
 
-        if g_access_token is not null
-           and g_token_expires_at > systimestamp + interval '60' second then
-            return g_access_token;
+        l_static_token := trim(get_secret(
+            config_pkg.get_config('MFCS_BEARER_TOKEN_REF', 'MFCS_BEARER_TOKEN')));
+        if lower(substr(l_static_token, 1, 7)) = 'bearer ' then
+            return trim(substr(l_static_token, 8));
         end if;
-
-        l_token_url := config_pkg.get_config('MFCS_TOKEN_URL');
-        l_client_id := config_pkg.get_config('MFCS_CLIENT_ID');
-        l_secret_ref := config_pkg.get_config('MFCS_CLIENT_SECRET_REF');
-        l_scope := config_pkg.get_config('MFCS_SCOPE');
-        l_client_secret := get_secret(l_secret_ref);
-
-        apex_web_service.g_request_headers.delete;
-        apex_web_service.g_request_headers(1).name := 'Content-Type';
-        apex_web_service.g_request_headers(1).value := 'application/x-www-form-urlencoded';
-        apex_web_service.g_request_headers(2).name := 'Accept';
-        apex_web_service.g_request_headers(2).value := 'application/json';
-
-        l_response := apex_web_service.make_rest_request(
-            p_url => l_token_url,
-            p_http_method => 'POST',
-            p_body => 'grant_type=client_credentials'
-                   || '&client_id=' || l_client_id
-                   || '&client_secret=' || l_client_secret
-                   || '&scope=' || l_scope,
-            p_wallet_path => wallet_path,
-            p_wallet_pwd => wallet_password,
-            p_https_host => https_host,
-            p_transfer_timeout => to_number(config_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45'))
-        );
-
-        select json_value(l_response, '$.access_token' returning varchar2(4000) null on error),
-               json_value(l_response, '$.expires_in' returning number default 300 on error)
-          into g_access_token, l_expires_in
-          from dual;
-
-        if g_access_token is null then
-            raise_application_error(-20951, 'OAuth token endpoint did not return access_token.');
-        end if;
-
-        g_token_expires_at := systimestamp + numtodsinterval(greatest(l_expires_in - 60, 60), 'SECOND');
-        l_client_secret := null;
-        return g_access_token;
+        return l_static_token;
     end;
 
     function get_json(
@@ -175,21 +188,33 @@ create or replace package body client_pkg as
     ) return clob is
         l_response clob;
     begin
-        apex_web_service.g_request_headers.delete;
-        apex_web_service.g_request_headers(1).name := 'Authorization';
-        apex_web_service.g_request_headers(1).value := 'Bearer ' || access_token;
-        apex_web_service.g_request_headers(2).name := 'Accept';
-        apex_web_service.g_request_headers(2).value := 'application/json';
-        apex_web_service.g_request_headers(3).name := 'X-Correlation-ID';
-        apex_web_service.g_request_headers(3).value := lower(rawtohex(sys_guid()));
+        ensure_workspace;
 
+        apex_web_service.g_request_headers.delete;
+        apex_web_service.g_request_headers(1).name := 'Accept';
+        apex_web_service.g_request_headers(1).value := 'application/json';
+        apex_web_service.g_request_headers(2).name := 'X-Correlation-ID';
+        apex_web_service.g_request_headers(2).value := lower(rawtohex(sys_guid()));
+
+        -- In credential mode apex_web_service sets Authorization itself from the
+        -- stored credential. Setting it here too would win and defeat the point.
+        if not credential_mode then
+            apex_web_service.g_request_headers(3).name := 'Authorization';
+            apex_web_service.g_request_headers(3).value := 'Bearer ' || access_token;
+        end if;
+
+        -- The three credential arguments are null outside credential mode, which
+        -- is the same as not passing them.
         l_response := apex_web_service.make_rest_request(
             p_url => rtrim(config_pkg.get_config('MFCS_BASE_URL'), '/') || p_path,
             p_http_method => 'GET',
             p_wallet_path => wallet_path,
             p_wallet_pwd => wallet_password,
             p_https_host => https_host,
-            p_transfer_timeout => to_number(config_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45'))
+            p_transfer_timeout => to_number(config_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45')),
+            p_credential_static_id => credential_static_id,
+            p_token_url => token_url,
+            p_oauth_scope => oauth_scope
         );
         o_status := apex_web_service.g_status_code;
         return l_response;
@@ -206,6 +231,51 @@ create or replace package body client_pkg as
         l_iat number;
         l_now number;
     begin
+        -- Credential mode has no token here to decode: apex_web_service holds it,
+        -- and deliberately exposes neither it nor the secret behind it. Report
+        -- what can be known - that the credential exists and what it points at -
+        -- rather than reporting nothing, since this endpoint is the first thing
+        -- checked when calls start failing.
+        if credential_mode then
+            l_ref := credential_static_id;
+            l_root.put('mode', 'OAUTH_CLIENT_CREDENTIALS');
+            l_root.put('credentialStaticId', l_ref);
+            l_root.put('tokenUrl', token_url);
+            l_root.put('scope', oauth_scope);
+
+            begin
+                ensure_workspace;
+                -- l_ref, not the function: a package-private function cannot be
+                -- called from SQL (PLS-00231).
+                select count(*) into l_exp
+                  from apex_workspace_credentials
+                 where static_id = l_ref;
+            exception
+                when others then
+                    l_exp := 0;
+            end;
+
+            l_root.put('present', l_exp > 0);
+            if l_exp > 0 then
+                -- Not 'valid'. It says a credential is registered, not that the
+                -- id and secret in it are right - only a call can show that.
+                l_root.put('expired', false);
+                l_root.put('message',
+                    'Credential ' || l_ref || ' is registered. '
+                    || 'The bearer token is fetched and refreshed automatically; '
+                    || 'there is nothing to paste and nothing here expires hourly.');
+            else
+                l_root.put('expired', true);
+                l_root.put('message',
+                    'No APEX credential ' || l_ref || ' in workspace '
+                    || config_pkg.get_config('MFCS_APEX_WORKSPACE', 'TW_TEST')
+                    || '. Run deploy/mdutils/oauth_credential.sql, then set the id '
+                    || 'and secret with apex_credential.set_persistent_credentials.');
+            end if;
+            return l_root.to_clob;
+        end if;
+
+        l_root.put('mode', 'STATIC_BEARER');
         l_ref := config_pkg.get_config('MFCS_BEARER_TOKEN_REF', 'MFCS_BEARER_TOKEN');
         l_root.put('secretRef', l_ref);
 
@@ -320,17 +390,23 @@ create or replace package body client_pkg as
                 || '","requestBytes":' || coalesce(to_char(dbms_lob.getlength(p_request_payload)), '0') || '}'
         );
 
+        ensure_workspace;
+
         apex_web_service.g_request_headers.delete;
-        apex_web_service.g_request_headers(1).name := 'Authorization';
-        apex_web_service.g_request_headers(1).value := 'Bearer ' || access_token;
-        apex_web_service.g_request_headers(2).name := 'Accept';
+        apex_web_service.g_request_headers(1).name := 'Accept';
+        apex_web_service.g_request_headers(1).value := 'application/json';
+        apex_web_service.g_request_headers(2).name := 'Content-Type';
         apex_web_service.g_request_headers(2).value := 'application/json';
-        apex_web_service.g_request_headers(3).name := 'Content-Type';
-        apex_web_service.g_request_headers(3).value := 'application/json';
-        apex_web_service.g_request_headers(4).name := 'X-Correlation-ID';
-        apex_web_service.g_request_headers(4).value := l_correlation_id;
-        apex_web_service.g_request_headers(5).name := 'X-Client-Principal-User';
-        apex_web_service.g_request_headers(5).value := p_user_id;
+        apex_web_service.g_request_headers(3).name := 'X-Correlation-ID';
+        apex_web_service.g_request_headers(3).value := l_correlation_id;
+        apex_web_service.g_request_headers(4).name := 'X-Client-Principal-User';
+        apex_web_service.g_request_headers(4).value := p_user_id;
+
+        -- See get_json: in credential mode apex_web_service owns this header.
+        if not credential_mode then
+            apex_web_service.g_request_headers(5).name := 'Authorization';
+            apex_web_service.g_request_headers(5).value := 'Bearer ' || access_token;
+        end if;
 
         event_pkg.log_event(
             p_action_request_id => p_action_request_id,
@@ -350,7 +426,10 @@ create or replace package body client_pkg as
             p_wallet_path => wallet_path,
             p_wallet_pwd => wallet_password,
             p_https_host => https_host,
-            p_transfer_timeout => to_number(config_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45'))
+            p_transfer_timeout => to_number(config_pkg.get_config('HTTP_TRANSFER_TIMEOUT_SECONDS', '45')),
+            p_credential_static_id => credential_static_id,
+            p_token_url => token_url,
+            p_oauth_scope => oauth_scope
         );
         l_http_status := apex_web_service.g_status_code;
 

@@ -98,6 +98,20 @@ App 102 page 20 (Style Explorer) and app 103 page 8 (Execution) both read `STEP`
   approving replays the frozen one. Order quantities stay editable during review and are saved before
   the document is built, so the frozen document carries the reviewed numbers. See
   `docs/status-and-next-steps.md` for the full state machine.
+- **`ACTION_REQUEST_ID` is the whole tie between a draft and its execution.** It is stamped on
+  `POC_STYLE_DRAFT` at submit, and every controller table keys on it, so page 8 reaches `STEP`,
+  `ATTEMPT`, `EVENT_LOG` and `REQUEST` from one join. Nothing else needs copying across.
+- **What MFCS holds is read out of the response document, not out of `REQUEST`.**
+  `poc_style_pkg.apply_response` unpacks `STYLE`, `ORDER_NO` and each `SIZE_CURVE_DETAIL[].SKU_ID`
+  onto the draft; `refresh_from_controller` re-asks `api_pkg.get_transaction` and applies the answer
+  without sending anything. The controller's contract is that document - joining to its tables for
+  identifiers would make every internal change of theirs a change here.
+
+  Two columns per row, on purpose. `COMPOSED_SKU_NO` is what the console asked for (it numbers its own
+  items, `MANL`); `MFCS_SKU_NO` is what came back. They should be equal, and storing both is what makes
+  a day when they are not visible rather than silently overwritten. The one identifier MFCS genuinely
+  invents is the order number, which is why the write-back runs even on a failed request: a run that
+  reserved a number and then failed has still burned it.
 
 ## Reading live MFCS data on a page
 

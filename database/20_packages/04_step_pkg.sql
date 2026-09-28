@@ -172,19 +172,29 @@ create or replace package body step_pkg as
             add_step(p_action_request_id, 'APPLY_INITIAL_RETAIL', 80);
         end if;
 
+        -- No verification step follows the order write. purchaseOrders/create
+        -- answers a create it did not make with an error, not with SUCCESS, so
+        -- its 200 is evidence on its own - unlike items/update, which is why the
+        -- item steps still read back. A GET against the procurement feed here
+        -- bought nothing but latency: the feed lags the write, so the step slept
+        -- through up to twelve ten-second retries waiting to be told what the
+        -- create response had already said.
+        --
+        -- The order number is not lost by removing it. persist_po_number writes
+        -- it the moment RESERVE_ORDER_NUMBER succeeds, so it reaches REQUEST and
+        -- the status document even when the create that follows fails.
         if p_operation_name in ('CREATE_ORDER', 'CREATE_ALL') then
             add_step(p_action_request_id, 'RESERVE_ORDER_NUMBER', 90);
             add_step(p_action_request_id, 'CREATE_PURCHASE_ORDER', 100);
-            add_step(p_action_request_id, 'VERIFY_PURCHASE_ORDER', 110);
         elsif p_operation_name = 'MODIFY_ORDER' then
             add_step(p_action_request_id, 'CREATE_PURCHASE_ORDER', 100);
             -- The header update above ignores its details array on this tenant
             -- (SUCCESS, nothing changes - proven live). The lines are synced
             -- through the purchaseOrder/details services in their own step,
             -- which reads the order first because what it sends depends on what
-            -- the order currently holds.
+            -- the order currently holds. That step does its own read-back, and
+            -- keeps it: here a SUCCESS genuinely is not evidence.
             add_step(p_action_request_id, 'SYNC_ORDER_LINES', 105);
-            add_step(p_action_request_id, 'VERIFY_PURCHASE_ORDER', 110);
         end if;
 
         commit;

@@ -423,21 +423,6 @@ export const STEPS = {
       'A cancelled line is not dead — a later details/update with a quantity resurrects it.',
     ],
   },
-  VERIFY_PURCHASE_ORDER: {
-    title: 'Verify purchase order',
-    kind: 'call',
-    handler: 'client_pkg.call_service (GET, with retry loop)',
-    mapper: 'build_purchase_order_verify_request',
-    create: { method: 'GET', endpoint: '/MerchIntegrations/services/procurement/order/{orderNo}' },
-    update: { method: 'GET', endpoint: '/MerchIntegrations/services/procurement/order/{orderNo}' },
-    detail:
-      'Reads the order back rather than trusting the write’s SUCCESS. The read side lags a few ' +
-      'behind - about 30 seconds for line changes, not the few seconds elsewhere - so this retries up ' +
-      'to 12 times with 10s sleeps. Currently verifies ' +
-      'existence only - the silent no-op on order lines showed it should also compare content ' +
-      'against what was sent. That upgrade is on the outstanding list.',
-    gotchas: ['Verify-by-readback is the project’s core defence; this step is where it is weakest today (existence, not content).'],
-  },
 };
 
 // ---------------------------------------------------------------------------
@@ -483,7 +468,6 @@ export const OPERATIONS = [
       { seq: 80, code: 'APPROVE_ITEMS' },
       { seq: 90, code: 'RESERVE_ORDER_NUMBER' },
       { seq: 100, code: 'CREATE_PURCHASE_ORDER' },
-      { seq: 110, code: 'VERIFY_PURCHASE_ORDER' },
     ],
   },
   {
@@ -524,7 +508,6 @@ export const OPERATIONS = [
       { seq: 70, code: 'APPROVE_ITEMS' },
       { seq: 90, code: 'RESERVE_ORDER_NUMBER' },
       { seq: 100, code: 'CREATE_PURCHASE_ORDER' },
-      { seq: 110, code: 'VERIFY_PURCHASE_ORDER' },
     ],
   },
   {
@@ -548,7 +531,6 @@ export const OPERATIONS = [
       { seq: 70, code: 'APPROVE_ITEMS' },
       { seq: 100, code: 'CREATE_PURCHASE_ORDER' },
       { seq: 105, code: 'SYNC_ORDER_LINES' },
-      { seq: 110, code: 'VERIFY_PURCHASE_ORDER' },
     ],
   },
 ];

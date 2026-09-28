@@ -71,6 +71,31 @@ does not exist (`tst3`, `dev3`) also answers 401, from the edge rather than from
 The token is issued in Postman (`postman/`) and loaded with `deploy/adb-free/set_token.sql`. The user
 sometimes updates the row by hand, so do not trust `SECRET.UPDATED_AT` — trust the decoded claim.
 
+**All of the above is the `STATIC_BEARER` path, which is on its way out.** `MFCS_AUTH_MODE =
+OAUTH_CLIENT_CREDENTIALS` moves the client id and secret into the **APEX credential store** and lets
+`apex_web_service` fetch and refresh the bearer token itself — no Postman, no hourly expiry, nothing
+to paste. `client_pkg` passes `p_credential_static_id`, `p_token_url` and `p_oauth_scope` and sets no
+`Authorization` header at all.
+
+Two things that path needs, and the code cannot supply either:
+
+- **The credential must exist and hold an id and secret.** `deploy/mdutils/oauth_credential.sql`
+  creates it; the id and secret go in by hand through
+  `apex_credential.set_persistent_credentials`, which is deliberately not scripted — **never put
+  either value in a file in this repository, which has a public remote.** Once set, neither can be
+  read back: `APEX_WORKSPACE_CREDENTIALS` has no column for them.
+- **A network ACL for the IDCS token host**, which is a different hostname from `MFCS_BASE_URL` and
+  so needs its own ACE. Without it every call fails `ORA-29273` / `ORA-24247`.
+  `deploy/mdutils/grant_token_host_acl.sql` is the grant (run as SYS);
+  `deploy/mdutils/verify_token_host.sql` says whether it has been run.
+
+An APEX credential is workspace-scoped and ORDS-invoked PL/SQL is not in an APEX session, so
+`client_pkg.ensure_workspace` names the workspace first. Skip it and the call goes out **unauthenticated**
+and MFCS answers 401 — indistinguishable from a bad secret.
+
+`client_pkg.token_status` reports whichever mode is active. In credential mode it can only say that a
+credential is registered, never that its contents are right; only a call shows that.
+
 ## Layout
 
 ```
@@ -170,10 +195,25 @@ All verified live. Most are silent failures, which is why they are worth memoris
   translate through `MAP.ORDER_LOCATION.*` so they cannot disagree.
 - **A purchase order ranges its own items**, so `CREATE_ITEM_LOCATIONS` only matters for style-only creates.
 - **Approval requires sourcing and country of manufacture first.**
-- **Parent styles carry differentiator *groups*** (`RMS_ALL_C`/`ALL`); children carry *concrete* diff IDs.
-  That is how *we* create them, not a tenant law: a real UAT style carries a concrete colour (`100`,
-  Black) with a size *group* (`ADULT_NUM`). The authoritative discriminator is `diff1Level` /
-  `diff2Level`, which reads `ID` or `GROUP`. We do not read it anywhere yet.
+- **L1 is a style/colour, not a style.** Per the MFCS consultant, 2026-09-28: `DIFF_1` holds a company
+  colour (diff type `C`) and `DIFF_2` a size group; SKUs carry that colour plus a size (type `S`,
+  `S`-prefixed: `S070`, not `070`). A SKU in any other colour is refused under the L1, and
+  `items/update` answers SUCCESS without changing a diff - proven with a description change in the
+  same call that did apply. So a colour change is a new L1, not new SKUs. Type `SC` (supplier colours,
+  and its group `RMS_ALL_C`) is retired and must never be used; `LL` and `HL` only group colours.
+  **Superseded:** we used to put groups on the parent (`RMS_ALL_C`/`ALL`, still in config) and
+  concrete diffs on the children. `diff1Level` / `diff2Level` read `ID` or `GROUP`; we do not read
+  them anywhere yet.
+- **`item/suppliers/update` ignores `unitCost` on an approved item** and answers SUCCESS (style
+  `100300035`, 2026-09-28). A cost change is `cost/costChange/immediate/create` at L1 level, which
+  cascades to every SKU, in the **supplier's** currency - the document's currency is refused with
+  `Invalid currency code`.
+- **Every foundation feed that publishes also pages.** The next page is an `offsetkey` inside the
+  `rel: next` link; a single read truncates silently (`diffid` stopped at exactly 500).
+- **FF and DT UDAs carry `"udaListOfValues": null`**, not an absent key, so `has()` is true and the
+  array is null.
+- **Colours link upward through `industryCode`**: a `C` diff's `industryCode` names its `LL`, and an
+  `LL`'s names its `HL`.
 - **Order read and write disagree on names**: read gives `physicalQuantityOrdered` / `originCountryId`,
   write wants `quantityOrdered` / `originCountry`.
 - **`purchaseOrders/update` is header-only in practice.** It answers SUCCESS while ignoring the
@@ -182,8 +222,9 @@ All verified live. Most are silent failures, which is why they are worth memoris
 - **`quantityCancelled` is cumulative-absolute; never send it.** A repeat of a line's existing
   cancelled quantity is a silent no-op. `quantityOrdered` is authoritative: full cancellation is
   `quantityOrdered:0` + `cancelInd` + `cancelCode` (ORCA codes: `S` switch, `B` reduction).
-- **A child's colour diff must belong to the parent's diff group** (`RMS_ALL_C` here). A colour
-  outside it is rejected loudly at items/create - one of the few loud failures.
+- **A child's diffs must belong to the parent's**: a member of the parent's group, or equal to the
+  parent's diff where it carries an ID. Anything else is rejected loudly at items/create
+  (`CORESVC_ITEM.CHECK_DIFFS`) - one of the few loud failures.
 - **Order line changes take ~30 seconds to appear** in the procurement read — far longer than the
   few seconds of feed lag elsewhere. A read-back that concludes too early reports a silent failure
   that did not happen.
@@ -353,6 +394,10 @@ colourways is two requests.
   second HTTP path; a duplicate is what previously let a stale token survive in one code path and not
   another.
 - Never cache a credential in a package global. ORDS pools sessions and the cache outlives the request.
+  This rule was stated in `client_pkg`'s own header while the package cached the OAuth token in
+  `g_access_token` — removed 2026-09-21 with the hand-rolled token POST. The token cache now belongs
+  to `apex_web_service`, which keeps it in the database rather than in a pooled session, so a change
+  of tenant cannot be served a previous tenant's token.
 - Emit ORDS responses through `ords_util_pkg.emit_json`. `htp.prn` takes a VARCHAR2, and the item feed
   crosses 32KB after about seven rows.
 - Do not pass an upstream failure through as HTTP 200. An expired token served as a 200 with an HTML
@@ -385,5 +430,6 @@ brand once its cache had refreshed and the UDAs written in the same run *were* v
 and validation still checks it against master data, because both are correct as far as we know - but
 nothing reaches the tenant, so do not report brand as working.
 
-**We create nothing Office would call complete.** Seasons, HTS codes and images are still absent -
-see `docs/status-and-next-steps.md`. UDAs and barcodes are done and proven live.
+**Cost changes on an existing style are lost.** `item/suppliers/update` answers SUCCESS and keeps the
+old cost; the fix is a cost-change step, not yet built. UDAs, barcodes, seasons, images and tariff
+codes are all done and proven live.

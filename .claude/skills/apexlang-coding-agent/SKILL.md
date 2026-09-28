@@ -79,7 +79,7 @@ diff -rq apexlang/<checked-in-app> <export dir>/<app alias><id>
 invalid property listed below on the first try. It caught none of the four render-time
 traps in the next section.
 
-## The four traps that cost real time
+## The traps that cost real time
 
 These all validate, import and then misbehave. Each one is worth checking for explicitly.
 
@@ -105,6 +105,90 @@ processes run. Anything binding that item — a region query, an LOV, a DML targ
 an undefined bind. The debug log says `Access to undefined Per Request (Memory Only)
 variable`. APEXlang exposes no property for "Maintain Session State", so the item type is
 the lever you have.
+
+### An interactive grid's savedReport must list its displayColumn entries
+
+Defining `column` blocks on the region is not enough. The *report* decides what is
+displayed, and a `savedReport` without `displayColumn` entries registers **zero** report
+columns - which the dictionary will confirm:
+
+```sql
+select rc.page_id, c.name, rc.display_seq, rc.is_visible
+  from apex_appl_page_ig_rpt_columns rc
+  join apex_appl_page_ig_columns c on c.column_id = rc.column_id
+ where rc.application_id = :app
+ order by rc.page_id, rc.display_seq;
+```
+
+The page then fails at render, in the browser, with:
+
+```
+TypeError: Cannot read properties of undefined (reading 'nodeType')
+    at Object._selectRows (widget.grid.min.js)
+    at Object._setSelection (desktop_all.min.js)
+```
+
+The grid has a control break and aggregates but no row structure to hang them on, so the
+selection code walks into nothing. Nothing server-side complains: it validates, it
+imports, the region and all its columns appear in `apex_appl_page_ig_columns`, and only
+the report-columns view shows the hole.
+
+Every column the report should show needs an entry, **including the control-break
+column**:
+
+```apex
+        savedReport Main (
+            visibility: primary
+            name: Main
+            view {
+                default: grid
+                stretchColumns: false
+            }
+
+            displayColumn (
+                column: @PLAN_MONTH
+                layout {
+                    sequence: 20
+                }
+            )
+
+            sort (
+                column: @PLAN_MONTH
+                sort {
+                    direction: asc
+                    nulls: last
+                    sequence: 1
+                }
+            )
+
+            controlBreak (
+                column: @PLAN_MONTH
+                sort {
+                    direction: asc
+                    nulls: last
+                }
+                layout {
+                    sequence: 1
+                }
+            )
+        )
+```
+
+Columns with no `displayColumn` entry still exist and stay available to the user through
+Actions - they are simply not in the default report.
+
+### A read-only grid must not declare editable column types
+
+`edit { enabled: false }` with columns typed `numberField`, `textField` or `selectList` is
+contradictory: the column type is what renders an input. Use `displayOnly` (or `link`, or
+`hidden`) throughout, and drop `queryOnly: true` with them - there is nothing to mark
+query-only on a column that was never going to be written.
+
+```sql
+select name, item_type from apex_appl_page_ig_columns
+ where application_id = :app and page_id = :p
+   and item_type not in ('NATIVE_DISPLAY_ONLY','NATIVE_HIDDEN','NATIVE_LINK');
+```
 
 ### Interactive grid DML targets the region query, not the table
 
@@ -258,11 +342,24 @@ That is the fastest way to prove a region's query before importing it.
 | `pageItem` select list | `nullText`, `width` |
 | `pageItem` not bound to a form region | the whole `source { }` block |
 | `button` | an `icon { }` block |
-| `interactiveGrid` region | `pageItemsToSubmit` (valid on `themeTemplateComponent`) |
+| `interactiveGrid` region | `pageItemsToSubmit` - see below, it is a feature gate rather than a flat prohibition |
 | Tabs Container region | `templateOptions` |
 
 A button with **no** `behavior { action: … }` defaults to submitting the page. That is the
 simplest way to get a submit button.
+
+`pageItemsToSubmit` is the one in that table worth stating precisely, because the flat
+reading is wrong. The compiler says:
+
+```
+- conditional pageItemsToSubmit (when (type FEATURES [AJAX_ITEMS_TO_SUBMIT]))
+```
+
+So it is gated on the region type declaring that feature, not forbidden outright. It is
+rejected on an interactive grid because a grid does not declare it; it is accepted on a
+`themeTemplateComponent` because that does. Worth remembering as a shape: several
+"rejected" properties are really conditional ones whose condition is unmet, and the
+rejection message does not say so. The property query above does.
 
 ### Dynamic actions
 
@@ -584,6 +681,542 @@ things: the `app` identifier in `application.apx` (upper case), its `name` / log
 `APP_NAME` substitution, the `id` in `deployments/default.json`, and the navigation list in
 `shared-components/lists.apx`. Delete the pages you do not want and add your own. Everything else -
 theme, templates, authentication, plugins - comes across working, which is most of the app.
+
+## Starting a new app, and the theme decision that follows you everywhere
+
+**A subscribed theme is what makes `@/` references resolve.** This is the single most
+expensive thing to get wrong when scaffolding a new app, because every symptom it causes
+looks like something else.
+
+```apex
+theme universal-theme (
+    themeNumber: 42
+    baseTheme: ut-26.1        <- subscribed: templates come from the base theme
+)
+theme universal-theme (
+    themeNumber: 42
+    version: 1.3              <- a local copy: every template must be in the export
+)
+```
+
+There are two reference forms and the theme decides which one works:
+
+| Form | Means | Works when |
+| --- | --- | --- |
+| `@/standard` | a template in the base theme | the theme declares `baseTheme:` |
+| `@standard` | a component defined in this export | the export ships `themes/.../region-templates/standard.apx` |
+
+Copying an older app's scaffolding gets you the second kind: a `version:`-style theme plus
+several dozen local template files. Everything validates until you reference a template
+that app never used - `@cards-container`, say - and then it is `REFERENCE_NOT_FOUND` with
+no hint that the fix is a different theme entirely. Switching to `baseTheme:` lets you
+delete the whole local subset and reference anything the theme offers.
+
+Oracle's own failure map states the diagnosis as a lookup, and it is worth memorising in
+that form: **widespread `REFERENCE_NOT_FOUND` across page templates, region templates,
+labels, lists or theme defaults - `@/standard`, `@/title-bar`, `@/breadcrumb`, `@/text`,
+`@/side-navigation-menu` - means look at `theme.apx` first**, for a missing Universal Theme
+`baseTheme` binding or a stale `version` field. The individual missing references are
+downstream symptoms. Chasing them one at a time is the expensive path, and the breadth of
+the failure is the clue: one wrong reference is a typo, forty is the theme.
+
+**Scaffold from an app that validates, and validate it first to prove it does.** Validating
+the donor is a two-minute experiment that tells you whether a pattern is sound before you
+spend an hour deciding your copy of it is broken.
+
+**`currentTheme:` and `currentThemeStyle:` keep the bare `@`.** They name components declared
+in the export, not templates. So does `list: @desktop-navigation-menu`, and so does an item's
+`region: @some-region`. A blanket search-and-replace of `@x` to `@/x` will break all three -
+`region:` is especially easy to miss, because theme.apx also has a `region:` property and
+there it *is* a template.
+
+## Slot names are scoped to their container
+
+`slot:` is not one vocabulary. The valid values depend on what the thing sits inside:
+
+| The thing | Its slots come from | Typical values |
+| --- | --- | --- |
+| a region | the **page** template | `body`, `breadcrumbBar`, `banner`, `footer` |
+| an item | its **region** template | `regionBody` |
+| a button | its **region** template | `rightOfTitle`, `top`, `next`, `belowBox` |
+| a sub-region | its **parent region** template | `subRegions`, `tabs`, `regionBody` |
+
+So `slot: contentBody` is right for a region on the Login page template and wrong for one
+on Standard, which wants `body`. Never sed `slot:` across a whole app - fix them per
+container. Validation names the valid set for the exact context, so one round trip per
+slot is enough.
+
+## Buttons are page-level, positioned into a region
+
+A `button` nested inside a `region` block fails with `COMPONENT_NOT_FOUND: button x not
+found`. Declare it at page level and point it at the region:
+
+```apex
+    button new-pot (
+        buttonName: NEW_POT
+        label: New Pot
+        layout {
+            sequence: 10
+            region: @intro
+            slot: rightOfTitle
+        }
+        appearance {
+            buttonTemplate: @/text-with-icon
+            hot: true
+            icon: fa-plus
+        }
+        behavior {
+            action: redirectThisApp
+            target: {
+                page: 100
+                clearCache: 100
+            }
+        }
+    )
+```
+
+**A button's behavior takes `action:`; a card action's takes `type:`.** Same idea, two
+property names, and the error for using the wrong one names the property rather than the
+mistake.
+
+## Passing item values in a target
+
+`items:` with a colon, and the block is a map:
+
+```apex
+            target: {
+                page: 10
+                clearCache: 10
+                items: {
+                    P10_POT_ID: &POT_ID.
+                }
+            }
+```
+
+`items {` without the colon is `Invalid token: items {`, and the three closing braces that
+follow all report as errors too, which makes it look like a much deeper structural problem
+than a missing character.
+
+## Cards are a native region type
+
+Do not build cards from a `classicReport` with the Cards template and `#CARD_SUBTEXT#`
+substitutions. Those substitution strings print literally when a template names one you did
+not populate. `type: cards` binds real columns:
+
+```apex
+    region pots (
+        type: cards
+        source { location: localDatabase, type: sqlQuery, sqlQuery: ... }
+        appearance {
+            template: @/cards-container
+            templateOptions: [ #DEFAULT#, t-CardsRegion--styleA ]
+        }
+        card       { primaryKeyColumn1: POT_ID }
+        title      { column: POT_NAME }
+        subtitle   { advancedFormatting: true
+                     htmlExpression: &POT_CODE. &middot; &SEASON_NAME. }
+        body       { column: DEPARTMENT_NAME }
+        secondaryBody { advancedFormatting: true
+                        htmlExpression: &STYLE_COUNT. styles }
+        iconAndBadge  { iconSource: iconClassColumn
+                        iconColumn: ICON_CLASS
+                        iconCssClasses: fa
+                        badgeColumn: POT_STATUS
+                        badgeCssClasses: &STATUS_CSS. }
+
+        action open ( ... )
+    )
+```
+
+`templateOptions` values are validated against the template, and the valid strings are not
+always what they look like: it is `t-CardsRegion--hideHeader js-addHiddenHeadingRoleDesc`,
+one string including the js- class, not `t-CardsRegion--hideHeader`.
+
+## staticContent holds its markup in source
+
+```apex
+        type: staticContent
+        source {
+            htmlCode:
+                ```html
+                <p>...</p>
+                ```
+        }
+```
+
+Not `staticContent { html: ... }`.
+
+## `&` in a SQLcl argument hangs the command
+
+```sql
+apex import ... -name "Office UK Range & Buy Control"
+```
+
+SQLcl reads `&` as a substitution variable, prompts for it, and blocks on stdin that never
+arrives. The command does not fail - it hangs until something kills it, and nothing is
+created, so it reads exactly like a slow import of a large app. A 149K app timing out after
+five minutes is this, not size. Put `set define off` at the top of every script that runs an
+`apex` command, and prefer a `-name` without an ampersand.
+
+## Plugins referenced by component-settings must be present
+
+Copying `shared-components/component-settings.apx` from another app brings its
+`componentSetting` blocks with it, including ones naming plugins you did not copy:
+
+```
+Type: PLUGIN_NOT_FOUND
+Error: Plugin not found for componentSetting component: plugin/select2
+```
+
+Drop any `componentSetting` block whose `name:` starts `plugin/` unless you copied the
+plugin too. The error helpfully lists every valid built-in item type, which is a useful
+reference in its own right.
+
+## Item names are unique across the application, not per page
+
+Declaring `P10_POT_NAME` on page 10 and again on page 30 - so a breadcrumb on page 30 can
+show the pot it belongs to - fails with `DUPLICATED_COMPONENT`. Page prefixes are a naming
+convention, not a namespace.
+
+An ancestor's items are set into session state instead, from the descendant's own
+before-header process:
+
+```plsql
+apex_util.set_session_state('P10_POT_ID', l_pot_id);
+apex_util.set_session_state('P10_POT_NAME', l_pot_name);
+```
+
+This is what makes a deep breadcrumb work when the page is reached from a bookmark rather
+than by clicking down through the hierarchy - otherwise the trail renders with blank crumbs
+linking nowhere.
+
+## label is a block on an item and a scalar on a button
+
+```apex
+    pageItem P120_COLOUR_NAME (
+        label {
+            label: Colourway name
+            alignment: left
+        }
+    )
+
+    button create (
+        label: Create Colourway
+    )
+```
+
+Worth knowing before a search-and-replace: converting every `label:` to a block breaks
+every button on the page, and the error - `Invalid property: label` - names the same
+property in both cases.
+
+Two more of this shape:
+
+- An item's field template is `appearance { template: @/required-floating }`, not
+  `fieldTemplate:`.
+- `maximumLength` is not a `settings` property on a page item.
+
+## Form regions and the items bound to them
+
+```apex
+    region commercial (
+        type: form
+        source {
+            location: localDatabase
+            tableName: RBC_COLOURWAY
+        }
+    )
+
+    pageItem P30_SUPPLIER_NO (
+        source {
+            formRegion: @commercial
+            column: SUPPLIER_NO
+            dataType: varchar2
+        }
+    )
+```
+
+Not `type: table` / `table:` on the region, and not `type: databaseColumn` /
+`databaseColumn:` on the item. The region's `source.type` accepts only `functionBody`,
+`propertyGraph`, `sqlQuery` and `tableView` - a plain table is named with `tableName` and
+no `type` at all.
+
+## Breadcrumb blocks
+
+An entry's parent goes inside `appearance`, and a breadcrumb *region* must name its
+template in `componentAppearance`:
+
+```apex
+    entry style (
+        name: &P20_STYLE_DESC.
+        pageNumber: 20
+        appearance {
+            parentEntry: @pot
+        }
+        link {
+            target: {
+                page: 20
+                items: {
+                    P20_STYLE_NO: &P20_STYLE_NO.
+                }
+            }
+        }
+    )
+```
+
+```apex
+    region breadcrumb (
+        type: breadcrumb
+        source {
+            breadcrumb: @breadcrumb
+        }
+        appearance {
+            template: @/title-bar
+        }
+        componentAppearance {
+            breadcrumbTemplate: @/breadcrumb
+        }
+    )
+```
+
+## Classic report columns take no display condition
+
+There is no `appearance { displayCondition { } }` on a `column`. A column that exists only
+to order a `union all` cannot be hidden that way - leave it out of the column list
+entirely, or drop it from the query.
+
+## Proving a region's SQL: substitute, do not bind
+
+`dbms_sql` does not bind APEX page items even inside an `apex_session.create_session`, so a
+harness that parses each region's query reports `ORA-01008: value for bind variable
+placeholder was not provided` for every one of them and proves nothing. Substitute the
+values into the text first:
+
+```plsql
+    function bound(p_sql in varchar2) return varchar2 is
+        l_s varchar2(32767) := p_sql;
+        procedure sub(p_item in varchar2) is
+        begin
+            l_s := replace(l_s, ':' || p_item, '''' || v(p_item) || '''');
+        end;
+    begin
+        sub('P10_POT_ID');
+        sub('P20_STYLE_NO');
+        return l_s;
+    end;
+```
+
+Then `dbms_sql.parse` each one wrapped in `select count(*) from ( ... )`. Keep it as a test
+file rather than a scratch script: it is the only check that catches a column the query
+does not actually provide, and it is worth re-running after every import.
+
+## Ask the compiler what a block takes; do not infer it
+
+This is the single biggest time-waster in APEXlang work, and it is a process mistake
+rather than a knowledge one. Writing a block from what its properties *ought* to be
+called, then letting validation correct them one at a time, costs a round trip per
+property. `savedReport` took three: `type: primary` (wrong), a missing `visibility`, then
+a missing `name`.
+
+**There is an oracle for this, and it is not guesswork or a donor.** Oracle's own APEXlang
+skill ships a tool that reads the *compiler's* property metadata out of SQLcl. It is
+vendored at `tools/oracle-apexlang/` and needs nothing but `node` and SQLcl on PATH:
+
+```bash
+node .claude/skills/apexlang-coding-agent/tools/oracle-apexlang/query-valid-props.mjs      --component savedReport --component-type-id 7050
+```
+
+```
+Using compiler metadata from SQLcl/Oracle runtime (build=26.1.0+3102, source=path_sqlcl)
+savedReport [componentTypeId=7050]   propertyCount: 12
+
+[identification]
+- active      visibility (required; lovType=STATIC)
+  value: primaryDefault | value: alternativeDefault | value: public | value: private
+- conditional name (required; when (visibility NOT_EQUALS PRIMARY_DEFAULT))
+- active      staticId (required)
+```
+
+Exact properties, requiredness, valid values and the conditions that gate them, for the
+build actually installed. Useful flags: `--group <name>` to narrow to one block,
+`--parent <name>` and `--component-type-id <id>` to disambiguate (component names repeat -
+`savedReport` is 7050 for an interactive report and 7950 for a grid), `--list` to
+enumerate candidates, `--json` for machine output.
+
+Run it **before** writing any block you have not written before. Donors drop to what they
+always were - worked examples showing a shape in context - and validation goes back to
+catching what you changed rather than discovering the schema.
+
+When the tool cannot answer (it is ambiguous about a nested child, or SQLcl is not
+reachable), fall back to the donor: `grep -A20` the block out and start from that text.
+
+```apex
+        savedReport Main (
+            visibility: primary
+            name: Main
+            view {
+                default: grid
+                stretchColumns: false
+            }
+        )
+```
+
+```apex
+        savedReport Main (
+            visibility: primary
+            name: Main
+            view {
+                default: grid
+                stretchColumns: false
+            }
+        )
+```
+
+Before writing any block you have not written before, `grep -A20` it out of a donor and
+start from that text. Validation is for catching what you then changed, not for
+discovering the schema.
+
+The same applies to whole features. A grid column that links to another page:
+
+```apex
+        column PLAN_LINE_REF (
+            type: link
+            link {
+                target: {
+                    page: 50
+                    clearCache: 50
+                    items: {
+                        P50_PLAN_LINE_ID: &PLAN_LINE_ID.
+                    }
+                }
+            }
+            source {
+                databaseColumn: PLAN_LINE_REF
+                dataType: varchar2
+            }
+        )
+```
+
+## Control breaks and aggregates live in the savedReport
+
+Not on the region, and not on the column:
+
+```apex
+            controlBreak (
+                column: @PLAN_MONTH
+                sort {
+                    direction: asc
+                    nulls: last
+                }
+                layout {
+                    sequence: 1
+                }
+            )
+
+            aggregate units-total (
+                column: @UNITS
+                function: sum
+                showGrandTotal: true
+                tooltip: Units
+            )
+```
+
+## More of the slot vocabulary
+
+The rule keeps costing round trips, so the values worth memorising:
+
+| Container | Item slot | Button slot |
+| --- | --- | --- |
+| Standard region | `regionBody` | `rightOfTitle`, `edit`, `create`, `next`, `previous` |
+| Interactive grid | `regionBody` | `edit`, `create`, `copy`, `close`, `next` |
+| Standard page template | region: `body` | |
+| Modal dialog page | region: `contentBody` | |
+| Login page | region: `contentBody` | |
+
+An item and a button in the *same* region can need different slot names, because the two
+lists are separate. `searchFieldAndSmartFilters` is an interactive *report* slot and is
+not valid on a grid.
+
+## A grid cannot compose an identifier, and should not be asked to
+
+Where a table has a derived key column, the honest options are a trigger or a process that
+runs straight after row processing. Without `CREATE TRIGGER`, the second:
+
+```apex
+    process save-curve (
+        type: interactiveGridAutoRowProcessing
+        editableRegion: @curve
+        execution { sequence: 10 }
+    )
+
+    process sync-curve (
+        type: executeCode
+        source {
+            plsqlCode:
+                ```plsql
+                begin
+                    my_pkg.sync(:P50_PARENT_ID);
+                end;
+                ```
+        }
+        execution { sequence: 20 }
+    )
+```
+
+Make the derived column nullable and `queryOnly: true` so the grid displays it and never
+writes it. The window where a row has no key value lasts one request, inside one
+transaction. Put the real validation in that same procedure: a grid enforces what its own
+list of values offers and nothing else, so rules about what a row must satisfy belong
+behind it.
+
+## Rules Oracle states up front that we learned from the crash
+
+From Oracle's own APEXlang contracts. Each of these is a MUST there, and each corresponds
+to something in this file discovered by breaking it. Prefer them as preventive rules:
+
+- **Every interactive grid needs at least one `savedReport`, and every `savedReport` needs
+  explicit `displayColumn` children.** This is the rule whose violation produces the
+  `nodeType` crash documented above. Never `column (...)` children inside a grid's saved
+  report - that is interactive *report* syntax.
+- **`keyColumn` is required on an interactive grid.**
+- **One source mode only.** Query-backed means `source.type: sqlQuery` plus
+  `source.sqlQuery`, and then no `tableName`, no `whereClause`, no `orderByClause` - put
+  the ordering inside the query. Table-backed means `source.tableName`, and `orderByClause`
+  is allowed but every identifier in it must match a declared `column` in the same region
+  (hidden columns count).
+- **`.apx` files must be LF.** Git on this Windows host will happily convert them; watch
+  for `LF will be replaced by CRLF` warnings on `.apx` paths.
+- **Do not copy classic or interactive report column-link syntax into a grid column.**
+
+## When validation fails with a code, look it up before reasoning about it
+
+`tools/oracle-apexlang/validator-fix-recipes.json` maps 119 validator error codes to a
+cause and a deterministic fix:
+
+```bash
+node -e "const r=require('./.claude/skills/apexlang-coding-agent/tools/oracle-apexlang/validator-fix-recipes.json').recipes; console.log(JSON.stringify(r['<CODE>'],null,2))"
+```
+
+## What Oracle's APEXlang skill is, and what it is not
+
+<https://github.com/oracle/skills/tree/main/apex> - 826 files, UPL licensed, targeting
+APEX 26.1, the same build as here.
+
+**Take from it:** the property query and the fix recipes above, both vendored under
+`tools/oracle-apexlang/`, and its component contracts under
+`apex/apexlang/templates/region-components/` when you want a canonical shape.
+
+**Do not treat it as a replacement for this file.** It documents syntax and structure
+thoroughly and says almost nothing about what misbehaves after a clean import. Verified
+absent from the entire tree: `returnPksAfterInsert` (missing from its grammar *and* its
+auto-row-processing template), the `REGION_SOURCE` silent zero-row update, `PLS-00428`
+from an LOV starting with a comment, the `hidden` vs `displayOnly` session-state trap, and
+the `&`-in-a-SQLcl-argument hang. Its grammar is also thinnest exactly where this project
+lives: `interactiveGrid` appears five times in 1.1MB and there is no interactive-grid
+reference domain at all.
+
+It is also Oracle's *internal* APEX-development skill, published. Its failure map's
+confirming checks name `wwv_flow_imp*`, `gen_api_pkg.plb` and `pe_data_checks.sql`, which
+need the APEX source tree. Read those rows for the diagnosis, not the instruction.
 
 ## Checking your work after an import
 

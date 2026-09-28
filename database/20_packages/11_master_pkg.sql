@@ -6,11 +6,16 @@ set define off
 --   ENDPOINT:  read straight from a foundation service that returns rows
 --   DERIVED:   harvested from the item or order feed
 --
--- The derived route is not a shortcut. merchhier, diffid, difftype, diffgroup,
--- supplier, store, warehouse and uda all answer HTTP 200 with zero rows on this
--- tenant: they are publish queues nothing has been seeded into, and since/before
--- does not change that. The item feed still carries the hierarchy, differentiator
--- and supplier values, so they are recovered from there instead.
+-- The derived route is not a shortcut. The foundation services are publish
+-- queues, and which of them hold anything depends on the tenant and the week.
+-- On STG in 2026-09, diffid, diffgroup, uda, supplier, store and warehouse
+-- publish; merchhier/* still answers HTTP 200 with zero rows. The item feed
+-- carries the hierarchy, differentiator and supplier values regardless, so the
+-- hierarchy is recovered from there.
+--
+-- Every feed that publishes also pages, and fetch_all follows the pages. Reading
+-- only the first one was harmless while the feeds were empty and silently
+-- truncated them once they filled: diffid stopped at exactly 500.
 
 prompt Creating master_pkg
 
@@ -70,6 +75,84 @@ create or replace package body master_pkg as
         values (p_type, p_source, p_status, p_rows, p_message, p_started, systimestamp);
     end;
 
+    -- Every row a foundation feed holds, across all its pages.
+    --
+    -- The envelope is {items, hasMore, links[]}, and the next page is named by an
+    -- offsetkey inside the rel=next link, the same key the item harvest pages on.
+    -- A few services (codes, banners, channels) answer a bare array instead of the
+    -- envelope; that is a single page by construction, and it is why banners and
+    -- channels used to fail ORA-40587 on json_object_t.parse.
+    --
+    -- o_status is the last page's HTTP status. A failure after page one returns
+    -- what was read so far with that status, and the caller decides whether a
+    -- partial read is worth keeping. o_truncated is true when p_max_pages ran out
+    -- with the feed still saying hasMore, so a cap reads as a cap in the refresh
+    -- log rather than as the size of the tenant's data.
+    function fetch_all(
+        p_path      in varchar2,
+        p_limit     in number,
+        o_status    out number,
+        o_truncated out boolean,
+        p_max_pages in number default 200
+    ) return json_array_t is
+        l_all json_array_t := json_array_t();
+        l_body clob;
+        l_root json_object_t;
+        l_items json_array_t;
+        l_links json_array_t;
+        l_link json_object_t;
+        l_offset varchar2(400);
+        l_page number := 0;
+        l_path varchar2(1000);
+    begin
+        o_truncated := false;
+        loop
+            l_page := l_page + 1;
+            l_path := p_path || '?limit=' || p_limit;
+            if l_offset is not null then
+                l_path := l_path || '&offsetkey=' || l_offset;
+            end if;
+
+            l_body := client_pkg.get_json(l_path, o_status);
+            exit when o_status not between 200 and 299;
+
+            begin
+                l_items := json_array_t.parse(l_body);
+                l_root := null;
+            exception
+                when others then
+                    l_root := json_object_t.parse(l_body);
+                    l_items := l_root.get_array('items');
+            end;
+
+            if l_items is not null then
+                for i in 0 .. l_items.get_size - 1 loop
+                    l_all.append(l_items.get(i));
+                end loop;
+            end if;
+
+            l_offset := null;
+            if l_root is not null and nvl(l_root.get_string('hasMore'), 'false') = 'true' then
+                l_links := l_root.get_array('links');
+                if l_links is not null then
+                    for i in 0 .. l_links.get_size - 1 loop
+                        l_link := treat(l_links.get(i) as json_object_t);
+                        if l_link.get_string('rel') = 'next' then
+                            l_offset := regexp_substr(l_link.get_string('href'), '[?&]offsetkey=([^&]+)', 1, 1, null, 1);
+                        end if;
+                    end loop;
+                end if;
+            end if;
+
+            exit when l_offset is null;
+            if l_page >= p_max_pages then
+                o_truncated := true;
+                exit;
+            end if;
+        end loop;
+        return l_all;
+    end;
+
     procedure load_direct(
         p_type       in varchar2,
         p_path       in varchar2,
@@ -78,20 +161,19 @@ create or replace package body master_pkg as
         p_limit      in number default 500
     ) is
         l_status number;
-        l_body clob;
+        l_truncated boolean;
         l_items json_array_t;
         l_row json_object_t;
         l_count number := 0;
         l_started timestamp with time zone := systimestamp;
         l_source varchar2(200) := 'ENDPOINT:' || p_path;
     begin
-        l_body := client_pkg.get_json(p_path || '?limit=' || p_limit, l_status);
-        if l_status not between 200 and 299 then
+        l_items := fetch_all(p_path, p_limit, l_status, l_truncated);
+        if l_status not between 200 and 299 and l_items.get_size = 0 then
             log_refresh(p_type, l_source, l_status, 0, 'HTTP ' || l_status, l_started);
             return;
         end if;
 
-        l_items := json_object_t.parse(l_body).get_array('items');
         for i in 0 .. l_items.get_size - 1 loop
             l_row := treat(l_items.get(i) as json_object_t);
             upsert(
@@ -106,7 +188,10 @@ create or replace package body master_pkg as
         end loop;
 
         log_refresh(p_type, l_source, l_status, l_count,
-            case when l_count = 0 then 'Service returned no rows (empty publish queue).' else null end,
+            case when l_count = 0 then 'Service returned no rows (empty publish queue).'
+                 when l_truncated then 'Stopped at the page cap; the feed has more.'
+                 when l_status not between 200 and 299 then 'Partial: a later page answered HTTP ' || l_status || '.'
+            end,
             l_started);
     exception
         when others then
@@ -124,9 +209,9 @@ create or replace package body master_pkg as
     --
     -- Definitions land as UDA; their list-of-values rows land as UDA_VALUE keyed by
     -- parent_code = the udaId, which is what makes the lookup a primary key hit.
-    procedure load_udas(p_limit in number default 500) is
+    procedure load_udas(p_limit in number default 100) is
         l_status number;
-        l_body clob;
+        l_truncated boolean;
         l_items json_array_t;
         l_row json_object_t;
         l_values json_array_t;
@@ -138,13 +223,14 @@ create or replace package body master_pkg as
         l_path varchar2(200) := '/MerchIntegrations/services/foundation/uda';
         l_source varchar2(200) := 'ENDPOINT:' || l_path;
     begin
-        l_body := client_pkg.get_json(l_path || '?limit=' || p_limit, l_status);
-        if l_status not between 200 and 299 then
+        -- A smaller page than the other feeds: each UDA row carries its whole
+        -- value list, and Style (66040) alone is ~2MB of values on UAT.
+        l_items := fetch_all(l_path, p_limit, l_status, l_truncated);
+        if l_status not between 200 and 299 and l_items.get_size = 0 then
             log_refresh('UDA', l_source, l_status, 0, 'HTTP ' || l_status, l_started);
             return;
         end if;
 
-        l_items := json_object_t.parse(l_body).get_array('items');
         for i in 0 .. l_items.get_size - 1 loop
             l_row := treat(l_items.get(i) as json_object_t);
             l_uda_id := to_char(l_row.get_number('udaId'));
@@ -161,9 +247,16 @@ create or replace package body master_pkg as
             );
             l_count := l_count + 1;
 
-            if l_row.has('udaListOfValues') then
+            -- FF and DT UDAs carry "udaListOfValues": null rather than omitting the
+            -- key, so has() is true and get_array returns a null object. Calling
+            -- get_size on that is ORA-30625, which aborted the whole load at the
+            -- first free-form UDA and left every value after it unloaded.
+            l_values := null;
+            if l_row.has('udaListOfValues') and l_row.get('udaListOfValues').is_array then
                 l_values := l_row.get_array('udaListOfValues');
-                for j in 0 .. nvl(l_values.get_size, 0) - 1 loop
+            end if;
+            if l_values is not null then
+                for j in 0 .. l_values.get_size - 1 loop
                     l_value := treat(l_values.get(j) as json_object_t);
                     upsert(
                         p_type   => 'UDA_VALUE',
@@ -182,11 +275,130 @@ create or replace package body master_pkg as
             case when l_count = 0
                  then 'Service returned no rows (empty publish queue).'
                  else 'Loaded ' || l_values_count || ' list-of-values rows as UDA_VALUE.'
+                      || case when l_truncated then ' Stopped at the page cap; the feed has more.' end
             end,
             l_started);
     exception
         when others then
             log_refresh('UDA', l_source, l_status, l_count, substr(sqlerrm, 1, 1000), l_started);
+    end;
+
+    -- Differentiators land as DIFF_<diffType> - DIFF_C, DIFF_S, DIFF_HL and so on -
+    -- which is what the item harvest writes too, so validation and the console's
+    -- lists see one set whichever route a value arrived by. They used to land as
+    -- DIFF_SVC, a type nothing read.
+    --
+    -- The type set is the tenant's, not ours. STG gained HL (High Level Colour)
+    -- and LL (Low Level Colour) in 2026-09 and labelled SC "Supplier Colour - to be
+    -- deleted"; loading by the row's own type is what keeps that visible here.
+    procedure load_diffs(p_limit in number default 500) is
+        l_status number;
+        l_truncated boolean;
+        l_items json_array_t;
+        l_row json_object_t;
+        l_count number := 0;
+        l_started timestamp with time zone := systimestamp;
+        l_path varchar2(200) := '/MerchIntegrations/services/foundation/diffid';
+        l_source varchar2(200) := 'ENDPOINT:' || l_path;
+    begin
+        l_items := fetch_all(l_path, p_limit, l_status, l_truncated);
+        if l_status not between 200 and 299 and l_items.get_size = 0 then
+            log_refresh('DIFF', l_source, l_status, 0, 'HTTP ' || l_status, l_started);
+            return;
+        end if;
+
+        for i in 0 .. l_items.get_size - 1 loop
+            l_row := treat(l_items.get(i) as json_object_t);
+            upsert(
+                p_type   => 'DIFF_' || nvl(l_row.get_string('diffType'), 'X'),
+                p_code   => l_row.get_string('diffId'),
+                p_parent => null,
+                p_desc   => l_row.get_string('diffDescription'),
+                p_attrs  => l_row.to_clob,
+                p_source => l_source
+            );
+            l_count := l_count + 1;
+        end loop;
+
+        log_refresh('DIFF', l_source, l_status, l_count,
+            case when l_count = 0 then 'Service returned no rows (empty publish queue).'
+                 when l_truncated then 'Stopped at the page cap; the feed has more.'
+            end,
+            l_started);
+    exception
+        when others then
+            log_refresh('DIFF', l_source, l_status, l_count, substr(sqlerrm, 1, 1000), l_started);
+    end;
+
+    -- A differentiator group says which diffs are legal children of a parent that
+    -- carries it: MFCS rejects a child whose colour is outside the parent's group.
+    -- Groups land as DIFF_GROUP (attributes carry diffType); members land as
+    -- DIFF_GROUP_MEMBER with parent_code = the group, so "is this size in that
+    -- group" is a primary key hit.
+    --
+    -- Members are replaced per group rather than merged. The group's row in the
+    -- feed is the whole membership, and a merge would keep a diff the tenant has
+    -- since removed from the group - which validation would then wrongly accept.
+    procedure load_diff_groups(p_limit in number default 100) is
+        l_status number;
+        l_truncated boolean;
+        l_items json_array_t;
+        l_row json_object_t;
+        l_details json_array_t;
+        l_detail json_object_t;
+        l_group varchar2(120);
+        l_count number := 0;
+        l_members number := 0;
+        l_started timestamp with time zone := systimestamp;
+        l_path varchar2(200) := '/MerchIntegrations/services/foundation/diffgroup';
+        l_source varchar2(200) := 'ENDPOINT:' || l_path;
+    begin
+        l_items := fetch_all(l_path, p_limit, l_status, l_truncated);
+        if l_status not between 200 and 299 and l_items.get_size = 0 then
+            log_refresh('DIFF_GROUP', l_source, l_status, 0, 'HTTP ' || l_status, l_started);
+            return;
+        end if;
+
+        for i in 0 .. l_items.get_size - 1 loop
+            l_row := treat(l_items.get(i) as json_object_t);
+            l_group := l_row.get_string('diffGroupId');
+            continue when l_group is null;
+
+            l_details := null;
+            if l_row.has('details') and l_row.get('details').is_array then
+                l_details := l_row.get_array('details');
+            end if;
+
+            -- The group row without its member list; the members are rows of
+            -- their own, and repeating them here would store every group twice.
+            l_row.remove('details');
+            upsert('DIFF_GROUP', l_group, null, l_row.get_string('diffGroupDescription'),
+                   l_row.to_clob, l_source);
+            l_count := l_count + 1;
+
+            delete from master_data
+             where data_type = 'DIFF_GROUP_MEMBER'
+               and parent_code = l_group;
+
+            if l_details is not null then
+                for j in 0 .. l_details.get_size - 1 loop
+                    l_detail := treat(l_details.get(j) as json_object_t);
+                    upsert('DIFF_GROUP_MEMBER', l_detail.get_string('diffId'), l_group,
+                           null, l_detail.to_clob, l_source);
+                    l_members := l_members + 1;
+                end loop;
+            end if;
+        end loop;
+
+        log_refresh('DIFF_GROUP', l_source, l_status, l_count,
+            case when l_count = 0 then 'Service returned no rows (empty publish queue).'
+                 else 'Loaded ' || l_members || ' member rows as DIFF_GROUP_MEMBER.'
+                      || case when l_truncated then ' Stopped at the page cap; the feed has more.' end
+            end,
+            l_started);
+    exception
+        when others then
+            log_refresh('DIFF_GROUP', l_source, l_status, l_count, substr(sqlerrm, 1, 1000), l_started);
     end;
 
     procedure harvest_from_items(p_pages in number default 10, p_limit in number default 200) is
@@ -391,10 +603,9 @@ create or replace package body master_pkg as
         load_code_details;
         load_udas;
 
-        -- Attempted anyway, so the refresh log records that they are still empty
+        -- Attempted anyway, so the refresh log records that it is still empty
         -- rather than leaving it a mystery.
         load_direct('DEPARTMENT_SVC', '/MerchIntegrations/services/foundation/merchhier/deps', 'dept', 'deptName');
-        load_direct('DIFF_SVC', '/MerchIntegrations/services/foundation/diffid', 'diffId', 'diffDesc');
         load_direct('SUPPLIER_SVC', '/MerchIntegrations/services/foundation/supplier', 'supplier', 'supplierName');
         -- warehouse / warehouseName, not wh / whName. Asking for the wrong names
         -- loaded nothing at all, silently, for as long as this call has existed -
@@ -406,6 +617,13 @@ create or replace package body master_pkg as
 
         harvest_from_items;
         harvest_from_orders;
+
+        -- After the harvest, not before. The harvest writes the same DIFF_* rows
+        -- from the item feed and stamps them DERIVED; loading the diff service
+        -- last leaves every diff the service publishes recorded as ENDPOINT, with
+        -- the service's description, and DERIVED marking only what it does not.
+        load_diffs;
+        load_diff_groups;
         commit;
 
         for r in (

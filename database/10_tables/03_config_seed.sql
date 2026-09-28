@@ -14,9 +14,19 @@ using (
     select 'DEFAULT' environment, 'MFCS_AUTH_MODE' config_key, 'STATIC_BEARER' config_value, 'Y' enabled_ind from dual union all
     select 'DEFAULT', 'MFCS_BASE_URL', 'https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_TOKEN_URL', 'https://idcs-c994c399babd4611b2505c507dbcf5a5.identity.oraclecloud.com/oauth2/v1/token', 'Y' from dual union all
-    select 'DEFAULT', 'MFCS_CLIENT_ID', 'replace-with-client-id', 'Y' from dual union all
-    select 'DEFAULT', 'MFCS_SCOPE', 'urn:opc:idm:__myscopes__', 'Y' from dual union all
-    select 'DEFAULT', 'MFCS_CLIENT_SECRET_REF', 'replace-with-rds-secret-reference', 'Y' from dual union all
+    -- The client id and secret are NOT here, and must never be added. Under
+    -- MFCS_AUTH_MODE = OAUTH_CLIENT_CREDENTIALS both live in the APEX credential
+    -- store, which has no column that returns either of them and is excluded from
+    -- application exports. See deploy/mdutils/oauth_credential.sql.
+    --
+    -- MFCS_CLIENT_ID and MFCS_CLIENT_SECRET_REF are gone with the hand-rolled
+    -- token POST that read them. A placeholder client id in a seed that ships to
+    -- a public remote is an invitation to fill it in there.
+    select 'DEFAULT', 'MFCS_CREDENTIAL_STATIC_ID', 'MFCS_OAUTH', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_APEX_WORKSPACE', 'TW_TEST', 'Y' from dual union all
+    -- The tenant's own scope, from the Postman environment. urn:opc:idm:__myscopes__
+    -- is the IDCS catch-all and is not what this tenant issues against.
+    select 'DEFAULT', 'MFCS_SCOPE', 'rgbu:merch:MFCS-STG3', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_BEARER_TOKEN_REF', 'MFCS_BEARER_TOKEN', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ITEM_NUMBER_RESERVATION_CHUNK_SIZE', '1', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ITEM_NUMBER_RESERVATION_DAYS_UNTIL_EXPIRY', '1', 'Y' from dual union all
@@ -65,6 +75,10 @@ using (
     select 'DEFAULT', 'MFCS_ORDER_CANCEL_CODE', 'S', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_REDUCE_CANCEL_CODE', 'B', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_LINE_ABSENT_ACTION', 'CANCEL', 'Y' from dual union all
+    -- Read by SYNC_ORDER_LINES only, which re-reads an amended order until its
+    -- lines match the document. The old VERIFY_PURCHASE_ORDER step also used
+    -- them and no longer exists: a create answers its own 200 honestly, so
+    -- reading the lagging procurement feed afterwards only bought latency.
     select 'DEFAULT', 'MFCS_ORDER_VERIFY_RETRY_COUNT', '12', 'Y' from dual union all
     select 'DEFAULT', 'MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS', '10', 'Y' from dual union all
     select 'DEFAULT', 'BATCH_WINDOW_ACTIVE_YN', 'N', 'Y' from dual union all
@@ -94,6 +108,8 @@ using (
     select 'DEFAULT', 'ENDPOINT.PURCHASE_ORDERS_UPDATE', '/MerchIntegrations/services/purchaseOrders/update', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.PO_DETAILS_CREATE', '/MerchIntegrations/services/purchaseOrder/details/create', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.PO_DETAILS_UPDATE', '/MerchIntegrations/services/purchaseOrder/details/update', 'Y' from dual union all
+    -- No step resolves this key any more. Kept because it records the path the
+    -- browse and order-line reads use, which they build inline.
     select 'DEFAULT', 'ENDPOINT.PURCHASE_ORDER_GET', '/MerchIntegrations/services/procurement/order/{orderNo}', 'Y' from dual union all
     select 'DEFAULT', 'ENDPOINT.REST_SERVICE_STATUS', '/MerchIntegrations/services/administration/operations/restService/status', 'Y' from dual
 ) s
