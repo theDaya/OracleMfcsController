@@ -15,3 +15,7 @@ deploy/mdutils/connect.env
 *.credentials
 docs/testToken.file
 *token*.file
+
+# RDS table extracts - every row carries the creating user's email address in
+# its audit columns. Loaded by deploy/mdutils/load_rds_hierarchy.sql; never commit.
+RDS extract/

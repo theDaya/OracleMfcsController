@@ -32,13 +32,18 @@ show errors
 
 create or replace package body master_pkg as
 
+    -- p_keep_existing = 'Y' inserts a missing row and leaves an existing one
+    -- untouched. The item harvest uses it for the hierarchy, which is loaded
+    -- authoritatively from an RDS extract (deploy/mdutils/load_rds_hierarchy.sql);
+    -- a plain upsert would relabel those rows DERIVED on every refresh.
     procedure upsert(
         p_type   in varchar2,
         p_code   in varchar2,
         p_parent in varchar2,
         p_desc   in varchar2,
         p_attrs  in clob,
-        p_source in varchar2
+        p_source in varchar2,
+        p_keep_existing in varchar2 default 'N'
     ) is
     begin
         if p_code is null then
@@ -52,6 +57,7 @@ create or replace package body master_pkg as
             d.attributes = nvl(p_attrs, d.attributes),
             d.source = p_source,
             d.refreshed_at = systimestamp
+            where p_keep_existing = 'N'
         when not matched then insert (data_type, data_code, parent_code, description, attributes, source)
         values (s.dt, s.dc, s.pc, p_desc, p_attrs, p_source);
     end;
@@ -441,10 +447,12 @@ create or replace package body master_pkg as
                 l_dept := to_char(l_it.get_number('dept'));
                 l_class := to_char(l_it.get_number('class'));
 
-                upsert('DEPARTMENT', l_dept, null, l_it.get_string('deptName'), null, l_source);
-                upsert('CLASS', l_class, l_dept, l_it.get_string('className'), null, l_source);
+                -- Insert-only: the RDS extract is the authority for the hierarchy,
+                -- and the harvest only fills in a code it has not supplied.
+                upsert('DEPARTMENT', l_dept, null, l_it.get_string('deptName'), null, l_source, 'Y');
+                upsert('CLASS', l_class, l_dept, l_it.get_string('className'), null, l_source, 'Y');
                 upsert('SUBCLASS', to_char(l_it.get_number('subclass')),
-                       l_dept || '.' || l_class, l_it.get_string('subclassName'), null, l_source);
+                       l_dept || '.' || l_class, l_it.get_string('subclassName'), null, l_source, 'Y');
 
                 -- diff1/diff2 carry their own type flag (C = colour, S = size).
                 if l_it.get_string('diff1') is not null then
