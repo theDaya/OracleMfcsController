@@ -5,11 +5,11 @@
 -- Send back the results of every statement, including any that errored -
 -- an error here is an answer too.
 
--- 1. Who and where. Expect MFCS_RDS_CUSTOM in all three of schema_name,
---    current_user and current_schema. Everything below - and the install -
---    lands in whichever schema this says, so if it is not MFCS_RDS_CUSTOM,
---    stop: the schema selector at the top right of SQL Workshop picks it.
---    (The first run on 2026-10-13 ran as ORDS_PUBLIC_USER_DIS.)
+-- 1. Who and where. Expect MFCS_RDS_CUSTOM in current_user and
+--    current_schema: that is the schema objects land in and whose privileges
+--    apply. user, session_user and proxy_user show ORDS_PUBLIC_USER_DIS in
+--    RDS, and that is normal - APEX connects as the ORDS account and runs each
+--    statement as the workspace schema (seen 2026-10-13).
 select user as schema_name,
        sys_context('userenv', 'session_user') as session_user,
        sys_context('userenv', 'current_user') as current_user,

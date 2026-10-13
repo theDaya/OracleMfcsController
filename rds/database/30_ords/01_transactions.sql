@@ -1,12 +1,17 @@
+-- current_schema, not USER. In RDS, APEX SQL Workshop connects as
+-- ORDS_PUBLIC_USER_DIS and runs each statement as MFCS_RDS_CUSTOM: USER there
+-- answers ORDS_PUBLIC_USER_DIS, and enabling that would REST-enable the wrong
+-- schema under the wrong URL.
 declare
     l_roles owa.vc_arr;
     l_patterns owa.vc_arr;
+    l_schema varchar2(128) := sys_context('userenv', 'current_schema');
 begin
     ords.enable_schema(
         p_enabled => true,
-        p_schema => user,
+        p_schema => l_schema,
         p_url_mapping_type => 'BASE_PATH',
-        p_url_mapping_pattern => lower(user),
+        p_url_mapping_pattern => lower(l_schema),
         p_auto_rest_auth => false
     );
 

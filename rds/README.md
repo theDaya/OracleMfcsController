@@ -38,13 +38,17 @@ until something recompiles it.
 
 ## Installing
 
-Everything runs in APEX: **SQL Workshop > SQL Scripts > Upload**, then **Run**. The files are in
+Everything runs in APEX: **SQL Workshop > SQL Scripts > Upload**, then **Run**. In RDS, SQL
+Workshop connects as `ORDS_PUBLIC_USER_DIS` and runs each statement as `MFCS_RDS_CUSTOM`, so
+`USER` answers the former while objects and privileges belong to the latter - expected, and why
+nothing here relies on `USER`. The files are in
 `rds/deploy/`. After each, open the run's results and check every statement - SQL Scripts carries
 on past an error and reports it at the end.
 
 | # | File | Does | Expect |
 | --- | --- | --- | --- |
 | 0 | `00_preflight.sql` | Checks only, changes nothing | See its comments. **Send the results back before going on** |
+| 0b | `00_network_probe.sql` | Two uncredentialed GETs, in **SQL Commands** | `MFCS HTTP 401`, `TOKEN HOST HTTP 405` - any HTTP status means reachable |
 | 1 | *(by hand, below)* | The web credential | |
 | 2 | `01_install_tables.sql` | 8 tables, the config seed, 4 views | No errors |
 | 3 | `02_install_packages_1.sql` | Packages 01-07 | No errors |

@@ -21,15 +21,20 @@ installed beside the original with stand-ins for the RDS views:
 - the credential resolves, a foundation read answers 200, and a full master data refresh runs
   clean, with the hierarchy loaded through the views: 21 departments, 83 classes, 306 subclasses
 
-**The first preflight in RDS ran as the wrong schema.** It reported `ORDS_PUBLIC_USER_DIS`,
-not `MFCS_RDS_CUSTOM`, so its grant and ACL answers describe that user, and the network ACEs it
-showed are for two Oracle test domains (`*.retail.us-phoenix-1.ocs.oc-test.com`,
-`*.identity.pint.oc9qadev.com`), neither of them the STG tenant or its IDCS host. To rerun under
-`MFCS_RDS_CUSTOM`. What it did settle: **RDS is Oracle 19c** (19.33), not 23ai like mdutils -
-nothing in `rds/` uses a feature newer than 12.2, but only a compile there proves it; the four
-hierarchy views have every column the install reads, with the same 7/21/83/306 rows the
-extract held and no deleted rows; and SQL Scripts handles blank lines inside PL/SQL and `&` in
-literals.
+**The first preflight in RDS.** It looked as if it ran as the wrong schema - `USER` answered
+`ORDS_PUBLIC_USER_DIS` - but that is how APEX works there: SQL Workshop connects as the ORDS
+account and runs each statement with `current_user` and `current_schema` = `MFCS_RDS_CUSTOM`,
+which is where objects land and whose privileges apply. The one place that used `USER`, ORDS's
+`enable_schema`, now uses `current_schema`. Settled by the preflight: **RDS is Oracle 19c**
+(19.33), not 23ai like mdutils - nothing in `rds/` uses a feature newer than 12.2, but only a
+compile there proves it; `MFCS_RDS_CUSTOM` holds SELECT on the four hierarchy views directly; the
+views carry every column the install reads, with the same 7/21/83/306 rows the extract held and
+no deleted rows; and SQL Scripts handles blank lines inside PL/SQL and `&` in literals.
+
+**Not settled: whether RDS can reach MFCS.** The only network ACEs the preflight showed are for
+two Oracle test domains (`*.retail.us-phoenix-1.ocs.oc-test.com`, `*.identity.pint.oc9qadev.com`)
+and may belong to the ORDS account rather than the schema. `rds/deploy/00_network_probe.sql`
+answers it with two real calls.
 
 **Two defects found along the way, both still live in the original:**
 
