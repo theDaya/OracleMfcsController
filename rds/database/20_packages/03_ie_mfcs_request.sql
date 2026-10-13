@@ -1,0 +1,539 @@
+-- Request lifecycle: registration, idempotency, status, generated identifiers.
+--
+-- A request is registered once under its ACTION_REQUEST_ID and never changes:
+-- the same id with the same payload replays the stored outcome, the same id
+-- with a different payload is a 409 conflict. Identifiers MFCS generates along
+-- the way (style, SKU and order numbers) are recorded in IE_MFCS_MAP_ENTITY so later
+-- requests naming the same source references can resolve them.
+
+create or replace package ie_mfcs_request authid definer as
+    -- SHA-256 of the payload, used to tell a replay from a conflicting reuse
+    -- of the same ACTION_REQUEST_ID.
+    -- The inbound document, in canonical form.
+    --
+    -- Callers may send SIZE_CURVE_DETAIL or the older PLMSizeCurveDtl; everything
+    -- downstream sees only the former. The old name said two wrong things: it was
+    -- the single camelCase key in an upper-snake document, and it named its source
+    -- system in a contract that already carries SOURCE_SYSTEM as a field.
+    --
+    -- This runs at intake, before the payload is hashed, stored or validated, and
+    -- that ordering is the point. Resume replays the *stored* payload, so a
+    -- document normalised on the way in is canonical for the rest of its life; one
+    -- normalised on the way out would leave both shapes in the system forever, and
+    -- every reader would have to know about both.
+    function normalise_payload(p_payload in clob) return clob;
+
+    function payload_hash(p_payload in clob) return varchar2;
+
+    -- Registers a request, or recognises one already seen. o_result is one of
+    -- NEW, DUPLICATE (same payload - o_response_payload carries the stored
+    -- outcome to replay) or CONFLICT (same id, different payload).
+    procedure register_request(
+        p_action_request_id in varchar2,
+        p_operation_name    in varchar2,
+        p_payload_hash      in varchar2,
+        p_payload           in clob,
+        o_result            out varchar2,
+        o_status            out varchar2,
+        o_response_payload  out clob
+    );
+
+    -- Sets IE_MFCS_PRD_REQUEST.REQUEST_STATUS and, when given, the stored response payload
+    -- that a later duplicate submission will replay.
+    procedure set_request_status(
+        p_action_request_id in varchar2,
+        p_status            in varchar2,
+        p_response_payload  in clob default null
+    );
+
+    -- Upserts one IE_MFCS_MAP_ENTITY row keyed on the source references. Null
+    -- parameters leave the existing column values in place, so partial
+    -- knowledge accumulates across steps rather than overwriting.
+    procedure save_generated_identifier(
+        p_action_request_id   in varchar2,
+        p_source_system       in varchar2,
+        p_source_style_ref    in varchar2,
+        p_mfcs_style_no       in varchar2,
+        p_source_variant_ref  in varchar2 default null,
+        p_mfcs_sku_no         in varchar2 default null,
+        p_sku_size            in varchar2 default null,
+        p_sku_width           in varchar2 default null,
+        p_source_order_ref    in varchar2 default null,
+        p_mfcs_order_no       in varchar2 default null
+    );
+
+    -- Builds the canonical status document for a request: status, completed and
+    -- failed steps, generated identifiers, errors. Every response the API
+    -- returns for an executed request comes from here.
+    function build_status_response(
+        p_action_request_id in varchar2,
+        p_status_override   in varchar2 default null
+    ) return clob;
+end ie_mfcs_request;
+/
+
+create or replace package body ie_mfcs_request as
+    function canonicalize(p_element in json_element_t) return clob is
+        l_object json_object_t;
+        l_array json_array_t;
+        l_keys json_key_list;
+        l_key varchar2(4000);
+        l_tmp varchar2(4000);
+        l_result clob;
+        l_first boolean := true;
+    begin
+        if p_element is null then
+            return 'null';
+        elsif p_element.is_object then
+            l_object := treat(p_element as json_object_t);
+            l_keys := l_object.get_keys;
+
+            if l_keys is not null then
+                for i in 1 .. l_keys.count loop
+                    if i < l_keys.count then
+                        for j in i + 1 .. l_keys.count loop
+                            if l_keys(j) < l_keys(i) then
+                                l_tmp := l_keys(i);
+                                l_keys(i) := l_keys(j);
+                                l_keys(j) := l_tmp;
+                            end if;
+                        end loop;
+                    end if;
+                end loop;
+            end if;
+
+            l_result := '{';
+            if l_keys is not null then
+                for i in 1 .. l_keys.count loop
+                    l_key := l_keys(i);
+                    if upper(l_key) not in ('DATE_TIME_STAMP', 'REQUEST_RECEIVED_AT', 'TRANSPORT_ID') then
+                        if l_first then
+                            l_first := false;
+                        else
+                            l_result := l_result || ',';
+                        end if;
+
+                        l_result := l_result
+                            || '"' || ie_mfcs_event.escape_json(l_key) || '":'
+                            || canonicalize(l_object.get(l_key));
+                    end if;
+                end loop;
+            end if;
+            l_result := l_result || '}';
+            return l_result;
+        elsif p_element.is_array then
+            l_array := treat(p_element as json_array_t);
+            l_result := '[';
+
+            if l_array.get_size > 0 then
+                for i in 0 .. l_array.get_size - 1 loop
+                    if i > 0 then
+                        l_result := l_result || ',';
+                    end if;
+                    l_result := l_result || canonicalize(l_array.get(i));
+                end loop;
+            end if;
+
+            l_result := l_result || ']';
+            return l_result;
+        else
+            return p_element.to_string;
+        end if;
+    end;
+
+    function normalise_payload(p_payload in clob) return clob is
+        l_doc json_object_t;
+        l_curve json_array_t;
+
+        -- DEPARTMENT, CLASS and SUBCLASS have always been accepted as either a
+        -- string or a number, because json_value coerces on the way out. Settling
+        -- them as numbers here means the stored document says what it means, and a
+        -- reader that does not coerce cannot be surprised.
+        procedure numeric_key(p_key in varchar2) is
+            l_raw varchar2(120);
+        begin
+            if not l_doc.has(p_key) then
+                return;
+            end if;
+            l_raw := trim(l_doc.get_string(p_key));
+            if l_raw is null then
+                return;
+            end if;
+            l_doc.put(p_key, to_number(l_raw));
+        exception
+            -- A non-numeric department is a validation error, not a normalisation
+            -- one. Leaving it untouched lets validation report it properly instead
+            -- of this function failing the request with a conversion error.
+            when others then
+                null;
+        end;
+
+        -- ITEM_NUMBER_TYPE is an MFCS code and reaches MFCS as one, so it is
+        -- settled here for the same reason the numeric keys are: the stored
+        -- document is what resume replays and what validation reports against.
+        -- A caller sending "manl" should not be refused for a difference in case
+        -- that carries no meaning, and should not be refused in one operation and
+        -- accepted in another because two readers upper-cased differently.
+        procedure upper_key(p_key in varchar2) is
+            l_raw varchar2(120);
+        begin
+            if not l_doc.has(p_key) then
+                return;
+            end if;
+            l_raw := upper(trim(l_doc.get_string(p_key)));
+            if l_raw is null then
+                return;
+            end if;
+            l_doc.put(p_key, l_raw);
+        exception
+            when others then
+                null;
+        end;
+    begin
+        l_doc := json_object_t.parse(p_payload);
+
+        if l_doc.has('PLMSizeCurveDtl') then
+            -- Only when the caller did not also send the canonical key. If both are
+            -- present the canonical one wins and the legacy one is dropped, rather
+            -- than silently merging two size curves.
+            if not l_doc.has('SIZE_CURVE_DETAIL') then
+                l_curve := l_doc.get_array('PLMSizeCurveDtl');
+                l_doc.put('SIZE_CURVE_DETAIL', l_curve);
+            end if;
+            l_doc.remove('PLMSizeCurveDtl');
+        end if;
+
+        numeric_key('DEPARTMENT');
+        numeric_key('CLASS');
+        numeric_key('SUBCLASS');
+        upper_key('ITEM_NUMBER_TYPE');
+
+        return l_doc.to_clob;
+    exception
+        -- Malformed JSON is the caller's problem and ie_mfcs_api already reports it
+        -- properly. Returning the payload untouched keeps that the single place
+        -- that decides what an unparseable document means.
+        when others then
+            return p_payload;
+    end;
+
+    function payload_hash(p_payload in clob) return varchar2 is
+        l_element json_element_t;
+        l_canonical clob;
+        l_hash varchar2(64);
+    begin
+        l_element := json_element_t.parse(p_payload);
+        l_canonical := canonicalize(l_element);
+
+        l_hash := rawtohex(dbms_crypto.hash(l_canonical, dbms_crypto.hash_sh256));
+
+        return lower(l_hash);
+    end;
+
+    procedure register_request(
+        p_action_request_id in varchar2,
+        p_operation_name    in varchar2,
+        p_payload_hash      in varchar2,
+        p_payload           in clob,
+        o_result            out varchar2,
+        o_status            out varchar2,
+        o_response_payload  out clob
+    ) is
+        l_existing_hash varchar2(64);
+        l_status varchar2(30);
+        l_source_system varchar2(60);
+        l_source_style_ref varchar2(120);
+        l_source_order_ref varchar2(120);
+        l_source_version varchar2(60);
+        l_style_no varchar2(30);
+        l_order_no varchar2(30);
+    begin
+        select json_value(p_payload, '$.SOURCE_SYSTEM' returning varchar2(60) null on error),
+               json_value(p_payload, '$.SOURCE_STYLE_REF' returning varchar2(120) null on error),
+               json_value(p_payload, '$.SOURCE_ORDER_REF' returning varchar2(120) null on error),
+               json_value(p_payload, '$.SOURCE_VERSION' returning varchar2(60) null on error),
+               json_value(p_payload, '$.STYLE' returning varchar2(30) null on error),
+               json_value(p_payload, '$.ORDER_NO' returning varchar2(30) null on error)
+          into l_source_system, l_source_style_ref, l_source_order_ref, l_source_version,
+               l_style_no, l_order_no
+          from dual;
+
+        if l_style_no is null and l_source_system is not null and l_source_style_ref is not null then
+            select max(mfcs_style_no)
+              into l_style_no
+              from ie_mfcs_map_entity
+             where source_system = l_source_system
+               and source_style_ref = l_source_style_ref
+               and mfcs_style_no is not null;
+        end if;
+
+        if p_operation_name in ('CREATE_STYLE', 'MODIFY_STYLE') then
+            l_order_no := null;
+        end if;
+
+        begin
+            insert into ie_mfcs_prd_request (
+                action_request_id,
+                operation_name,
+                source_system,
+                source_style_ref,
+                source_order_ref,
+                source_version,
+                payload_hash,
+                request_status,
+                style_no,
+                order_no,
+                request_payload
+            ) values (
+                p_action_request_id,
+                p_operation_name,
+                l_source_system,
+                l_source_style_ref,
+                l_source_order_ref,
+                l_source_version,
+                p_payload_hash,
+                'RECEIVED',
+                l_style_no,
+                l_order_no,
+                p_payload
+            );
+
+            commit;
+            o_result := 'NEW';
+            o_status := 'RECEIVED';
+            o_response_payload := null;
+            return;
+        exception
+            when dup_val_on_index then
+                null;
+        end;
+
+        begin
+            select payload_hash, request_status, response_payload
+              into l_existing_hash, l_status, o_response_payload
+              from ie_mfcs_prd_request
+             where action_request_id = p_action_request_id
+             for update nowait;
+        exception
+            when others then
+                if sqlcode = -54 then
+                    o_result := 'EXECUTING';
+                    o_status := 'IN_PROGRESS';
+                    o_response_payload := null;
+                    rollback;
+                    return;
+                end if;
+                raise;
+        end;
+
+        if l_existing_hash <> p_payload_hash then
+            o_result := 'CONFLICT';
+            o_status := l_status;
+        elsif l_status = 'IN_PROGRESS' then
+            o_result := 'EXECUTING';
+            o_status := l_status;
+        elsif l_status = 'FAILED_NO_SIDE_EFFECT' then
+            -- Always resumable, and the status name is the reason: nothing was
+            -- created, so re-running cannot duplicate anything.
+            --
+            -- This used to resume only when the stored response mentioned
+            -- MFCS_BATCH_WINDOW_ACTIVE, which was written for the one transient
+            -- cause that had been seen and never generalised. Every other
+            -- transient - a stale token being the common one - replayed its own
+            -- failure for ever, so a request that failed on a 401 could never be
+            -- retried even once the token was good again.
+            update ie_mfcs_prd_request
+               set request_status = 'IN_PROGRESS',
+                   started_at = coalesce(started_at, systimestamp),
+                   last_updated_at = systimestamp
+             where action_request_id = p_action_request_id;
+            o_result := 'RESUME';
+            o_status := 'IN_PROGRESS';
+        elsif l_status in ('COMPLETED', 'MANUAL_REVIEW') then
+            o_result := 'EXISTING';
+            o_status := l_status;
+        else
+            update ie_mfcs_prd_request
+               set request_status = 'IN_PROGRESS',
+                   started_at = coalesce(started_at, systimestamp),
+                   last_updated_at = systimestamp
+             where action_request_id = p_action_request_id;
+            o_result := 'RESUME';
+            o_status := 'IN_PROGRESS';
+        end if;
+
+        commit;
+    end;
+
+    procedure set_request_status(
+        p_action_request_id in varchar2,
+        p_status            in varchar2,
+        p_response_payload  in clob default null
+    ) is
+    begin
+        update ie_mfcs_prd_request
+           set request_status = p_status,
+               response_payload = case when p_response_payload is not null then p_response_payload else response_payload end,
+               started_at = case when p_status = 'IN_PROGRESS' then coalesce(started_at, systimestamp) else started_at end,
+               completed_at = case when p_status in ('COMPLETED', 'FAILED_NO_SIDE_EFFECT', 'MANUAL_REVIEW') then systimestamp else completed_at end,
+               last_updated_at = systimestamp
+         where action_request_id = p_action_request_id;
+
+        commit;
+    end;
+
+    procedure save_generated_identifier(
+        p_action_request_id   in varchar2,
+        p_source_system       in varchar2,
+        p_source_style_ref    in varchar2,
+        p_mfcs_style_no       in varchar2,
+        p_source_variant_ref  in varchar2 default null,
+        p_mfcs_sku_no         in varchar2 default null,
+        p_sku_size            in varchar2 default null,
+        p_sku_width           in varchar2 default null,
+        p_source_order_ref    in varchar2 default null,
+        p_mfcs_order_no       in varchar2 default null
+    ) is
+    begin
+        update ie_mfcs_map_entity
+           set mfcs_style_no = coalesce(p_mfcs_style_no, mfcs_style_no),
+               mfcs_sku_no = coalesce(p_mfcs_sku_no, mfcs_sku_no),
+               sku_size = coalesce(p_sku_size, sku_size),
+               sku_width = coalesce(p_sku_width, sku_width),
+               mfcs_order_no = coalesce(p_mfcs_order_no, mfcs_order_no),
+               last_updated_at = systimestamp
+         where source_system = p_source_system
+           and nvl(source_style_ref, '-') = nvl(p_source_style_ref, '-')
+           and nvl(source_variant_ref, '-') = nvl(p_source_variant_ref, '-')
+           and nvl(source_order_ref, '-') = nvl(p_source_order_ref, '-');
+
+        if sql%rowcount = 0 then
+            insert into ie_mfcs_map_entity (
+                source_system,
+                source_style_ref,
+                mfcs_style_no,
+                source_variant_ref,
+                mfcs_sku_no,
+                sku_size,
+                sku_width,
+                source_order_ref,
+                mfcs_order_no
+            ) values (
+                p_source_system,
+                p_source_style_ref,
+                p_mfcs_style_no,
+                p_source_variant_ref,
+                p_mfcs_sku_no,
+                p_sku_size,
+                p_sku_width,
+                p_source_order_ref,
+                p_mfcs_order_no
+            );
+        end if;
+
+        update ie_mfcs_prd_request
+           set style_no = coalesce(p_mfcs_style_no, style_no),
+               order_no = coalesce(p_mfcs_order_no, order_no),
+               last_updated_at = systimestamp
+         where action_request_id = p_action_request_id;
+
+        commit;
+    end;
+
+    function build_status_response(
+        p_action_request_id in varchar2,
+        p_status_override   in varchar2 default null
+    ) return clob is
+        l_status varchar2(30);
+        l_operation varchar2(30);
+        l_style varchar2(30);
+        l_order varchar2(30);
+        l_failed_step varchar2(60);
+        l_response clob;
+        l_retryable varchar2(5);
+        l_first boolean := true;
+    begin
+        select operation_name, request_status, style_no, order_no
+          into l_operation, l_status, l_style, l_order
+          from ie_mfcs_prd_request
+         where action_request_id = p_action_request_id;
+
+        l_status := nvl(p_status_override, l_status);
+
+        l_retryable := case when l_status in ('PARTIALLY_COMPLETED', 'OUTCOME_UNKNOWN', 'FAILED_NO_SIDE_EFFECT') then 'true' else 'false' end;
+        l_response := '{'
+            || '"OPERATION_NAME":"' || ie_mfcs_event.escape_json(l_operation) || '",'
+            || '"ACTION_REQUEST_ID":"' || ie_mfcs_event.escape_json(p_action_request_id) || '",'
+            || '"STATUS":"' || ie_mfcs_event.escape_json(l_status) || '",'
+            || '"RETRYABLE":' || l_retryable || ','
+            || '"STYLE":' || case when l_style is null then 'null' else '"' || ie_mfcs_event.escape_json(l_style) || '"' end || ','
+            || '"ORDER_NO":' || case when l_order is null then 'null' else '"' || ie_mfcs_event.escape_json(l_order) || '"' end || ','
+            || '"SIZE_CURVE_DETAIL":[';
+
+        for r in (
+            select source_variant_ref, sku_size, sku_width, mfcs_sku_no
+              from ie_mfcs_map_entity m
+              join ie_mfcs_prd_request r
+                on r.source_system = m.source_system
+               and nvl(r.source_style_ref, '-') = nvl(m.source_style_ref, '-')
+             where r.action_request_id = p_action_request_id
+               and m.mfcs_sku_no is not null
+             order by source_variant_ref
+        ) loop
+            if l_first then
+                l_first := false;
+            else
+                l_response := l_response || ',';
+            end if;
+
+            l_response := l_response
+                || '{"SOURCE_VARIANT_REF":"' || ie_mfcs_event.escape_json(r.source_variant_ref) || '",'
+                || '"SKU_SIZE":"' || ie_mfcs_event.escape_json(r.sku_size) || '",'
+                || '"SKU_WIDTH":"' || ie_mfcs_event.escape_json(r.sku_width) || '",'
+                || '"SKU_ID":"' || ie_mfcs_event.escape_json(r.mfcs_sku_no) || '"}';
+        end loop;
+
+        l_response := l_response || '],"COMPLETED_STEPS":[';
+        l_first := true;
+        for s in (
+            select step_code
+              from ie_mfcs_prd_request_step
+             where action_request_id = p_action_request_id
+               and step_status = 'SUCCEEDED'
+             order by step_sequence
+        ) loop
+            if l_first then
+                l_first := false;
+            else
+                l_response := l_response || ',';
+            end if;
+            l_response := l_response || '"' || ie_mfcs_event.escape_json(s.step_code) || '"';
+        end loop;
+
+        l_response := l_response || '],"FAILED_STEP":';
+        begin
+            select step_code
+              into l_failed_step
+              from (
+                  select step_code
+                    from ie_mfcs_prd_request_step
+                   where action_request_id = p_action_request_id
+                     and step_status in ('FAILED', 'OUTCOME_UNKNOWN')
+                   order by step_sequence
+              )
+             where rownum = 1;
+            l_response := l_response || '"' || ie_mfcs_event.escape_json(l_failed_step) || '"';
+        exception
+            when no_data_found then
+                l_response := l_response || 'null';
+        end;
+
+        l_response := l_response || ',"GENERATED_IDENTIFIERS":{'
+            || '"STYLE":' || case when l_style is null then 'null' else '"' || ie_mfcs_event.escape_json(l_style) || '"' end
+            || ',"ORDER_NO":' || case when l_order is null then 'null' else '"' || ie_mfcs_event.escape_json(l_order) || '"' end
+            || '},"ERRORS":[]}';
+
+        return l_response;
+    end;
+end ie_mfcs_request;
+/

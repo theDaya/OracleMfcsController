@@ -106,7 +106,21 @@ deploy/adb-free/        install, schema/ACL setup, probes, token loader
 tests/                  live tests - they create real tenant records
 ui/                     React console (Vite, proxies /api to ORDS)
 docs/                   the three documents above, plus the tenant OpenAPI spec
+rds/                    the same controller under RDS names, for MFCS_RDS_CUSTOM - see below
 ```
+
+**There are two trees, and new work goes into `rds/`.** `rds/` is the controller renamed to the
+Oracle Database Naming Standard (`IE_MFCS_*`) for the RDS schema `MFCS_RDS_CUSTOM`, workspace
+`MFCS`, tenant STG. The original `database/` tree stays installed on mdutils because the two APEX
+consoles run against it, and takes fixes only - a fix made there needs making in `rds/` too, and
+the reverse. `rds/README.md` has the name mapping, the four deliberate differences, and the install.
+
+RDS is reached only through APEX SQL Scripts, so the install is generated:
+`rds/deploy/build.sh` stitches `rds/database/` into `rds/deploy/0[1-3]_install_*.sql`. **Edit the
+sources and rebuild; never the outputs.** SQL Scripts does not run SQLcl commands, so nothing under
+`rds/database/` may use `prompt`, `set` or `show errors`, and a `;` inside a comment in a plain SQL
+file is a hazard. The RDS views are reached only through `IE_MFCS_VW_*`, never named in a package,
+so the layer still compiles on mdutils against `rds/tests/stand_in_rds_views.sql`.
 
 The numbering in `20_packages/` is load order, not decoration. Each file holds a package's spec **and**
 body, so anything a body calls must already exist. `payload_pkg` is called statically by

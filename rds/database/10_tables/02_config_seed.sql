@@ -1,0 +1,131 @@
+-- STG: the tenant MFCS_RDS replicates, so validation and writes see the same one.
+--
+-- This integration always talks to the real MFCS tenant. There is no client-mode
+-- switch: the simulators and MOCK/PUBLIC_MOCK/LOCAL_MFCS modes were removed.
+--
+-- Item locations: every item-location row in the tenant reads
+-- location 19271 / locationType W / physicalWarehouse 1927, which is why the
+-- previous CH / 1 defaults never worked. Note that a purchase order ranges its
+-- items automatically - only items created without an order need this step.
+
+merge into ie_mfcs_cfg_setting c
+using (
+    select 'DEFAULT' environment, 'MFCS_AUTH_MODE' config_key, 'OAUTH_CLIENT_CREDENTIALS' config_value, 'Y' enabled_ind from dual union all
+    select 'DEFAULT', 'MFCS_BASE_URL', 'https://rex-npe.retail.eu-frankfurt-1.ocs.oraclecloud.com/rgbu-rex-truw-stg3-mfcs', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_TOKEN_URL', 'https://idcs-c994c399babd4611b2505c507dbcf5a5.identity.oraclecloud.com/oauth2/v1/token', 'Y' from dual union all
+    -- The client id and secret are NOT here, and must never be added. Both live
+    -- in the APEX credential store - a Web Credential in the MFCS workspace,
+    -- static id MFCS_OAUTH - which has no column that returns either of them and
+    -- is excluded from application exports. See rds/README.md.
+    --
+    -- MFCS_AUTH_MODE is informational: OAuth client credentials is the only mode
+    -- ie_mfcs_client has. It is kept so token_status and a reader of this table
+    -- both say which mode is in use.
+    select 'DEFAULT', 'MFCS_CREDENTIAL_STATIC_ID', 'MFCS_OAUTH', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_APEX_WORKSPACE', 'MFCS', 'Y' from dual union all
+    -- The tenant's own scope, from the Postman environment. urn:opc:idm:__myscopes__
+    -- is the IDCS catch-all and is not what this tenant issues against.
+    select 'DEFAULT', 'MFCS_SCOPE', 'rgbu:merch:MFCS-STG3', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ITEM_NUMBER_RESERVATION_CHUNK_SIZE', '1', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ITEM_NUMBER_RESERVATION_DAYS_UNTIL_EXPIRY', '1', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_COST_ZONE_GROUP_ID', '2000', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_DEFAULT_UOP', 'EA', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_COST_UOM', 'EA', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_SUPPLIER_PACK_SIZE', '1', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_INNER_PACK_SIZE', '1', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_PURCHASE_TYPE', '0', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_MANUFACTURER_COUNTRY', 'VN', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_DIRECT_SHIP_IND', 'N', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_INNER_NAME', 'EA', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_CASE_NAME', 'CS', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_PALLET_NAME', 'PAL', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_LOCATION_HIERARCHY_LEVEL', 'W', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_LOCATION_HIERARCHY_VALUE', '19271', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_STORE_ORDER_MULTIPLE', 'E', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_TAXABLE_IND', 'Y', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_PARENT_DIFF1_GROUP', 'RMS_ALL_C', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_PARENT_DIFF2_GROUP', 'ALL', 'Y' from dual union all
+    select 'DEFAULT', 'INTERNAL_TIME_BUDGET_SECONDS', '240', 'Y' from dual union all
+    select 'DEFAULT', 'HTTP_TRANSFER_TIMEOUT_SECONDS', '45', 'Y' from dual union all
+    select 'DEFAULT', 'FEATURE_INITIAL_RETAIL_YN', 'N', 'Y' from dual union all
+    select 'DEFAULT', 'FEATURE_ITEM_LOCATIONS_YN', 'Y', 'Y' from dual union all
+    select 'DEFAULT', 'FEATURE_GENERATE_MISSING_SKUS_YN', 'Y', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_SKU_VERIFY_RETRY_COUNT', '6', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_SKU_VERIFY_RETRY_SLEEP_SECONDS', '5', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_RESERVATION_DAYS_UNTIL_EXPIRY', '1', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_OTB_EOW_DAY', 'SUNDAY', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_EXPENSE_CALC_BASIS', 'V', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_EXPENSE_IN_DUTY', 'N', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_EXPENSE_IN_EXPENSE', 'Y', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_EXPENSE_IN_ALC', 'Y', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_TYPE', 'N/B', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_STATUS', 'A', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_ORIGIN', '2', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_INCLUDE_ON_ORDER_IND', 'Y', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_EDI_PO_IND', 'N', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_PRE_MARK_IND', 'N', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_QUALITY_CONTROL_IND', 'N', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_FREIGHT_TERMS', 'PREPAID', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_LOCATION_TYPE', 'W', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_DEFAULT_LOCATION', '19271', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_DEFAULT_TERMS', '34', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_DEFAULT_IMPORT_COUNTRY', 'GB', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_CANCEL_CODE', 'S', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_REDUCE_CANCEL_CODE', 'B', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_LINE_ABSENT_ACTION', 'CANCEL', 'Y' from dual union all
+    -- Read by SYNC_ORDER_LINES only, which re-reads an amended order until its
+    -- lines match the document. The old VERIFY_PURCHASE_ORDER step also used
+    -- them and no longer exists: a create answers its own 200 honestly, so
+    -- reading the lagging procurement feed afterwards only bought latency.
+    select 'DEFAULT', 'MFCS_ORDER_VERIFY_RETRY_COUNT', '12', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_ORDER_VERIFY_RETRY_SLEEP_SECONDS', '10', 'Y' from dual union all
+    select 'DEFAULT', 'BATCH_WINDOW_ACTIVE_YN', 'N', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_NUMBERS_MANAGE', '/MerchIntegrations/services/item/itemNumbers/reserve', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEMS_CREATE', '/MerchIntegrations/services/items/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEMS_UPDATE', '/MerchIntegrations/services/items/update', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_SEASONS_CREATE', '/MerchIntegrations/services/item/seasons/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_IMAGES_CREATE', '/MerchIntegrations/services/item/images/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_IMAGES_UPDATE', '/MerchIntegrations/services/item/images/update', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_HTS_CREATE', '/MerchIntegrations/services/item/hts/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_HTS_UPDATE', '/MerchIntegrations/services/item/hts/update', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_IMAGE_TYPE', 'T', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_HTS_STATUS', 'A', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_LOCATIONS_CREATE', '/MerchIntegrations/services/item/locations/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_SOURCING_CREATE', '/MerchIntegrations/services/item/suppliers/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_SOURCING_UPDATE', '/MerchIntegrations/services/item/suppliers/update', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_CREATE', '/MerchIntegrations/services/item/supplier/countriesOfManufacture/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_COUNTRIES_OF_MANUFACTURE_UPDATE', '/MerchIntegrations/services/item/supplier/countriesOfManufacture/update', 'Y' from dual union all
+    select 'DEFAULT', 'MFCS_UPC_ITEM_NUMBER_TYPE', 'EAN13', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_UDAS_CREATE', '/MerchIntegrations/services/item/uda/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_UDAS_UPDATE', '/MerchIntegrations/services/item/uda/update', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_LOCATIONS_UPDATE', '/MerchIntegrations/services/item/locations/update', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.ITEM_APPROVE', '/MerchIntegrations/services/items/update', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.INITIAL_RETAIL', '/MerchIntegrations/services/TODO-from-office-openapi/item/initialRetail/apply', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.PO_PREISSUED_CREATE', '/MerchIntegrations/services/purchaseOrder/preIssuedOrderNumber/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.PURCHASE_ORDERS_CREATE', '/MerchIntegrations/services/purchaseOrders/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.PURCHASE_ORDERS_UPDATE', '/MerchIntegrations/services/purchaseOrders/update', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.PO_DETAILS_CREATE', '/MerchIntegrations/services/purchaseOrder/details/create', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.PO_DETAILS_UPDATE', '/MerchIntegrations/services/purchaseOrder/details/update', 'Y' from dual union all
+    -- No step resolves this key any more. Kept because it records the path the
+    -- browse and order-line reads use, which they build inline.
+    select 'DEFAULT', 'ENDPOINT.PURCHASE_ORDER_GET', '/MerchIntegrations/services/procurement/order/{orderNo}', 'Y' from dual union all
+    select 'DEFAULT', 'ENDPOINT.REST_SERVICE_STATUS', '/MerchIntegrations/services/administration/operations/restService/status', 'Y' from dual
+) s
+on (c.environment = s.environment and c.config_key = s.config_key)
+when matched then update set
+    c.config_value = s.config_value,
+    c.enabled_ind = s.enabled_ind,
+    c.updated_at = systimestamp
+when not matched then insert (
+    environment,
+    config_key,
+    config_value,
+    enabled_ind
+) values (
+    s.environment,
+    s.config_key,
+    s.config_value,
+    s.enabled_ind
+);
+
+commit;

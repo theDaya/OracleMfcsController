@@ -6,6 +6,36 @@ name already says what they are.
 Source layout mirrors this: `database/10_tables/`, `database/20_packages/` (one file per package,
 numbered in dependency order), `database/30_ords/`.
 
+**The same layer also exists under RDS names**, in `rds/`, for the RDS schema `MFCS_RDS_CUSTOM`.
+Everything below describes both: the objects do the same jobs under different names. What
+differs, and why, is in `rds/README.md`.
+
+### Names in RDS
+
+The Oracle Database Naming Standard wants `<application>_<functional area>…` on every object, so
+everything is `IE_MFCS_*` - application `IE` (Induction Engine), functional area `MFCS`. Tables
+carry the standard's classification; packages lose `_PKG`, since the standard forbids naming an
+object's type. Columns and `CONFIG` keys are unchanged.
+
+| Original | RDS | |
+| --- | --- | --- |
+| `REQUEST` | `IE_MFCS_PRD_REQUEST` | |
+| `STEP` | `IE_MFCS_PRD_REQUEST_STEP` | |
+| `ATTEMPT` | `IE_MFCS_PRD_STEP_ATTEMPT` | |
+| `ENTITY_MAP` | `IE_MFCS_MAP_ENTITY` | |
+| `EVENT_LOG` | `IE_MFCS_LOG_EVENT` | |
+| `MASTER_REFRESH` | `IE_MFCS_LOG_MASTER_REFRESH` | |
+| `MASTER_DATA` | `IE_MFCS_REF_MASTER_DATA` | |
+| `CONFIG` | `IE_MFCS_CFG_SETTING` | |
+| `SECRET` | - | Not carried over: the static-bearer path it served is gone |
+| `ATTEMPT_SEQ`, `EVENT_LOG_SEQ` | `IE_MFCS_SEQ_ATTEMPT_ID`, `IE_MFCS_SEQ_EVENT_LOG_ID` | |
+| - | `IE_MFCS_VW_MERCH_GROUP`, `_DEPARTMENT`, `_CLASS`, `_SUBCLASS` | The hierarchy from `MFCS_RDS.RDS_WV_*`, deleted rows removed |
+| `config_pkg` … `ords_util_pkg` | `IE_MFCS_CONFIG` … `IE_MFCS_ORDS_UTIL` | `master_pkg` is `IE_MFCS_MASTER_DATA` |
+| Constraints, indexes | `<table>_PK`, `_UK`, `_FK`, `_CK`, `_CK1`…, `_IX`, `_UX` | Numbered, per the standard |
+
+The package files are renumbered into true load order: `sku` moved from 14 to 08, because the
+orchestrator calls it.
+
 ---
 
 ## Tables

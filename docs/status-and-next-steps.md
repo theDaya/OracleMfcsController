@@ -1,6 +1,88 @@
 # Status and next steps
 
-Written so work can stop and resume without losing the thread. Current as of **2026-09-28**.
+Written so work can stop and resume without losing the thread. Current as of **2026-10-13**.
+
+## Session of 2026-10-13 — the controller moves to RDS
+
+**The controller now exists twice.** `rds/` is the same layer renamed to the Oracle Database
+Naming Standard - `IE_MFCS_*`, application `IE` (Induction Engine), functional area `MFCS` - for
+the RDS schema `MFCS_RDS_CUSTOM`, workspace `MFCS`, tenant STG. The original stays on mdutils for
+the two APEX consoles and takes fixes only. ORDS in RDS is being set up by hand, separately.
+`rds/README.md` has the mapping, the differences and the install; `docs/database-objects.md` has
+the name table.
+
+**Not yet installed in RDS.** Everything is built and proven on mdutils, where the RDS layer was
+installed beside the original with stand-ins for the RDS views:
+
+- 59 objects compile in one pass in load order, and none references an object of the original
+- preview is **byte-identical** to the original's for 28 real stored documents, given the same
+  master data
+- the offline mapper tests pass 9 of 9 on both
+- the credential resolves, a foundation read answers 200, and a full master data refresh runs
+  clean, with the hierarchy loaded through the views: 21 departments, 83 classes, 306 subclasses
+
+Next is `rds/deploy/00_preflight.sql` in RDS, run by hand in APEX SQL Scripts, whose results
+decide whether the install goes ahead as written - in particular whether `MFCS_RDS_CUSTOM`
+holds SELECT on the `MFCS_RDS` views directly, which a view needs, or only through a role.
+
+**Two defects found along the way, both still live in the original:**
+
+- **Recovery re-ran writes it should have been resolving.** `client_pkg.correlation_status`
+  set `Authorization: Bearer ` from the static token and passed no credential, so under OAuth it
+  sent an empty bearer and was answered 401 - proven live today. `recovery_pkg` reads a body with
+  no `count` as `NO_RECORD` and puts the step back to `PENDING`, so a step whose outcome was
+  unknown was simply run again: the duplicate write the whole recovery path exists to prevent.
+  Fixed in `rds/` - the lookup authenticates, and a lookup that fails reports UNKNOWN, which goes
+  to manual review. **The original still has it.**
+- **A fresh install of the original leaves the orchestrator invalid.** `orchestrator_pkg` (09)
+  calls `sku_pkg` (14). It works on mdutils only because Oracle recompiles on first use. `rds/`
+  is renumbered into true load order.
+
+**Not verified: anything that writes to MFCS from the new layer.** The coverage suite cannot pass
+on either side until its fixtures move to the restructured colour and size model.
+
+### STG findings, 2026-10-01 to 2026-10-13
+
+All verified live on STG, and recorded here for the first time:
+
+- **No country of manufacture, no approval** - confirmed again.
+- **An unapproved item cannot be ordered.**
+- **Country of manufacture can be changed on an approved, ordered item.**
+- **An approved item cannot go back to worksheet.**
+- **`items/update` ignores `DIFF_1`/`DIFF_2` even in worksheet**, not only once approved.
+- **`items/delete` marks an item `D` without checking for orders.** The nightly purge then removed
+  an unordered style (`100300035`) and kept an ordered one (`CMF10011048`) in `D`.
+- **A purged item number can be reused**: `100300035` was recreated as `MANL` with a different
+  colour.
+
+So a style created in the wrong colour can be corrected only by delete, wait for the purge, and
+recreate - and only if it has never been ordered. A supported correction route is a question for
+the consultant.
+
+### The agreed plan, in order
+
+Agreed 2026-09-28 after the RMS16 comparison, nothing built yet:
+
+1. **Item structure per the consultant**: L1 is a style/colour - a `C` colour in `DIFF_1`, a size
+   group in `DIFF_2` - and SKUs carry an `S` size. Never diff type `SC`. A new `SIZE_GROUP` on the
+   document, colour and sizes validated against the diff feeds and group membership, a colour
+   change refused on modify, `ENSURE_STYLE_SKUS` adding sizes only, and new test fixtures.
+2. **A cost-change step**: `cost/costChange/immediate/create` at L1, in the supplier's currency.
+3. **`MANL` creates check RDS** (`ITEM_MASTER`) that no style or SKU number is taken, before any write.
+4. **Order CFAs** (10 on orders, none on items), and quantity 0 as cancel.
+5. **RMS16's guards**: no hierarchy or supplier change on modify, never below received on a PO
+   line, delete omitted UDAs and seasons.
+6. **Cancel and reinstate order.** Packs are paused.
+
+Also agreed 2026-10-01: remove the post-transaction read-back loops (`ENSURE_STYLE_SKUS` verify,
+`SYNC_ORDER_LINES` verify) and move pre-reads to RDS; add an optional `MANUFACTURE_COUNTRY`.
+Proposed, not agreed: strip the `S` prefix from size codes in SKU numbers, and fix the supplier
+colour code at three characters.
+
+All of it now gets built in `rds/`. Items 3 and the pre-reads are where being next to RDS pays
+off, and they need `ITEM_MASTER`, `ITEM_SUPPLIER`, `ORDHEAD` and `ORDLOC` views that are not in
+the list of RDS views provided so far. So do `DIFF_IDS` (a diff's type and description, which
+`DIFF_GROUP_DETAIL` does not carry), currency and brand, before master data can leave REST.
 
 ## Session of 2026-09-28 — the RMS16 comparison, a restructured tenant, and two silent failures
 
