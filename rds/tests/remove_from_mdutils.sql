@@ -1,5 +1,5 @@
 -- Removes the RDS layer from mdutils, where it is installed beside the original
--- only to be compiled and previewed (rds/tests/README.md). NEVER RUN THIS IN RDS.
+-- only to be compiled and previewed (rds/README.md, "How this was verified"). NEVER RUN THIS IN RDS.
 --
 -- Drops every IE_MFCS_* object in the current schema and nothing else.
 
