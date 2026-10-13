@@ -31,10 +31,10 @@ compile there proves it; `MFCS_RDS_CUSTOM` holds SELECT on the four hierarchy vi
 views carry every column the install reads, with the same 7/21/83/306 rows the extract held and
 no deleted rows; and SQL Scripts handles blank lines inside PL/SQL and `&` in literals.
 
-**Not settled: whether RDS can reach MFCS.** The only network ACEs the preflight showed are for
-two Oracle test domains (`*.retail.us-phoenix-1.ocs.oc-test.com`, `*.identity.pint.oc9qadev.com`)
-and may belong to the ORDS account rather than the schema. `rds/deploy/00_network_probe.sql`
-answers it with two real calls.
+**RDS can reach MFCS.** The preflight's ACL list showed only two Oracle test domains, but
+`rds/deploy/00_network_probe.sql` settled it with real calls through `apex_web_service`: MFCS
+answered HTTP 401 and the IDCS token host HTTP 405, exactly as on mdutils - both reachable. The
+ACL view evidently describes the ORDS login account, not the path the APEX engine takes.
 
 **Two defects found along the way, both still live in the original:**
 
