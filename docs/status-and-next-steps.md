@@ -21,9 +21,15 @@ installed beside the original with stand-ins for the RDS views:
 - the credential resolves, a foundation read answers 200, and a full master data refresh runs
   clean, with the hierarchy loaded through the views: 21 departments, 83 classes, 306 subclasses
 
-Next is `rds/deploy/00_preflight.sql` in RDS, run by hand in APEX SQL Scripts, whose results
-decide whether the install goes ahead as written - in particular whether `MFCS_RDS_CUSTOM`
-holds SELECT on the `MFCS_RDS` views directly, which a view needs, or only through a role.
+**The first preflight in RDS ran as the wrong schema.** It reported `ORDS_PUBLIC_USER_DIS`,
+not `MFCS_RDS_CUSTOM`, so its grant and ACL answers describe that user, and the network ACEs it
+showed are for two Oracle test domains (`*.retail.us-phoenix-1.ocs.oc-test.com`,
+`*.identity.pint.oc9qadev.com`), neither of them the STG tenant or its IDCS host. To rerun under
+`MFCS_RDS_CUSTOM`. What it did settle: **RDS is Oracle 19c** (19.33), not 23ai like mdutils -
+nothing in `rds/` uses a feature newer than 12.2, but only a compile there proves it; the four
+hierarchy views have every column the install reads, with the same 7/21/83/306 rows the
+extract held and no deleted rows; and SQL Scripts handles blank lines inside PL/SQL and `&` in
+literals.
 
 **Two defects found along the way, both still live in the original:**
 

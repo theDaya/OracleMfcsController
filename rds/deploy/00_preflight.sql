@@ -5,10 +5,17 @@
 -- Send back the results of every statement, including any that errored -
 -- an error here is an answer too.
 
--- 1. Who and where. Expect MFCS_RDS_CUSTOM.
+-- 1. Who and where. Expect MFCS_RDS_CUSTOM in all three of schema_name,
+--    current_user and current_schema. Everything below - and the install -
+--    lands in whichever schema this says, so if it is not MFCS_RDS_CUSTOM,
+--    stop: the schema selector at the top right of SQL Workshop picks it.
+--    (The first run on 2026-10-13 ran as ORDS_PUBLIC_USER_DIS.)
 select user as schema_name,
-       sys_context('userenv', 'con_name') as container,
-       sys_context('userenv', 'db_name') as db_name
+       sys_context('userenv', 'session_user') as session_user,
+       sys_context('userenv', 'current_user') as current_user,
+       sys_context('userenv', 'current_schema') as current_schema,
+       sys_context('userenv', 'proxy_user') as proxy_user,
+       sys_context('userenv', 'con_name') as container
   from dual;
 
 select product, version_full
@@ -86,10 +93,12 @@ union all
 select 'SUBCLASS', count(*), sum(case when last_dml_type = 'D' then 1 else 0 end)
   from mfcs_rds.rds_wv_subclass;
 
--- 7. The APEX workspace this schema belongs to. Expect MFCS.
+-- 7. Every schema the workspace may use. Expect MFCS_RDS_CUSTOM among them,
+--    under MFCS. The web credential is looked up in the workspace named in
+--    MFCS_APEX_WORKSPACE, so this is also the check that "MFCS" is right.
 select workspace_name, schema
   from apex_workspace_schemas
- where schema = user;
+ order by workspace_name, schema;
 
 -- 8. The MFCS web credential, if it has been created yet. Expect one row,
 --    static id MFCS_OAUTH, once step 1 of rds/README.md is done.
