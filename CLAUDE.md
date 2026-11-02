@@ -286,6 +286,11 @@ All verified live. Most are silent failures, which is why they are worth memoris
   holds and the document does not name are left alone, deliberately. Proven live on draft 206,
   2026-11-02 - before that, the update service was sent the create body and answered
   `UDA Value is required. Field: NEW_UDA_VALUE`.
+- **A new child is created already holding its style's UDAs and seasons.** MFCS copies them at
+  `items/create`. So a SKU `ENSURE_STYLE_SKUS` has just made is not empty, it is merely not in
+  the item feed yet (404 for about a minute) - and creating its UDAs anyway is refused with
+  `There should only be one UDA for the item/UDA ID`. `sync_item_attributes` waits for the feed
+  rather than reading a 404 as "holds nothing". Verified on `50055010S120`, 2026-11-02.
 - **Never `to_number()` a request field read as a string.** It parses under the session's decimal
   character, and a session with `NLS_NUMERIC_CHARACTERS` of `, ` (SQLcl here does) turns a cost of
   48.49 into `ORA-06502`. Use `payload_pkg.number_value` or `json_value ... returning number`.
@@ -389,12 +394,22 @@ Optional additions, absent from documents written earlier and behaving exactly a
   the caller believes it is choosing and something upstream dropped it, which is worth refusing
   loudly rather than quietly reserving a number nobody expects. `ITEM_NUMBER_TYPE` must be `MANL` -
   see the tenant-behaviour note above for why `ITEM` cannot work. Numbering is all-or-nothing per
-  request, unique within the document, 25 characters or fewer, and accepted only on `CREATE_STYLE`
-  and `CREATE_ALL`; on a modify the items already exist and are addressed by `STYLE` and `SKU_ID`.
+  request, unique within the document, and 25 characters or fewer. The style's own `ITEM_NUMBER`
+  is accepted only on `CREATE_STYLE` and `CREATE_ALL`; on a modify the style exists and is
+  addressed by `STYLE`.
 
-  `ITEM_NUMBER` is not `SKU_ID`. `SKU_ID` names a SKU MFCS already holds and is a reference on a
-  modify; `ITEM_NUMBER` is an assignment on a create. Validation already forces `SKU_ID` null on
-  the create operations, so the two can never arrive together.
+  **On a modify, rows can still carry `ITEM_NUMBER`** - the rows without a `SKU_ID`, which are sizes
+  the style may lack. `ENSURE_STYLE_SKUS` creates such a child under the document's number (MANL)
+  and description instead of reserving one; all-or-nothing applies across those rows, and
+  `ITEM_NUMBER_TYPE` is then required at the root with no root `ITEM_NUMBER`. If the style already
+  has that colour/size under another number, the existing child wins and `SKU_NUMBER_NOT_USED` is
+  logged as a warning. Added 2026-11-02 after draft 207 got a reserved `100450009` where Office's
+  scheme said `56249011S120`; proven live on style `50055010` / order `75004` (draft 209), which
+  gained `50055010S120`.
+
+  `ITEM_NUMBER` is not `SKU_ID`. `SKU_ID` names a SKU MFCS already holds and is a reference;
+  `ITEM_NUMBER` is an assignment to one that does not exist yet. A row carrying both is refused
+  (`ITEM_NUMBER_WITH_SKU_ID`), and validation forces `SKU_ID` null on the create operations.
 
   When the document carries numbers, `RESERVE_ITEM_NUMBERS` makes no call: it records them against
   the request and the run continues identically. That is the *only* place the two numbering paths
@@ -406,10 +421,6 @@ Optional additions, absent from documents written earlier and behaving exactly a
 after `ENSURE_STYLE_SKUS` finds a row's SKU by; a row without one had its SKU created and then
 lost, so the next step sent `"item": null` (draft 207, 2026-11-02, which left child `100450009` on
 style `56249011`). Validation refuses it now, before anything is written.
-
-**A size added on a modify gets a reserved `ITEM` number, not the caller's.** `ITEM_NUMBER` is
-accepted only on the create operations, so `ENSURE_STYLE_SKUS` reserves one for a new child -
-`100450009` above, where Office's scheme would have made it `56249011S120`. Not yet changed.
 
 `SKU_WIDTH` is no longer required. It reached no MFCS field: it was validated against `MAP.WIDTH.*` and
 then used only to build a description string. It is still accepted and still recorded in `ENTITY_MAP`

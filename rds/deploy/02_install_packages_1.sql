@@ -1119,22 +1119,40 @@ create or replace package body ie_mfcs_validation as
         l_numbered number;
         l_distinct number;
         l_too_long number;
+        l_new_rows number;
+        l_new_numbered number;
+        l_both number;
     begin
         select trim(json_value(p_payload, '$.ITEM_NUMBER' returning varchar2(4000) null on error)),
                upper(trim(json_value(p_payload, '$.ITEM_NUMBER_TYPE' returning varchar2(4000) null on error)))
           into l_item_number, l_type
           from dual;
 
-        -- The pair travels together or not at all. A type without a number is the
-        -- case worth naming: the caller believes it is choosing the number, and
-        -- something upstream dropped it. Accepting that would reserve a number
-        -- and create a style nobody asked for under a number nobody expects.
-        if l_type is not null and l_item_number is null then
+        select count(*),
+               count(item_number),
+               count(distinct item_number),
+               count(case when lengthb(item_number) > c_max_length then 1 end),
+               count(case when sku_id is null then 1 end),
+               count(case when sku_id is null and item_number is not null then 1 end),
+               count(case when sku_id is not null and item_number is not null then 1 end)
+          into l_rows, l_numbered, l_distinct, l_too_long, l_new_rows, l_new_numbered, l_both
+          from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
+              columns item_number varchar2(4000) path '$.ITEM_NUMBER' null on error,
+                      sku_id      varchar2(4000) path '$.SKU_ID' null on error
+          );
+
+        -- The type travels with numbers or not at all. A type with no number
+        -- anywhere is the case worth naming: the caller believes it is choosing,
+        -- and something upstream dropped the numbers. Accepting that would
+        -- reserve numbers nobody expects. On a modify the numbers are on the rows
+        -- only - the style already has its number - so a type with row numbers
+        -- and no style number is the normal shape there.
+        if l_type is not null and l_item_number is null and l_numbered = 0 then
             add_error(p_errors, 'ITEM_NUMBER', 'REQUIRED_WITH_TYPE',
                 'ITEM_NUMBER is required when ITEM_NUMBER_TYPE is supplied.');
         end if;
 
-        if l_item_number is not null and l_type is null then
+        if l_type is null and (l_item_number is not null or l_numbered > 0) then
             add_error(p_errors, 'ITEM_NUMBER_TYPE', 'REQUIRED_WITH_ITEM_NUMBER',
                 'ITEM_NUMBER_TYPE is required when ITEM_NUMBER is supplied.');
         end if;
@@ -1144,14 +1162,12 @@ create or replace package body ie_mfcs_validation as
                 'ITEM_NUMBER_TYPE must be MANL. MFCS refuses a caller-chosen number of any other type.');
         end if;
 
-        select count(*),
-               count(item_number),
-               count(distinct item_number),
-               count(case when lengthb(item_number) > c_max_length then 1 end)
-          into l_rows, l_numbered, l_distinct, l_too_long
-          from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
-              columns item_number varchar2(4000) path '$.ITEM_NUMBER' null on error
-          );
+        -- SKU_ID names a SKU that exists; ITEM_NUMBER assigns one to a SKU that
+        -- does not. A row carrying both is asking for two different things.
+        if l_both > 0 then
+            add_error(p_errors, 'SIZE_CURVE_DETAIL.ITEM_NUMBER', 'ITEM_NUMBER_WITH_SKU_ID',
+                'A SIZE_CURVE_DETAIL row cannot carry both SKU_ID and ITEM_NUMBER.');
+        end if;
 
         if l_item_number is not null and lengthb(l_item_number) > c_max_length then
             add_error(p_errors, 'ITEM_NUMBER', 'ITEM_NUMBER_TOO_LONG',
@@ -1172,9 +1188,20 @@ create or replace package body ie_mfcs_validation as
                 'When ITEM_NUMBER is supplied for the style, every SIZE_CURVE_DETAIL row must supply one too.');
         end if;
 
-        if l_item_number is null and l_numbered > 0 then
+        if l_item_number is null and l_numbered > 0
+           and p_operation in ('CREATE_STYLE', 'CREATE_ALL') then
             add_error(p_errors, 'ITEM_NUMBER', 'REQUIRED_WITH_SKU_ITEM_NUMBERS',
                 'ITEM_NUMBER is required for the style when SIZE_CURVE_DETAIL rows supply one.');
+        end if;
+
+        -- On a modify the same all-or-nothing rule, over the rows that can take a
+        -- number: those without a SKU_ID, which ENSURE_STYLE_SKUS creates when the
+        -- style lacks them. Half numbered by the caller and half reserved is the
+        -- style nobody can reason about, arrived at one amendment at a time.
+        if p_operation not in ('CREATE_STYLE', 'CREATE_ALL')
+           and l_new_numbered > 0 and l_new_numbered < l_new_rows then
+            add_error(p_errors, 'SIZE_CURVE_DETAIL.ITEM_NUMBER', 'ITEM_NUMBER_REQUIRED_FOR_NEW',
+                'When any SIZE_CURVE_DETAIL row without a SKU_ID supplies an ITEM_NUMBER, every such row must.');
         end if;
 
         -- Two SKUs sharing a number is one SKU, and MFCS would not say so.
@@ -1197,9 +1224,12 @@ create or replace package body ie_mfcs_validation as
             end if;
         end if;
 
-        -- Only the operations that create the items. On a modify the style and its
-        -- SKUs already exist and are addressed by STYLE and SKU_ID; a number
-        -- offered here would be an assignment MFCS has no service to honour.
+        -- The style's own number, only on the operations that create the style. On
+        -- a modify it exists and is addressed by STYLE; a number offered here would
+        -- be an assignment MFCS has no service to honour. Row numbers are another
+        -- matter: a size the style lacks becomes a new child even on a modify, and
+        -- a caller that numbers its own items numbers that one too - draft 207
+        -- got a reserved 100450009 where Office's scheme said 56249011S120.
         if l_item_number is not null and p_operation not in ('CREATE_STYLE', 'CREATE_ALL') then
             add_error(p_errors, 'ITEM_NUMBER', 'ITEM_NUMBER_NOT_ALLOWED',
                 'ITEM_NUMBER is only accepted for CREATE_STYLE and CREATE_ALL.');
@@ -2073,7 +2103,11 @@ create or replace package ie_mfcs_payload authid definer as
         size_diff          varchar2(120),
         colour_diff        varchar2(120),
         source_variant_ref varchar2(120),
-        sku_width          varchar2(60)
+        sku_width          varchar2(60),
+        -- MANL when the document numbered this child, ITEM when it was reserved.
+        item_number_type   varchar2(10),
+        -- The row's own ITEM_DESCRIPTION, when the caller composed one.
+        item_description   varchar2(250)
     );
     type t_generated_children is table of t_generated_child index by pls_integer;
 
@@ -3423,13 +3457,16 @@ create or replace package body ie_mfcs_payload as
             l_item := json_object_t();
             l_item.put('item', l_child.item);
             l_item.put('itemParent', p_plan.style);
-            l_item.put('itemDescription',
+            -- The caller's description when it composed one, as the create path
+            -- does. Otherwise the parent's with the size differentiator appended,
+            -- which is a differentiator id ("S120"), not the size a person reads.
+            l_item.put('itemDescription', nvl(substr(trim(l_child.item_description), 1, 250),
                 substr(trim(p_plan.item_description || ' ' || l_child.sku_size
-                    || ' ' || l_child.sku_width), 1, 250));
+                    || ' ' || l_child.sku_width), 1, 250)));
             l_item.put('shortDescription',
                 substr(nvl(p_plan.short_description, p_plan.item_description), 1, 120));
             l_item.put('dataLoadingDestination', 'RMS');
-            l_item.put('itemNumberType', 'ITEM');
+            l_item.put('itemNumberType', nvl(l_child.item_number_type, 'ITEM'));
             l_item.put('itemLevel', 2);
             l_item.put('tranLevel', 2);
             l_item.put('dept', p_plan.dept);
@@ -3560,9 +3597,11 @@ create or replace package body ie_mfcs_payload as
         append_approval(p_plan.style, p_plan.item_description);
 
         for i in 1 .. p_plan.children.count loop
+            -- Must match what the create sent, or approval overwrites it.
             append_approval(p_plan.children(i).item,
-                trim(p_plan.item_description || ' ' || p_plan.children(i).sku_size
-                    || ' ' || p_plan.children(i).sku_width));
+                nvl(trim(p_plan.children(i).item_description),
+                    trim(p_plan.item_description || ' ' || p_plan.children(i).sku_size
+                        || ' ' || p_plan.children(i).sku_width)));
         end loop;
 
         l_root.put('collectionSize', l_items.get_size);

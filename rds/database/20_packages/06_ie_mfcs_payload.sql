@@ -228,7 +228,11 @@ create or replace package ie_mfcs_payload authid definer as
         size_diff          varchar2(120),
         colour_diff        varchar2(120),
         source_variant_ref varchar2(120),
-        sku_width          varchar2(60)
+        sku_width          varchar2(60),
+        -- MANL when the document numbered this child, ITEM when it was reserved.
+        item_number_type   varchar2(10),
+        -- The row's own ITEM_DESCRIPTION, when the caller composed one.
+        item_description   varchar2(250)
     );
     type t_generated_children is table of t_generated_child index by pls_integer;
 
@@ -1578,13 +1582,16 @@ create or replace package body ie_mfcs_payload as
             l_item := json_object_t();
             l_item.put('item', l_child.item);
             l_item.put('itemParent', p_plan.style);
-            l_item.put('itemDescription',
+            -- The caller's description when it composed one, as the create path
+            -- does. Otherwise the parent's with the size differentiator appended,
+            -- which is a differentiator id ("S120"), not the size a person reads.
+            l_item.put('itemDescription', nvl(substr(trim(l_child.item_description), 1, 250),
                 substr(trim(p_plan.item_description || ' ' || l_child.sku_size
-                    || ' ' || l_child.sku_width), 1, 250));
+                    || ' ' || l_child.sku_width), 1, 250)));
             l_item.put('shortDescription',
                 substr(nvl(p_plan.short_description, p_plan.item_description), 1, 120));
             l_item.put('dataLoadingDestination', 'RMS');
-            l_item.put('itemNumberType', 'ITEM');
+            l_item.put('itemNumberType', nvl(l_child.item_number_type, 'ITEM'));
             l_item.put('itemLevel', 2);
             l_item.put('tranLevel', 2);
             l_item.put('dept', p_plan.dept);
@@ -1715,9 +1722,11 @@ create or replace package body ie_mfcs_payload as
         append_approval(p_plan.style, p_plan.item_description);
 
         for i in 1 .. p_plan.children.count loop
+            -- Must match what the create sent, or approval overwrites it.
             append_approval(p_plan.children(i).item,
-                trim(p_plan.item_description || ' ' || p_plan.children(i).sku_size
-                    || ' ' || p_plan.children(i).sku_width));
+                nvl(trim(p_plan.children(i).item_description),
+                    trim(p_plan.item_description || ' ' || p_plan.children(i).sku_size
+                        || ' ' || p_plan.children(i).sku_width)));
         end loop;
 
         l_root.put('collectionSize', l_items.get_size);

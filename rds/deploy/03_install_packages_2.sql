@@ -977,6 +977,7 @@ create or replace package body ie_mfcs_orchestrator as
         l_sku varchar2(30);
         l_source_variant_ref varchar2(120);
         l_sku_width varchar2(60);
+        l_supplied varchar2(30);
         l_recorded pls_integer := 0;
     begin
         if l_required is null then
@@ -995,13 +996,30 @@ create or replace package body ie_mfcs_orchestrator as
                 -- resolves to the same SKU; take the first and let the mapping stand.
                 l_source_variant_ref := null;
                 l_sku_width := null;
+                l_supplied := null;
                 for v in ie_mfcs_payload.c_size_curve(l_payload) loop
                     if v.sku_size = l_size then
                         l_source_variant_ref := v.source_variant_ref;
                         l_sku_width := v.sku_width;
+                        l_supplied := v.item_number;
                         exit;
                     end if;
                 end loop;
+
+                -- The document numbered a child the style already has under another
+                -- number. The existing one wins - a colour/size pair defines the
+                -- item, so there cannot be a second - but the caller should hear
+                -- that its number was not used rather than find out later.
+                if l_supplied is not null and l_supplied <> l_sku then
+                    ie_mfcs_event.log_event(
+                        p_action_request_id => p_action_request_id,
+                        p_event_phase => 'SKU_NUMBER_NOT_USED',
+                        p_step_code => 'ENSURE_STYLE_SKUS',
+                        p_event_level => 'WARN',
+                        p_message => 'Size ' || l_size || ' already exists as ' || l_sku
+                            || ', so the document''s number ' || l_supplied || ' was not used.'
+                    );
+                end if;
 
                 if l_source_variant_ref is not null then
                     ie_mfcs_request.save_generated_identifier(
@@ -1059,6 +1077,8 @@ create or replace package body ie_mfcs_orchestrator as
         l_size varchar2(60);
         l_source_variant_ref varchar2(120);
         l_sku_width varchar2(60);
+        l_supplied varchar2(30);
+        l_supplied_desc varchar2(250);
         l_days number :=
             to_number(ie_mfcs_config.get_config('MFCS_ITEM_NUMBER_RESERVATION_DAYS_UNTIL_EXPIRY', '14'));
         l_retries number :=
@@ -1124,31 +1144,42 @@ create or replace package body ie_mfcs_orchestrator as
                 || '","missingCount":' || l_missing.get_size || '}'
         );
 
-        -- One reservation per child, matching how the create flow reserves numbers.
+        -- The document's number for each child when it supplies one, otherwise one
+        -- reservation per child, matching how the create flow reserves numbers.
+        -- A supplied number is never burned by a failure: a resume re-reads the
+        -- style, finds the child still missing, and offers the same number again.
         for i in 0 .. l_missing.get_size - 1 loop
             l_entry := treat(l_missing.get(i) as json_object_t);
             l_size := l_entry.get_string('size');
 
             l_source_variant_ref := null;
             l_sku_width := null;
+            l_supplied := null;
+            l_supplied_desc := null;
             for v in ie_mfcs_payload.c_size_curve(l_payload) loop
                 if v.sku_size = l_size then
                     l_source_variant_ref := v.source_variant_ref;
                     l_sku_width := v.sku_width;
+                    l_supplied := v.item_number;
+                    l_supplied_desc := v.item_description;
                     exit;
                 end if;
             end loop;
 
-            l_response := ie_mfcs_client.call_service(
-                p_action_request_id => p_action_request_id,
-                p_step_code => p_step_code,
-                p_http_method => 'POST',
-                p_endpoint_key => 'ENDPOINT.ITEM_NUMBERS_MANAGE',
-                p_request_payload =>
-                    '{"itemNumberType":"ITEM","quantity":1,"daysUntilExpiry":' || l_days || '}',
-                p_user_id => p_user_id
-            );
-            l_item := first_reserved_item(l_response);
+            if l_supplied is not null then
+                l_item := l_supplied;
+            else
+                l_response := ie_mfcs_client.call_service(
+                    p_action_request_id => p_action_request_id,
+                    p_step_code => p_step_code,
+                    p_http_method => 'POST',
+                    p_endpoint_key => 'ENDPOINT.ITEM_NUMBERS_MANAGE',
+                    p_request_payload =>
+                        '{"itemNumberType":"ITEM","quantity":1,"daysUntilExpiry":' || l_days || '}',
+                    p_user_id => p_user_id
+                );
+                l_item := first_reserved_item(l_response);
+            end if;
 
             l_child_count := l_child_count + 1;
             l_plan.children(l_child_count).item := l_item;
@@ -1157,6 +1188,10 @@ create or replace package body ie_mfcs_orchestrator as
             l_plan.children(l_child_count).colour_diff := l_entry.get_string('colourDiff');
             l_plan.children(l_child_count).source_variant_ref := l_source_variant_ref;
             l_plan.children(l_child_count).sku_width := l_sku_width;
+            l_plan.children(l_child_count).item_description := l_supplied_desc;
+            l_plan.children(l_child_count).item_number_type := case
+                when l_supplied is not null then ie_mfcs_payload.document_item_number_type(l_payload)
+                else 'ITEM' end;
 
             l_created := l_created
                 || case when l_created is not null then ', ' end
@@ -1165,9 +1200,12 @@ create or replace package body ie_mfcs_orchestrator as
 
             ie_mfcs_event.log_event(
                 p_action_request_id => p_action_request_id,
-                p_event_phase => 'SKU_NUMBER_RESERVED',
+                p_event_phase => case when l_supplied is not null
+                                      then 'SKU_NUMBER_SUPPLIED' else 'SKU_NUMBER_RESERVED' end,
                 p_step_code => p_step_code,
-                p_message => 'Reserved an item number for a missing combination.',
+                p_message => case when l_supplied is not null
+                                  then 'Using the document''s item number for a missing combination.'
+                                  else 'Reserved an item number for a missing combination.' end,
                 p_detail_payload => '{"mfcsSkuNo":"' || ie_mfcs_event.escape_json(l_item)
                     || '","size":"' || ie_mfcs_event.escape_json(l_size)
                     || '","sizeDiff":"' || ie_mfcs_event.escape_json(l_entry.get_string('sizeDiff'))
@@ -1646,8 +1684,9 @@ create or replace package body ie_mfcs_orchestrator as
     --
     -- The read is foundation/item, which lags about a minute behind a write. It is
     -- the only read that carries an item's UDAs and seasons - itemDetail does not,
-    -- checked 2026-11-02 - so the read-back waits for it, and a SKU created moments
-    -- ago by ENSURE_STYLE_SKUS, which 404s there, is read as holding nothing.
+    -- checked 2026-11-02 - so both the first read and the read-back wait for it,
+    -- including for a SKU created moments ago by ENSURE_STYLE_SKUS, which 404s
+    -- there until the feed catches up.
     procedure sync_item_attributes(
         p_action_request_id in varchar2,
         p_step_code         in varchar2,
@@ -1711,10 +1750,31 @@ create or replace package body ie_mfcs_orchestrator as
             l_arrays t_keys := t_keys('udaLov', 'udaFreeform', 'udaDate');
             l_fields t_keys := t_keys('udaValue', 'udaText', 'udaDate');
         begin
-            l_body := ie_mfcs_client.get_json('/MerchIntegrations/services/foundation/item/' || p_item, l_status);
-            if l_status = 404 then
-                return l_out;
-            elsif l_status not between 200 and 299 then
+            -- A 404 is not "holds nothing". It is a SKU ENSURE_STYLE_SKUS created
+            -- moments ago that the feed does not show yet - and MFCS copies the
+            -- style's UDAs onto a new child at create, so it already holds them.
+            -- Treating it as empty sent creates for UDAs it had, refused with
+            -- "There should only be one UDA for the item/UDA ID" (2026-11-02).
+            -- Wait for it instead, as the read-back below waits.
+            for attempt in 1 .. greatest(1, l_retries) loop
+                l_body := ie_mfcs_client.get_json('/MerchIntegrations/services/foundation/item/' || p_item, l_status);
+                exit when l_status <> 404;
+                if attempt = greatest(1, l_retries) then
+                    raise_application_error(-20968,
+                        'Item ' || p_item || ' is still not readable after ' || attempt
+                        || ' reads, so its ' || l_property || 's cannot be compared. A resume will retry.');
+                end if;
+                ie_mfcs_event.log_event(
+                    p_action_request_id => p_action_request_id,
+                    p_event_phase => 'ATTRIBUTES_READ_WAIT',
+                    p_step_code => p_step_code,
+                    p_event_level => 'WARN',
+                    p_message => 'Item ' || p_item || ' is not in the item feed yet; waiting.',
+                    p_detail_payload => '{"attempt":' || attempt || ',"sleepSeconds":' || l_sleep || '}'
+                );
+                dbms_session.sleep(l_sleep);
+            end loop;
+            if l_status not between 200 and 299 then
                 raise_application_error(-20968,
                     'Could not read item ' || p_item || ' before writing its '
                     || l_property || 's (HTTP ' || l_status || ').');

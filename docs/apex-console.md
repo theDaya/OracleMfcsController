@@ -102,6 +102,10 @@ App 102 page 20 (Style Explorer) and app 103 page 8 (Execution) both read `STEP`
   country from a field the order read does not have, and validation passed the result anyway.
   Style/Model, Supplier Colour and Supplier Colour Code stay blank: they are Office's own lookups,
   and STG does not carry the UDAs that would hold them.
+- **A size added to an amended draft is numbered like a composed one.** A row with no SKU number
+  (only rows read from MFCS have one) goes out with `ITEM_NUMBER` = style number + size
+  differentiator, MANL, as reference and number, and "style description + size description" as
+  its name. The document then carries `ITEM_NUMBER_TYPE` at the root and no style `ITEM_NUMBER`.
 - **Nothing reaches MFCS without a review and an approval.** Submitting freezes the document;
   approving replays the frozen one. Order quantities stay editable during review and are saved before
   the document is built, so the frozen document carries the reviewed numbers. See

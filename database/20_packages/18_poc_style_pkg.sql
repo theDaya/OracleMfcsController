@@ -361,6 +361,7 @@ create or replace package body poc_style_pkg as
         l_row json_object_t;
         l_upcs json_array_t;
         l_upc json_object_t;
+        l_added boolean := false;
         d poc_style_draft%rowtype;
     begin
         refresh_composition(p_draft_id);
@@ -444,7 +445,13 @@ create or replace package body poc_style_pkg as
                 -- SKU by it - and the same name the seeded SKUs carry: the style's
                 -- description and the size's. Without either, draft 207 created
                 -- the child and then sent "item": null.
+                --
+                -- And Office's number, by the same rule as a composed SKU: the
+                -- style number plus the size differentiator. Without it the
+                -- controller reserves one, which is how 207 got 100450009.
                 l_row.put('SOURCE_VARIANT_REF', d.style || trim(s.sku_size));
+                l_row.put('ITEM_NUMBER', d.style || trim(s.sku_size));
+                l_added := true;
                 l_row.put('ITEM_DESCRIPTION',
                     join_capped(d.composed_item_desc, size_desc(s.sku_size), 250));
             end if;
@@ -467,6 +474,11 @@ create or replace package body poc_style_pkg as
             l_curve.append(l_row);
         end loop;
         l_doc.put('SIZE_CURVE_DETAIL', l_curve);
+
+        -- An amendment numbers only its added sizes; the style keeps its own.
+        if l_added then
+            l_doc.put('ITEM_NUMBER_TYPE', 'MANL');
+        end if;
 
         return l_doc.to_clob;
     end;
