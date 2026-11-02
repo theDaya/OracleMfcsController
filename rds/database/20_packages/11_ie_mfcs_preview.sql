@@ -165,6 +165,19 @@ create or replace package body ie_mfcs_preview as
                         || 'a number, create the child, add sourcing and country of manufacture, '
                         || 'approve - then the style is read again to confirm it took. The calls '
                         || 'depend on what the tenant already has, so they cannot be planned ahead.');
+                elsif s.step_code in ('CREATE_ITEM_UDAS', 'CREATE_ITEM_SEASONS') then
+                    l_call.put('description',
+                        'Reads the style and each SKU first. A '
+                        || case when s.step_code = 'CREATE_ITEM_UDAS' then 'UDA' else 'season' end
+                        || ' the item lacks goes through '
+                        || case when s.step_code = 'CREATE_ITEM_UDAS' then 'item/uda/create'
+                                else 'item/seasons/create' end
+                        || case when s.step_code = 'CREATE_ITEM_UDAS'
+                                then ', one it holds at another value through item/uda/update, '
+                                     || 'which names the current value and the new one'
+                           end
+                        || '. Every row the document names is then read back. Rows the item '
+                        || 'holds and the document does not name are left alone.');
                 elsif s.step_code = 'RESERVE_ITEM_NUMBERS' then
                     l_call.put('description',
                         'Nothing is reserved: the document carries its own ITEM_NUMBER for the '

@@ -55,6 +55,12 @@ create or replace package ie_mfcs_payload authid definer as
     -- JSON-reading implementation.
     function string_value(p_payload in clob, p_name in varchar2) return varchar2;
 
+    -- A numeric request field read as a JSON number. Never to_number() a
+    -- string_value: that parses under the session's decimal character, and in a
+    -- session whose NLS_NUMERIC_CHARACTERS is ', ' a cost of 48.49 raises ORA-06502
+    -- - which is how SYNC_ORDER_LINES first failed, 2026-11-02.
+    function number_value(p_payload in clob, p_name in varchar2) return number;
+
     -- A delivery location as the virtual warehouse MFCS wants, derived from the
     -- tenant's warehouse feed. Public because the order-line planner needs the
     -- same answer the order mapper gets.

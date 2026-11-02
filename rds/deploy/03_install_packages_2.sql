@@ -897,14 +897,21 @@ create or replace package body ie_mfcs_orchestrator as
                 else
                     def('ENDPOINT.ITEMS_CREATE', 'POST', 'build_reference_item_request');
                 end if;
+            -- On an existing style both are local: sync_item_attributes reads each
+            -- item and decides between update and create, so no single endpoint
+            -- can be named in advance. The mapper still names the rows wanted.
             when 'CREATE_ITEM_UDAS' then
                 if l_existing then
-                    def('ENDPOINT.ITEM_UDAS_UPDATE', 'PUT', 'build_item_uda_request');
+                    def(null, null, 'build_item_uda_request');
                 else
                     def('ENDPOINT.ITEM_UDAS_CREATE', 'POST', 'build_item_uda_request');
                 end if;
             when 'CREATE_ITEM_SEASONS' then
-                def('ENDPOINT.ITEM_SEASONS_CREATE', 'POST', 'build_item_season_request');
+                if l_existing then
+                    def(null, null, 'build_item_season_request');
+                else
+                    def('ENDPOINT.ITEM_SEASONS_CREATE', 'POST', 'build_item_season_request');
+                end if;
             when 'CREATE_ITEM_IMAGES' then
                 if l_existing then
                     def('ENDPOINT.ITEM_IMAGES_UPDATE', 'PUT', 'build_item_image_request');
@@ -1468,7 +1475,8 @@ create or replace package body ie_mfcs_orchestrator as
             ie_mfcs_config.get_config('MFCS_ORDER_DEFAULT_LOCATION', '19271')));
         l_plan.location_type := ie_mfcs_config.get_config('MFCS_ORDER_LOCATION_TYPE', 'W');
         l_plan.origin_country := ie_mfcs_payload.string_value(l_payload, 'ORIGIN_COUNTRY');
-        l_plan.unit_cost := to_number(ie_mfcs_payload.string_value(l_payload, 'UNIT_COST'));
+        -- number_value, not to_number(string_value): see its comment.
+        l_plan.unit_cost := ie_mfcs_payload.number_value(l_payload, 'UNIT_COST');
         l_plan.supplier_pack_size := to_number(ie_mfcs_config.get_config('MFCS_SUPPLIER_PACK_SIZE', '1'));
         l_plan.earliest_ship_date := ie_mfcs_payload.string_value(l_payload, 'EARLIEST_SHIP_DATE');
         l_plan.latest_ship_date := ie_mfcs_payload.string_value(l_payload, 'LATEST_SHIP_DATE');
@@ -1612,6 +1620,325 @@ create or replace package body ie_mfcs_orchestrator as
         );
     end;
 
+    -- UDAs and seasons on a style that already exists, brought to what the
+    -- document says by reading each item first.
+    --
+    -- Neither can be resent blind. item/uda/update does not take the create body:
+    -- it finds the row by its current value and carries the change in
+    -- newUdaValue / newUdaText / newUdaDate, and a UDA the item does not hold yet
+    -- has no row to find, so it needs item/uda/create instead - first seen live
+    -- on 2026-11-02 as "UDA Value is required. Field: NEW_UDA_VALUE". Seasons have
+    -- no update service at all, and re-creating a row that exists is an error on
+    -- this tenant rather than a no-op.
+    --
+    -- So the step reads, then writes what differs: update where the item holds the
+    -- UDA at another value, create where it does not hold it, nothing where it
+    -- already holds exactly that. That is not the "only send what changed" this
+    -- layer refuses elsewhere - it conditions on the tenant, like
+    -- ENSURE_STYLE_SKUS, not on a guess about it - and every row of the document
+    -- is then proven by reading back. A row held at the right value is checked as
+    -- hard as one that was written.
+    --
+    -- A UDA or season the item holds and the document does not name is left
+    -- alone. Removing it is the strict reading of a whole-style document, but some
+    -- are set inside MFCS by people or processes this layer does not know about,
+    -- and a delete is the one write here that cannot be repeated to put it back.
+    --
+    -- The read is foundation/item, which lags about a minute behind a write. It is
+    -- the only read that carries an item's UDAs and seasons - itemDetail does not,
+    -- checked 2026-11-02 - so the read-back waits for it, and a SKU created moments
+    -- ago by ENSURE_STYLE_SKUS, which 404s there, is read as holding nothing.
+    procedure sync_item_attributes(
+        p_action_request_id in varchar2,
+        p_step_code         in varchar2,
+        p_user_id           in varchar2
+    ) is
+        l_is_uda boolean := p_step_code = 'CREATE_ITEM_UDAS';
+        l_property varchar2(10) := case when p_step_code = 'CREATE_ITEM_UDAS' then 'uda' else 'season' end;
+        l_desired json_array_t;
+        l_entry json_object_t;
+        l_wanted json_array_t;
+        l_row json_object_t;
+        l_current json_array_t;
+        l_item varchar2(30);
+        l_item_creates json_array_t;
+        l_item_updates json_array_t;
+        l_creates json_array_t := json_array_t();
+        l_updates json_array_t := json_array_t();
+        l_held pls_integer := 0;
+        l_response clob;
+        l_retries number := to_number(ie_mfcs_config.get_config('MFCS_ATTRIBUTE_VERIFY_RETRY_COUNT', '12'));
+        l_sleep number := to_number(ie_mfcs_config.get_config('MFCS_ATTRIBUTE_VERIFY_RETRY_SLEEP_SECONDS', '10'));
+        l_verified boolean;
+        l_mismatch varchar2(1000);
+
+        -- A scalar as text whatever its JSON type. The read gives udaValue as a
+        -- number and the mapper sends it as a string, and they must compare equal.
+        function scalar(p_obj in json_object_t, p_key in varchar2) return varchar2 is
+        begin
+            if p_obj is null or not p_obj.has(p_key) or p_obj.get(p_key).is_null then
+                return null;
+            elsif p_obj.get(p_key).is_string then
+                return p_obj.get_string(p_key);
+            end if;
+            return p_obj.get(p_key).to_string;
+        end;
+
+        function value_key(p_display_type in varchar2) return varchar2 is
+        begin
+            return case p_display_type when 'FF' then 'udaText' when 'DT' then 'udaDate' else 'udaValue' end;
+        end;
+
+        -- Dates compare on the day: the read may carry a time the write did not.
+        function comparable(p_key in varchar2, p_value in varchar2) return varchar2 is
+        begin
+            return case when p_key = 'udaDate' then substr(p_value, 1, 10) else p_value end;
+        end;
+
+        -- What the item holds now, flattened to one row per value: for UDAs
+        -- {udaId, value}, from the three arrays the read splits them across; for
+        -- seasons the read's own rows.
+        function read_current(p_item in varchar2) return json_array_t is
+            l_status number;
+            l_body clob;
+            l_items json_array_t;
+            l_doc json_object_t;
+            l_uda json_object_t;
+            l_src json_array_t;
+            l_out json_array_t := json_array_t();
+            l_flat json_object_t;
+            type t_keys is table of varchar2(20);
+            l_arrays t_keys := t_keys('udaLov', 'udaFreeform', 'udaDate');
+            l_fields t_keys := t_keys('udaValue', 'udaText', 'udaDate');
+        begin
+            l_body := ie_mfcs_client.get_json('/MerchIntegrations/services/foundation/item/' || p_item, l_status);
+            if l_status = 404 then
+                return l_out;
+            elsif l_status not between 200 and 299 then
+                raise_application_error(-20968,
+                    'Could not read item ' || p_item || ' before writing its '
+                    || l_property || 's (HTTP ' || l_status || ').');
+            end if;
+            l_items := json_object_t.parse(l_body).get_array('items');
+            if l_items is null or l_items.get_size = 0 then
+                return l_out;
+            end if;
+            l_doc := treat(l_items.get(0) as json_object_t);
+
+            if not l_is_uda then
+                return nvl(l_doc.get_array('itemSeason'), l_out);
+            end if;
+
+            l_uda := l_doc.get_object('itemUda');
+            if l_uda is null then
+                return l_out;
+            end if;
+            for a in 1 .. l_arrays.count loop
+                -- FF and DT arrays arrive as an explicit null, not an absent key.
+                if l_uda.has(l_arrays(a)) and not l_uda.get(l_arrays(a)).is_null then
+                    l_src := l_uda.get_array(l_arrays(a));
+                    for i in 0 .. l_src.get_size - 1 loop
+                        l_flat := json_object_t();
+                        l_flat.put('udaId', scalar(treat(l_src.get(i) as json_object_t), 'udaId'));
+                        l_flat.put('value', comparable(l_fields(a),
+                            scalar(treat(l_src.get(i) as json_object_t), l_fields(a))));
+                        l_out.append(l_flat);
+                    end loop;
+                end if;
+            end loop;
+            return l_out;
+        end;
+
+        -- Whether the item already holds this row exactly. For a UDA also reports
+        -- how many values it holds under that id, and the value when there is one,
+        -- because that is the row an update has to name.
+        function holds(
+            p_current in json_array_t,
+            p_wanted  in json_object_t,
+            o_count   out pls_integer,
+            o_only    out varchar2
+        ) return boolean is
+            l_cur json_object_t;
+            l_match boolean := false;
+            l_key varchar2(20);
+        begin
+            o_count := 0;
+            for i in 0 .. p_current.get_size - 1 loop
+                l_cur := treat(p_current.get(i) as json_object_t);
+                if l_is_uda then
+                    l_key := value_key(scalar(p_wanted, 'displayType'));
+                    if scalar(l_cur, 'udaId') = scalar(p_wanted, 'udaId') then
+                        o_count := o_count + 1;
+                        o_only := scalar(l_cur, 'value');
+                        if scalar(l_cur, 'value') = comparable(l_key, scalar(p_wanted, l_key)) then
+                            l_match := true;
+                        end if;
+                    end if;
+                elsif scalar(l_cur, 'seasonId') = scalar(p_wanted, 'seasonId')
+                      and nvl(scalar(l_cur, 'phaseId'), '~') = nvl(scalar(p_wanted, 'phaseId'), '~') then
+                    l_match := true;
+                end if;
+            end loop;
+            return l_match;
+        end;
+
+        function envelope(p_items in json_array_t) return clob is
+            l_root json_object_t := json_object_t();
+        begin
+            l_root.put('collectionSize', p_items.get_size);
+            l_root.put('items', p_items);
+            return l_root.to_clob;
+        end;
+
+        procedure add_item(p_target in out nocopy json_array_t, p_item in varchar2, p_rows in json_array_t) is
+            l_obj json_object_t := json_object_t();
+        begin
+            if p_rows.get_size > 0 then
+                l_obj.put('item', p_item);
+                l_obj.put('dataLoadingDestination', 'RMS');
+                l_obj.put(l_property, p_rows);
+                p_target.append(l_obj);
+            end if;
+        end;
+    begin
+        -- What the document says, from the step's own mapper, so the rows this
+        -- step reasons about are exactly the rows a create would have sent.
+        l_desired := json_object_t.parse(payload_for_step(p_action_request_id, p_step_code)).get_array('items');
+
+        for i in 0 .. nvl(l_desired.get_size, 0) - 1 loop
+            l_entry := treat(l_desired.get(i) as json_object_t);
+            l_item := scalar(l_entry, 'item');
+            l_wanted := l_entry.get_array(l_property);
+            if l_item is not null and l_wanted is not null and l_wanted.get_size > 0 then
+                l_current := read_current(l_item);
+                l_item_creates := json_array_t();
+                l_item_updates := json_array_t();
+                for w in 0 .. l_wanted.get_size - 1 loop
+                    l_row := treat(l_wanted.get(w) as json_object_t);
+                    declare
+                        l_count pls_integer;
+                        l_only varchar2(4000);
+                        l_key varchar2(20);
+                        l_update json_object_t;
+                    begin
+                        if holds(l_current, l_row, l_count, l_only) then
+                            l_held := l_held + 1;
+                        elsif l_is_uda and l_count = 1 then
+                            -- One value under this id: change it in place.
+                            l_key := value_key(scalar(l_row, 'displayType'));
+                            l_update := json_object_t();
+                            l_update.put('udaId', l_row.get('udaId'));
+                            l_update.put('displayType', scalar(l_row, 'displayType'));
+                            l_update.put(l_key, l_only);
+                            l_update.put('new' || upper(substr(l_key, 1, 1)) || substr(l_key, 2),
+                                scalar(l_row, l_key));
+                            l_item_updates.append(l_update);
+                        else
+                            -- Not held, or a multi-value UDA holding others: add it.
+                            l_item_creates.append(l_row);
+                        end if;
+                    end;
+                end loop;
+                add_item(l_updates, l_item, l_item_updates);
+                add_item(l_creates, l_item, l_item_creates);
+            end if;
+        end loop;
+
+        ie_mfcs_event.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'ATTRIBUTES_PLAN',
+            p_step_code => p_step_code,
+            p_message => 'Items read; ' || l_property || ' changes decided.',
+            p_detail_payload => '{"property":"' || l_property || '"'
+                || ',"alreadyHeld":' || l_held
+                || ',"itemsToUpdate":' || l_updates.get_size
+                || ',"itemsToCreate":' || l_creates.get_size || '}'
+        );
+
+        if l_updates.get_size > 0 then
+            l_response := ie_mfcs_client.call_service(
+                p_action_request_id => p_action_request_id,
+                p_step_code => p_step_code,
+                p_http_method => 'PUT',
+                p_endpoint_key => 'ENDPOINT.ITEM_UDAS_UPDATE',
+                p_request_payload => envelope(l_updates),
+                p_user_id => p_user_id
+            );
+        end if;
+
+        if l_creates.get_size > 0 then
+            l_response := ie_mfcs_client.call_service(
+                p_action_request_id => p_action_request_id,
+                p_step_code => p_step_code,
+                p_http_method => 'POST',
+                p_endpoint_key => case when l_is_uda then 'ENDPOINT.ITEM_UDAS_CREATE'
+                                       else 'ENDPOINT.ITEM_SEASONS_CREATE' end,
+                p_request_payload => envelope(l_creates),
+                p_user_id => p_user_id
+            );
+        end if;
+
+        -- Read back every row the document names, written or not.
+        for attempt in 1 .. greatest(1, l_retries) loop
+            l_verified := true;
+            l_mismatch := null;
+            for i in 0 .. nvl(l_desired.get_size, 0) - 1 loop
+                l_entry := treat(l_desired.get(i) as json_object_t);
+                l_item := scalar(l_entry, 'item');
+                l_wanted := l_entry.get_array(l_property);
+                if l_item is not null and l_wanted is not null and l_wanted.get_size > 0 then
+                    l_current := read_current(l_item);
+                    for w in 0 .. l_wanted.get_size - 1 loop
+                        l_row := treat(l_wanted.get(w) as json_object_t);
+                        declare
+                            l_count pls_integer;
+                            l_only varchar2(4000);
+                        begin
+                            if not holds(l_current, l_row, l_count, l_only) then
+                                l_verified := false;
+                                l_mismatch := substr(l_mismatch
+                                    || case when l_mismatch is not null then ', ' end
+                                    || l_item || ' ' || l_property || ' '
+                                    || case when l_is_uda then scalar(l_row, 'udaId')
+                                            else scalar(l_row, 'seasonId') end, 1, 1000);
+                            end if;
+                        end;
+                    end loop;
+                end if;
+            end loop;
+            exit when l_verified;
+
+            if attempt < greatest(1, l_retries) then
+                ie_mfcs_event.log_event(
+                    p_action_request_id => p_action_request_id,
+                    p_event_phase => 'ATTRIBUTES_VERIFY_WAIT',
+                    p_step_code => p_step_code,
+                    p_event_level => 'WARN',
+                    p_message => 'Items do not yet read back as requested; waiting for the item cache.',
+                    p_detail_payload => '{"attempt":' || attempt
+                        || ',"sleepSeconds":' || l_sleep
+                        || ',"missing":"' || ie_mfcs_event.escape_json(substr(l_mismatch, 1, 400)) || '"}'
+                );
+                dbms_session.sleep(l_sleep);
+            end if;
+        end loop;
+
+        if not l_verified then
+            raise_application_error(-20969,
+                'After ' || greatest(1, l_retries) || ' reads these ' || l_property
+                || 's are still not on their items: ' || substr(l_mismatch, 1, 500)
+                || '. The item read lags about a minute, so a resume may find them.');
+        end if;
+
+        ie_mfcs_step.set_step_status(p_action_request_id, p_step_code, 'SUCCEEDED');
+        ie_mfcs_event.log_event(
+            p_action_request_id => p_action_request_id,
+            p_event_phase => 'ATTRIBUTES_VERIFIED',
+            p_step_code => p_step_code,
+            p_message => 'Every ' || l_property || ' the document names reads back on its item.'
+        );
+    end;
+
     procedure execute_request(
         p_action_request_id in varchar2
     ) is
@@ -1667,6 +1994,12 @@ create or replace package body ie_mfcs_orchestrator as
 
             if l_step = 'SYNC_ORDER_LINES' then
                 sync_order_lines(p_action_request_id, l_step, l_user_id);
+                continue;
+            end if;
+
+            if l_step in ('CREATE_ITEM_UDAS', 'CREATE_ITEM_SEASONS')
+               and targets_existing_style(l_operation) then
+                sync_item_attributes(p_action_request_id, l_step, l_user_id);
                 continue;
             end if;
 
@@ -2012,6 +2345,19 @@ create or replace package body ie_mfcs_preview as
                         || 'a number, create the child, add sourcing and country of manufacture, '
                         || 'approve - then the style is read again to confirm it took. The calls '
                         || 'depend on what the tenant already has, so they cannot be planned ahead.');
+                elsif s.step_code in ('CREATE_ITEM_UDAS', 'CREATE_ITEM_SEASONS') then
+                    l_call.put('description',
+                        'Reads the style and each SKU first. A '
+                        || case when s.step_code = 'CREATE_ITEM_UDAS' then 'UDA' else 'season' end
+                        || ' the item lacks goes through '
+                        || case when s.step_code = 'CREATE_ITEM_UDAS' then 'item/uda/create'
+                                else 'item/seasons/create' end
+                        || case when s.step_code = 'CREATE_ITEM_UDAS'
+                                then ', one it holds at another value through item/uda/update, '
+                                     || 'which names the current value and the new one'
+                           end
+                        || '. Every row the document names is then read back. Rows the item '
+                        || 'holds and the document does not name are left alone.');
                 elsif s.step_code = 'RESERVE_ITEM_NUMBERS' then
                     l_call.put('description',
                         'Nothing is reserved: the document carries its own ITEM_NUMBER for the '

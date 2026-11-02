@@ -280,6 +280,15 @@ All verified live. Most are silent failures, which is why they are worth memoris
   symmetric with create: it identifies the existing row by its current value and carries the change in
   `newUdaValue` / `newUdaText` / `newUdaDate`. `items/create` also accepts a nested `uda` array, so
   UDAs can ride along at create time instead of needing their own call.
+  So on an existing style `CREATE_ITEM_UDAS` and `CREATE_ITEM_SEASONS` are local steps
+  (`orchestrator_pkg.sync_item_attributes`): read each item, update what it holds at another value,
+  create what it lacks, read every row back. Seasons have no update service at all. Rows the item
+  holds and the document does not name are left alone, deliberately. Proven live on draft 206,
+  2026-11-02 - before that, the update service was sent the create body and answered
+  `UDA Value is required. Field: NEW_UDA_VALUE`.
+- **Never `to_number()` a request field read as a string.** It parses under the session's decimal
+  character, and a session with `NLS_NUMERIC_CHARACTERS` of `, ` (SQLcl here does) turns a cost of
+  48.49 into `ORA-06502`. Use `payload_pkg.number_value` or `json_value ... returning number`.
 - **A barcode cannot be created until its parent SKU is out of worksheet status.** MFCS answers
   `This item's parent must be in submitted status before the item can be submitted`. This is why
   `CREATE_REFERENCE_ITEMS` runs *after* `APPROVE_ITEMS` rather than next to the child create, where it
