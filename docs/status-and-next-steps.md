@@ -288,7 +288,7 @@ recomposing them would invent a different style than the one being amended.
 | --- | --- |
 | Style only | `31551120` from CLARKS DESERT CROSBY + Burgundy 120, submitted by Priya Naidoo, approved by Tom Fletcher, COMPLETED |
 | Order and Style | `31566090` + **order 40004**, quantities adjusted at review, COMPLETED |
-| Amend Order | order 40004 read back and seeded as draft 83 with its two lines, real size diffs and descriptions |
+| Amend Order | order 40004 read back and seeded as draft 83 with its two lines, real size diffs and descriptions. **Only the lines and a few header fields were seeded** - class, subclass, origin, cost, retail, import country and every attribute row were left blank, found on draft 203 (order 75003). Fixed 2026-11-02: order 75003 now seeds whole (draft 204), and order 40003 seeds its barcode. **No `MODIFY_ORDER` has yet been sent to MFCS**, so the modify path of the UDA, season, image, HTS and barcode steps is unproven |
 | Gate | approving a DRAFT is refused: `ORA-20960: Draft 61 is DRAFT, and this action needs it to be SUBMITTED` |
 
 **The SKU description gap is closed.** The contract gained `ITEM_DESCRIPTION` at the root and per

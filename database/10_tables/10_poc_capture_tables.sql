@@ -74,7 +74,9 @@ create table poc_draft_sku_upc (
     constraint poc_draft_sku_upc_pk primary key (draft_upc_id),
     constraint poc_draft_sku_upc_fk foreign key (draft_sku_id)
         references poc_style_draft_sku (draft_sku_id) on delete cascade,
-    constraint poc_draft_sku_upc_uk unique (upc),
+    -- Per SKU, not global. An amendment seeded from MFCS carries the same
+    -- barcodes as the draft that created the style, legitimately.
+    constraint poc_draft_sku_upc_uk unique (draft_sku_id, upc),
     constraint poc_draft_sku_upc_ck check (primary_yn in ('Y', 'N'))
 );
 

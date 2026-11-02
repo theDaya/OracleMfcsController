@@ -619,6 +619,7 @@ create or replace package body poc_style_pkg as
     ) return number is
         l_order clob;
         l_style_doc clob;
+        l_sku_doc clob;
         l_draft_id number;
         l_style varchar2(30);
         l_colour varchar2(60);
@@ -651,6 +652,13 @@ create or replace package body poc_style_pkg as
             l_desc varchar2(250);
             l_loc number;
             l_import varchar2(3);
+            l_class number;
+            l_subclass number;
+            l_retail number;
+            l_origin varchar2(3);
+            l_cost number;
+            l_line_cost number;
+            l_line_origin varchar2(3);
             l_nbd date; l_nad date; l_otb date; l_esd date; l_lsd date;
             -- Bound in as values, not called from the insert: a local function is
             -- invisible to SQL, which is what PLS-00231 means when it says so.
@@ -669,11 +677,27 @@ create or replace package body poc_style_pkg as
             l_esd := d('$.items[0].earliestShipDate');
             l_lsd := d('$.items[0].latestShipDate');
 
-            -- The order does not carry the style's description, so read the style.
-            -- One extra call, on an amendment only, for a name the reviewer needs.
+            -- The order carries none of the style's own attributes, so read the
+            -- style. It has to be complete, not just a name: a MODIFY_ORDER resends
+            -- the whole style write set, so anything left blank here is not "left
+            -- alone" in MFCS, it is a gap in what the amendment says the style is.
             l_style_doc := browse_pkg.get_style(l_style, 'N');
-            l_style_desc := json_value(l_style_doc, '$.items[0].itemDescription'
-                returning varchar2(250) null on error);
+
+            select json_value(l_style_doc, '$.items[0].itemDescription' returning varchar2(250) null on error),
+                   json_value(l_style_doc, '$.items[0].class' returning number null on error),
+                   json_value(l_style_doc, '$.items[0].subclass' returning number null on error),
+                   -- originalRetail, not unitRetail: unitRetail reads 0 on every
+                   -- style this layer creates (a known defect), and originalRetail
+                   -- is what was sent.
+                   json_value(l_style_doc, '$.items[0].originalRetail' returning number null on error),
+                   json_value(l_style_doc,
+                       '$.items[0].itemSupplier[0].itemSupplierCountry[0].originCountry'
+                       returning varchar2(3) null on error),
+                   json_value(l_style_doc,
+                       '$.items[0].itemSupplier[0].itemSupplierCountry[0].unitCost'
+                       returning number null on error)
+              into l_style_desc, l_class, l_subclass, l_retail, l_origin, l_cost
+              from dual;
 
             select json_value(l_order, '$.items[0].dept' returning number null on error),
                    json_value(l_order, '$.items[0].supplier' returning number null on error),
@@ -683,13 +707,21 @@ create or replace package body poc_style_pkg as
                 -- mapper translates it to the virtual one on the way out, because
                 -- MFCS refuses ranging against a physical location at level W.
                 json_value(l_order, '$.items[0].details[0].physicalLocation' returning number null on error),
-                   json_value(l_order, '$.items[0].importCountry' returning varchar2(3) null on error)
-              into l_dept, l_supplier, l_currency, l_desc, l_loc, l_import
+                   -- importCountryId on the read. importCountry, which this used to
+                   -- ask for, is not a field of the order read and always came back null.
+                   json_value(l_order, '$.items[0].importCountryId' returning varchar2(3) null on error),
+                   -- The order line's cost and origin win over the item supplier's.
+                   -- The line is in the order's currency, which is the draft's; the
+                   -- item supplier's cost is in the supplier's, which may not be.
+                   json_value(l_order, '$.items[0].details[0].unitCost' returning number null on error),
+                   json_value(l_order, '$.items[0].details[0].originCountryId' returning varchar2(3) null on error)
+              into l_dept, l_supplier, l_currency, l_desc, l_loc, l_import, l_line_cost, l_line_origin
               from dual;
 
             insert into poc_style_draft (
                 operation_name, origin, style, order_no, source_order_ref,
-                department, supplier, currency_code, mfcs_colour,
+                department, class, subclass, supplier, origin_country,
+                currency_code, unit_cost, retail_price, mfcs_colour,
                 composed_item_no, composed_item_desc,
                 not_before_date, not_after_date, otb_eow_date,
                 earliest_ship_date, latest_ship_date, delivery_loc, import_country,
@@ -697,13 +729,73 @@ create or replace package body poc_style_pkg as
             ) values (
                 'MODIFY_ORDER', 'AMENDED', l_style, p_order_no,
                 'POC-AMEND-' || p_order_no,
-                l_dept, l_supplier, l_currency, l_colour,
+                l_dept, l_class, l_subclass, l_supplier, nvl(l_line_origin, l_origin),
+                l_currency, nvl(l_line_cost, l_cost), l_retail, l_colour,
                 l_style, nvl(l_style_desc, nvl(l_desc, 'Order ' || p_order_no)),
                 l_nbd, l_nad, l_otb, l_esd, l_lsd,
                 l_loc, l_import,
                 p_user_id, 'DRAFT'
             ) returning draft_id into l_draft_id;
         end;
+
+        -- The style-level attributes, read back as MFCS holds them. The three UDA
+        -- shapes arrive as three arrays, one per display type, and land in the one
+        -- table with the value in the column that type uses.
+        -- Sibling nested paths give one row per array element with only that
+        -- array's columns filled, so exactly one of the three ids is set per row.
+        insert into poc_draft_uda (draft_id, uda_id, uda_value, uda_text, uda_date)
+        select l_draft_id, coalesce(j.lov_id, j.ff_id, j.dt_id), j.lov_value, j.ff_text,
+               to_date(substr(j.dt_date, 1, 10), 'YYYY-MM-DD')
+          from json_table(l_style_doc, '$.items[0].itemUda'
+              columns
+                  nested path '$.udaLov[*]' columns (
+                      lov_id    varchar2(30)  path '$.udaId',
+                      lov_value varchar2(120) path '$.udaValue'),
+                  nested path '$.udaFreeform[*]' columns (
+                      ff_id     varchar2(30)  path '$.udaId',
+                      ff_text   varchar2(250) path '$.udaText'),
+                  nested path '$.udaDate[*]' columns (
+                      dt_id     varchar2(30)  path '$.udaId',
+                      dt_date   varchar2(30)  path '$.udaDate')
+          ) j
+         where coalesce(j.lov_id, j.ff_id, j.dt_id) is not null;
+
+        insert into poc_draft_season (draft_id, season_id, phase_id, sequence_no)
+        select l_draft_id, s.season_id, s.phase_id, s.sequence_no
+          from json_table(l_style_doc, '$.items[0].itemSeason[*]'
+              columns
+                  season_id   number path '$.seasonId',
+                  phase_id    number path '$.phaseId',
+                  sequence_no number path '$.sequenceNo'
+          ) s
+         where s.season_id is not null;
+
+        insert into poc_draft_image (draft_id, image_name, image_address, image_type, primary_yn, display_priority)
+        select l_draft_id, i.image_name, i.image_address, i.image_type,
+               case when i.primary_ind = 'Y' then 'Y' else 'N' end, i.display_priority
+          from json_table(l_style_doc, '$.items[0].itemImage[*]'
+              columns
+                  image_name       varchar2(120) path '$.imageName',
+                  image_address    varchar2(250) path '$.imageAddress',
+                  image_type       varchar2(10)  path '$.imageType',
+                  primary_ind      varchar2(1)   path '$.primaryImageInd',
+                  display_priority number        path '$.displayPriority'
+          ) i
+         where i.image_name is not null;
+
+        insert into poc_draft_hts (draft_id, hts, import_country, origin_country, effect_from, effect_to)
+        select l_draft_id, h.hts, h.import_country, h.origin_country,
+               to_date(substr(h.effect_from, 1, 10), 'YYYY-MM-DD'),
+               to_date(substr(h.effect_to, 1, 10), 'YYYY-MM-DD')
+          from json_table(l_style_doc, '$.items[0].hts[*]'
+              columns
+                  hts            varchar2(30) path '$.hts',
+                  import_country varchar2(3)  path '$.importCountry',
+                  origin_country varchar2(3)  path '$.originCountry',
+                  effect_from    varchar2(30) path '$.effectFrom',
+                  effect_to      varchar2(30) path '$.effectTo'
+          ) h
+         where h.hts is not null;
 
         -- The order's own lines become the size curve. Quantity is the thing an
         -- amendment is usually about, which is why the review stage leaves it
@@ -724,6 +816,26 @@ create or replace package body poc_style_pkg as
                   size_diff varchar2(60)  path '$.resolved.diff2'
           ) d
          where d.item is not null;
+
+        -- Barcodes, one SKU read each. The item feed cannot see level 3 at all,
+        -- but a SKU's own referenceItem array lists its barcodes, and the order
+        -- read's enrichment does not keep that array. Read field names differ from
+        -- the write's: itemNoType, not itemNumberType.
+        for s in (select draft_sku_id, composed_sku_no
+                    from poc_style_draft_sku
+                   where draft_id = l_draft_id) loop
+            l_sku_doc := browse_pkg.get_style(s.composed_sku_no, 'N');
+            insert into poc_draft_sku_upc (draft_sku_id, upc, upc_type, primary_yn)
+            select s.draft_sku_id, r.upc, nvl(r.upc_type, 'EAN13'),
+                   case when r.primary_ind = 'Y' then 'Y' else 'N' end
+              from json_table(l_sku_doc, '$.items[0].referenceItem[*]'
+                  columns
+                      upc         varchar2(30) path '$.referenceItem',
+                      upc_type    varchar2(10) path '$.itemNoType',
+                      primary_ind varchar2(1)  path '$.primaryInd'
+              ) r
+             where r.upc is not null;
+        end loop;
 
         commit;
         return l_draft_id;

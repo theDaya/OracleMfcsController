@@ -94,6 +94,14 @@ App 102 page 20 (Style Explorer) and app 103 page 8 (Execution) both read `STEP`
 - **`ORIGIN` decides whether numbers get recomposed.** `COMPOSED` drafts have their item numbers
   rebuilt from the style and colour on every save; `AMENDED` drafts, seeded by reading MFCS, do not -
   recomposing them would invent a different style than the one being amended.
+- **An amended draft is seeded whole.** `seed_from_order` reads the order, the style and each SKU,
+  and fills everything MFCS holds: hierarchy, origin, cost (the order line's, in the order's
+  currency), `originalRetail`, import country, UDAs, seasons, images, tariff codes and barcodes. A
+  `MODIFY_ORDER` resends the whole style write set, so a field left blank here is not left alone in
+  MFCS. Until 2026-11-02 it filled only department, supplier, colour, dates and lines, read import
+  country from a field the order read does not have, and validation passed the result anyway.
+  Style/Model, Supplier Colour and Supplier Colour Code stay blank: they are Office's own lookups,
+  and STG does not carry the UDAs that would hold them.
 - **Nothing reaches MFCS without a review and an approval.** Submitting freezes the document;
   approving replays the frozen one. Order quantities stay editable during review and are saved before
   the document is built, so the frozen document carries the reviewed numbers. See
