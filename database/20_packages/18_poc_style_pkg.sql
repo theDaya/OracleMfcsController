@@ -88,6 +88,15 @@ create or replace package poc_style_pkg authid definer as
         o_response    out clob
     );
 
+    -- Continues an approved draft whose run stopped part way. Steps that
+    -- succeeded are skipped, and the run picks up from the one that failed.
+    -- Replays the frozen document, exactly as approval does - nothing is rebuilt.
+    procedure resume_draft(
+        p_draft_id    in number,
+        o_http_status out number,
+        o_response    out clob
+    );
+
     -- Back to DRAFT, discarding the frozen document and the review record. The
     -- only way to edit a submitted draft, and deliberately explicit: a change
     -- made behind an approval is a change nobody approved.
@@ -541,6 +550,47 @@ create or replace package body poc_style_pkg as
         -- number and then failed to create the order has still burned that
         -- number in MFCS, and the draft is the only place it can be tied back
         -- to what asked for it.
+        apply_response(p_draft_id, o_response);
+    end;
+
+    -- The usual reason is the tenant's batch window, which refuses writes part
+    -- way through a run. Only the three resumable statuses are let through: a
+    -- COMPLETED request has nothing left to do, and anything else is either
+    -- running or needs a person (MANUAL_REVIEW).
+    procedure resume_draft(
+        p_draft_id    in number,
+        o_http_status out number,
+        o_response    out clob
+    ) is
+        l_request_id poc_style_draft.action_request_id%type;
+        l_status     varchar2(30);
+    begin
+        select action_request_id into l_request_id
+          from poc_style_draft where draft_id = p_draft_id;
+
+        select max(request_status) into l_status
+          from request where action_request_id = l_request_id;
+
+        if l_status is null
+           or l_status not in ('PARTIALLY_COMPLETED', 'FAILED_NO_SIDE_EFFECT', 'OUTCOME_UNKNOWN') then
+            raise_application_error(-20960,
+                'Draft ' || p_draft_id || ' has no request that can be resumed'
+                || case when l_status is not null then ' (it is ' || l_status || ')' end || '.');
+        end if;
+
+        api_pkg.resume_transaction(l_request_id, o_http_status, o_response);
+
+        update poc_style_draft
+           set response_payload = o_response,
+               http_status = o_http_status,
+               draft_status = case when o_http_status between 200 and 299
+                                   then 'COMPLETED' else 'FAILED' end,
+               last_updated_at = systimestamp
+         where draft_id = p_draft_id;
+        commit;
+
+        -- As in approve_draft: the response can carry an order number MFCS
+        -- assigned, and the draft is where it gets tied back.
         apply_response(p_draft_id, o_response);
     end;
 
