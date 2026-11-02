@@ -427,15 +427,27 @@ create or replace package body poc_style_pkg as
                    where draft_id = p_draft_id
                    order by sku_size) loop
             l_row := json_object_t();
-            l_row.put('SOURCE_VARIANT_REF', s.composed_sku_no);
             l_row.put('SKU_SIZE', s.sku_size);
             l_row.put('SKU_QTY', s.sku_qty);
             if d.origin = 'COMPOSED' then
+                l_row.put('SOURCE_VARIANT_REF', s.composed_sku_no);
                 l_row.put('ITEM_NUMBER', s.composed_sku_no);
-            else
+                l_row.put('ITEM_DESCRIPTION', s.composed_sku_desc);
+            elsif s.composed_sku_no is not null then
+                -- Read from MFCS when the draft was seeded: a SKU that exists.
+                l_row.put('SOURCE_VARIANT_REF', s.composed_sku_no);
                 l_row.put('SKU_ID', s.composed_sku_no);
+                l_row.put('ITEM_DESCRIPTION', s.composed_sku_desc);
+            else
+                -- A size added to an amended draft, so no SKU yet. It still needs
+                -- a reference - every step after ENSURE_STYLE_SKUS finds the row's
+                -- SKU by it - and the same name the seeded SKUs carry: the style's
+                -- description and the size's. Without either, draft 207 created
+                -- the child and then sent "item": null.
+                l_row.put('SOURCE_VARIANT_REF', d.style || trim(s.sku_size));
+                l_row.put('ITEM_DESCRIPTION',
+                    join_capped(d.composed_item_desc, size_desc(s.sku_size), 250));
             end if;
-            l_row.put('ITEM_DESCRIPTION', s.composed_sku_desc);
 
             l_upcs := json_array_t();
             for u in (select upc, upc_type, primary_yn

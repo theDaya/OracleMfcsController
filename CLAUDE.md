@@ -402,6 +402,15 @@ Optional additions, absent from documents written earlier and behaving exactly a
   knows or cares which way they were arrived at. Absent `ITEM_NUMBER` everything behaves exactly as
   it did, reserving `ITEM` numbers as before.
 
+`SOURCE_VARIANT_REF` is required on every size-curve row, and unique. It is the key every step
+after `ENSURE_STYLE_SKUS` finds a row's SKU by; a row without one had its SKU created and then
+lost, so the next step sent `"item": null` (draft 207, 2026-11-02, which left child `100450009` on
+style `56249011`). Validation refuses it now, before anything is written.
+
+**A size added on a modify gets a reserved `ITEM` number, not the caller's.** `ITEM_NUMBER` is
+accepted only on the create operations, so `ENSURE_STYLE_SKUS` reserves one for a new child -
+`100450009` above, where Office's scheme would have made it `56249011S120`. Not yet changed.
+
 `SKU_WIDTH` is no longer required. It reached no MFCS field: it was validated against `MAP.WIDTH.*` and
 then used only to build a description string. It is still accepted and still recorded in `ENTITY_MAP`
 where a caller sends it, but nothing depends on it.

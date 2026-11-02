@@ -265,6 +265,7 @@ create or replace package body ie_mfcs_validation as
         l_week_end_day varchar2(20);
         l_count number;
         l_distinct_count number;
+        l_ref_distinct number;
         l_parsed json_element_t;
     begin
         begin
@@ -432,6 +433,25 @@ create or replace package body ie_mfcs_validation as
 
         if l_count > 0 then
             add_error(l_errors, 'SIZE_CURVE_DETAIL.SKU_QTY', 'POSITIVE_WHOLE_NUMBER_REQUIRED', 'Quantities must be positive whole numbers.');
+        end if;
+
+        -- SOURCE_VARIANT_REF is the key every step after ENSURE_STYLE_SKUS finds a
+        -- row's SKU by. Without it the SKU is still created - on a modify, by
+        -- reserving a number - and then cannot be found, so the next step sends
+        -- "item": null. That is how draft 207 left an orphan child in MFCS on
+        -- 2026-11-02. Refused here, before anything is written.
+        select count(*), count(ref), count(distinct ref)
+          into l_count, l_distinct_count, l_ref_distinct
+          from json_table(p_payload, '$.SIZE_CURVE_DETAIL[*]'
+              columns ref varchar2(120) path '$.SOURCE_VARIANT_REF' null on error
+          );
+
+        if l_distinct_count < l_count then
+            add_error(l_errors, 'SIZE_CURVE_DETAIL.SOURCE_VARIANT_REF', 'REQUIRED',
+                'Every SIZE_CURVE_DETAIL row needs a SOURCE_VARIANT_REF; it is how each row''s SKU is found.');
+        elsif l_ref_distinct < l_distinct_count then
+            add_error(l_errors, 'SIZE_CURVE_DETAIL.SOURCE_VARIANT_REF', 'DUPLICATE_SOURCE_VARIANT_REF',
+                'SOURCE_VARIANT_REF must be unique within the request.');
         end if;
 
         -- Barcodes. Optional by design: a document with no SKU_UPCS produces no
